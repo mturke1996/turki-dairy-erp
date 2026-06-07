@@ -57,6 +57,9 @@ export const metadata: Metadata = {
     title: BRAND.name,
     statusBarStyle: 'default',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
   openGraph: {
     type: 'website',
     locale: 'ar_LY',

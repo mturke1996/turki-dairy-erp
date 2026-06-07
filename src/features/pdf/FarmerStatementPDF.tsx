@@ -90,6 +90,10 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
           <Text style={[s.value, { direction: 'ltr', textAlign: 'right' }]}>{ar(farmer.phone)}</Text>
         </View>
         <View style={s.cell}>
+          <Text style={s.label}>{ar('المصرف')}</Text>
+          <Text style={s.value}>{ar(farmer.bankName ?? '—')}</Text>
+        </View>
+        <View style={s.cell}>
           <Text style={s.label}>{ar('رقم الحساب')}</Text>
           <Text style={[s.value, { direction: 'ltr', textAlign: 'right' }]}>
             {ar(farmer.bankAccount ?? '—')}

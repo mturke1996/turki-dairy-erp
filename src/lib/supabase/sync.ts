@@ -1,55 +1,36 @@
-/**
- * منسّق المزامنة السحابية (Supabase).
- *
- * الاستراتيجية: محلي-أولاً (Zustand + localStorage) مع مزامنة سحابية:
- *   • السحب (pull): مرة عند الإقلاع + زر «إعادة تحميل».
- *   • الدفع (push): تلقائي مع تأخير (debounce) بعد كل تعديل.
- *
- * المفتاح المنشور (publishable) يُستخدم مباشرةً من المتصفح مع RLS مسموح
- * (أداة داخلية). فعّل Supabase Auth لتقييد الوصول في الإنتاج.
- */
-
 'use client';
 
 import { create } from 'zustand';
 import { useErpStore } from '@/lib/store/use-erp-store';
-import { isSupabaseConfigured, pullAll, pushAll, testConnection, type ErpSnapshot } from './repository';
+import { isSupabaseConfigured } from './config';
+import {
+  pullAll,
+  pushAll,
+  testConnection,
+  SyncConflictError,
+  type ErpSnapshot,
+} from './repository';
 
-export type SyncStatus = 'disabled' | 'idle' | 'syncing' | 'pushing' | 'error' | 'offline';
+export type SyncStatus = 'idle' | 'syncing' | 'pushing' | 'conflict' | 'error' | 'offline' | 'unconfigured';
 
 interface SyncState {
   configured: boolean;
-  enabled: boolean;
   status: SyncStatus;
   lastSyncAt: string | null;
   lastError: string | null;
-  setEnabled: (v: boolean) => void;
+  remoteVersion: number;
   setStatus: (s: SyncStatus) => void;
-}
-
-const ENABLED_KEY = 'turki-cloud-sync-enabled';
-
-function readEnabled(): boolean {
-  if (typeof window === 'undefined') return false;
-  return window.localStorage.getItem(ENABLED_KEY) === '1';
 }
 
 export const useSyncStore = create<SyncState>((set) => ({
   configured: isSupabaseConfigured(),
-  enabled: readEnabled(),
-  status: 'disabled',
+  status: isSupabaseConfigured() ? 'idle' : 'unconfigured',
   lastSyncAt: null,
   lastError: null,
-  setEnabled: (v) => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(ENABLED_KEY, v ? '1' : '0');
-    }
-    set({ enabled: v, status: v ? 'idle' : 'disabled' });
-  },
+  remoteVersion: 0,
   setStatus: (s) => set({ status: s }),
 }));
 
-/** يجمع لقطة كاملة من حالة المتجر الحالية لرفعها. */
 function snapshot(): ErpSnapshot {
   const s = useErpStore.getState();
   return {
@@ -74,44 +55,67 @@ function snapshot(): ErpSnapshot {
   };
 }
 
-let applyingRemote = false; // يمنع دفع التغييرات الناتجة عن السحب
+let applyingRemote = false;
 
-/** يسحب كامل البيانات من السحابة إلى المتجر. */
+function applyRemote(data: ErpSnapshot): void {
+  applyingRemote = true;
+  useErpStore.getState().replaceAll(data);
+  applyingRemote = false;
+}
+
+/** يسحب كامل البيانات من PostgreSQL إلى الذاكرة. */
 export async function pullFromCloud(): Promise<{ ok: boolean; error?: string }> {
-  const { setStatus } = useSyncStore.getState();
-  setStatus('syncing');
+  useSyncStore.setState({ status: 'syncing' });
   try {
     const data = await pullAll();
 
-    // السحابة غير مهيّأة (لا توجد دورات) → ارفع الحالة المحلية بدل مسحها
-    if (!data.sessions || data.sessions.length === 0) {
-      await pushAll(snapshot());
-      useSyncStore.setState({ status: 'idle', lastSyncAt: new Date().toISOString(), lastError: null });
+    if (!data.sessions?.length) {
+      await pushAll(snapshot(), { skipConflictCheck: true });
+      useSyncStore.setState({
+        status: 'idle',
+        lastSyncAt: new Date().toISOString(),
+        lastError: null,
+        remoteVersion: data.syncVersion,
+      });
       return { ok: true };
     }
 
-    applyingRemote = true;
-    useErpStore.getState().replaceAll(data);
-    applyingRemote = false;
-    useSyncStore.setState({ status: 'idle', lastSyncAt: new Date().toISOString(), lastError: null });
+    applyRemote(data);
+    useSyncStore.setState({
+      status: 'idle',
+      lastSyncAt: new Date().toISOString(),
+      lastError: null,
+      remoteVersion: data.syncVersion,
+    });
     return { ok: true };
   } catch (e) {
     applyingRemote = false;
-    const error = e instanceof Error ? e.message : 'فشل السحب';
+    const error = e instanceof Error ? e.message : 'فشل تحميل البيانات';
     useSyncStore.setState({ status: 'error', lastError: error });
     return { ok: false, error };
   }
 }
 
-/** يرفع كامل الحالة إلى السحابة. */
-export async function pushToCloud(): Promise<{ ok: boolean; error?: string }> {
+/** يرفع التغييرات إلى PostgreSQL. */
+export async function pushToCloud(retryOnConflict = true): Promise<{ ok: boolean; error?: string; conflictResolved?: boolean }> {
   useSyncStore.setState({ status: 'pushing' });
   try {
-    await pushAll(snapshot());
-    useSyncStore.setState({ status: 'idle', lastSyncAt: new Date().toISOString(), lastError: null });
+    const version = await pushAll(snapshot());
+    useSyncStore.setState({
+      status: 'idle',
+      lastSyncAt: new Date().toISOString(),
+      lastError: null,
+      remoteVersion: version,
+    });
     return { ok: true };
   } catch (e) {
-    const error = e instanceof Error ? e.message : 'فشل الرفع';
+    if (e instanceof SyncConflictError && retryOnConflict) {
+      useSyncStore.setState({ status: 'conflict', lastError: e.message });
+      const pulled = await pullFromCloud();
+      if (!pulled.ok) return pulled;
+      return pushToCloud(false).then((r) => ({ ...r, conflictResolved: true }));
+    }
+    const error = e instanceof Error ? e.message : 'فشل حفظ البيانات';
     useSyncStore.setState({ status: 'error', lastError: error });
     return { ok: false, error };
   }
@@ -120,16 +124,15 @@ export async function pushToCloud(): Promise<{ ok: boolean; error?: string }> {
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribe: (() => void) | null = null;
 
-/** يبدأ الدفع التلقائي بعد كل تعديل (مع تأخير). */
 function startAutoPush() {
   if (unsubscribe) return;
   unsubscribe = useErpStore.subscribe(() => {
     if (applyingRemote) return;
-    if (!useSyncStore.getState().enabled) return;
+    if (!isSupabaseConfigured()) return;
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       void pushToCloud();
-    }, 2000);
+    }, 1500);
   });
 }
 
@@ -141,32 +144,27 @@ export function stopAutoSync() {
   }
 }
 
-/** يُستدعى مرة واحدة بعد الإماهة: يسحب البيانات ثم يفعّل الدفع التلقائي. */
-export async function initCloudSync(): Promise<void> {
-  const { configured, enabled } = useSyncStore.getState();
-  if (!configured || !enabled) {
-    useSyncStore.setState({ status: enabled ? 'idle' : 'disabled' });
-    return;
+/** يحمّل البيانات من Supabase ويفعّل الحفظ التلقائي بعد كل تعديل. */
+export async function initCloudSync(): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    useSyncStore.setState({ status: 'unconfigured', lastError: 'Supabase غير مهيّأ' });
+    return { ok: false, error: 'Supabase غير مهيّأ' };
   }
-  const probe = await testConnection();
-  if (!probe.ok) {
-    useSyncStore.setState({ status: 'offline', lastError: probe.error ?? null });
-    return;
-  }
-  await pullFromCloud();
-  startAutoPush();
-}
 
-/** يفعّل المزامنة لأول مرة: يدفع البيانات المحلية الحالية ثم يبدأ المزامنة. */
-export async function enableAndBootstrap(): Promise<{ ok: boolean; error?: string }> {
-  useSyncStore.getState().setEnabled(true);
   const probe = await testConnection();
   if (!probe.ok) {
     useSyncStore.setState({ status: 'offline', lastError: probe.error ?? null });
     return { ok: false, error: probe.error };
   }
-  const pushed = await pushToCloud();
-  if (!pushed.ok) return pushed;
+
+  const pulled = await pullFromCloud();
+  if (!pulled.ok) return pulled;
+
   startAutoPush();
   return { ok: true };
+}
+
+/** @deprecated — المزامنة دائماً مفعّلة */
+export async function enableAndBootstrap(): Promise<{ ok: boolean; error?: string }> {
+  return initCloudSync();
 }

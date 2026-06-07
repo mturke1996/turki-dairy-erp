@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Field } from '@/components/shared/field';
+import { CopyableInput } from '@/components/shared/copyable-input';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { QUALITY_LABELS, FARMER_STATUS_LABELS } from '@/lib/domain/constants';
 import type { Farmer, FarmerStatus, QualityTier } from '@/lib/domain/types';
@@ -21,6 +22,7 @@ const EMPTY = {
   fullName: '',
   region: '',
   phone: '',
+  bankName: '',
   bankAccount: '',
   iban: '',
   avgDailyYield: '',
@@ -46,6 +48,7 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
           fullName: farmer.fullName,
           region: farmer.region,
           phone: farmer.phone,
+          bankName: farmer.bankName ?? '',
           bankAccount: farmer.bankAccount ?? '',
           iban: farmer.iban ?? '',
           avgDailyYield: farmer.avgDailyYield != null ? String(farmer.avgDailyYield) : '',
@@ -71,6 +74,7 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
       fullName: form.fullName.trim(),
       region: form.region.trim(),
       phone: form.phone.trim(),
+      bankName: form.bankName.trim() || undefined,
       bankAccount: form.bankAccount.trim() || undefined,
       iban: iban || undefined,
       avgDailyYield: form.avgDailyYield.trim() ? Number(form.avgDailyYield) : undefined,
@@ -108,22 +112,32 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
           <Field label="رقم الهاتف" required>
             <Input dir="ltr" value={form.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="091-xxxxxxx" />
           </Field>
-          <Field label="رقم الحساب" hint="اختياري" className="sm:col-span-2">
+
+          <Field label="اسم المصرف" hint="اختياري" className="sm:col-span-2">
             <Input
+              value={form.bankName}
+              onChange={(e) => set({ bankName: e.target.value })}
+              placeholder="مثال: مصرف الجمهورية — فرع الميناء"
+            />
+          </Field>
+          <Field label="رقم الحساب" hint="اختياري · يمكن النسخ" className="sm:col-span-2">
+            <CopyableInput
               dir="ltr"
               value={form.bankAccount}
               onChange={(e) => set({ bankAccount: e.target.value })}
               placeholder="0021-554390"
               className="font-mono"
+              copyLabel="رقم الحساب"
             />
           </Field>
-          <Field label="رقم الآيبان (IBAN)" hint="اختياري" className="sm:col-span-2">
-            <Input
+          <Field label="رقم الآيبان (IBAN)" hint="اختياري · يمكن النسخ" className="sm:col-span-2">
+            <CopyableInput
               dir="ltr"
               value={form.iban}
               onChange={(e) => set({ iban: e.target.value })}
               placeholder="LY83 0021 0000 0000 5543 90"
               className="font-mono uppercase"
+              copyLabel="الآيبان"
             />
           </Field>
 

@@ -109,8 +109,17 @@ export default function FarmersPage() {
                       <p className="font-mono text-[11px] text-muted-foreground" dir="ltr">{f.code}</p>
                     </TableCell>
                     <TableCell className="text-[12.5px] text-muted-foreground">{f.region}</TableCell>
-                    <TableCell className="text-center font-mono text-[11.5px] text-muted-foreground" dir="ltr">
-                      {f.bankAccount ?? (f.iban ? f.iban.slice(0, 14) + '…' : '—')}
+                    <TableCell className="text-center text-[11.5px] text-muted-foreground">
+                      {f.bankName || f.bankAccount || f.iban ? (
+                        <div className="space-y-0.5">
+                          {f.bankName ? <p className="text-[12px] text-foreground">{f.bankName}</p> : null}
+                          <p className="font-mono" dir="ltr">
+                            {f.bankAccount ?? (f.iban ? f.iban.slice(0, 18) + '…' : '—')}
+                          </p>
+                        </div>
+                      ) : (
+                        '—'
+                      )}
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge variant={QUALITY_VARIANT[f.qualityTier]}>{f.qualityTier}</Badge>

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Money, Liters } from '@/components/shared/money';
+import { CopyableValue } from '@/components/shared/copyable-value';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PaymentDialog } from '@/components/forms/payment-dialog';
 import { FarmerFormDialog } from './farmer-form-dialog';
@@ -112,13 +113,20 @@ export function FarmerDetailDialog({
             />
           </div>
 
+          {(farmer.bankName || farmer.bankAccount || farmer.iban) ? (
+            <div className="rounded-lg border border-border bg-canvas-sunken/50 px-3 py-2.5 text-[12px]">
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">البيانات البنكية</p>
+              <div className="flex flex-col gap-2">
+                {farmer.bankName ? (
+                  <span className="text-[13px] font-medium text-foreground">{farmer.bankName}</span>
+                ) : null}
+                <CopyableValue value={farmer.bankAccount ?? ''} label="حساب:" />
+                <CopyableValue value={farmer.iban ?? ''} label="IBAN:" />
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
-            {farmer.bankAccount ? (
-              <span className="font-mono" dir="ltr">حساب: {farmer.bankAccount}</span>
-            ) : null}
-            {farmer.iban ? (
-              <span className="font-mono" dir="ltr">IBAN: {farmer.iban}</span>
-            ) : null}
             {farmer.avgDailyYield != null && farmer.avgDailyYield > 0 ? (
               <span>متوسط الإنتاج: <Liters value={farmer.avgDailyYield} className="inline text-[12px]" />/يوم</span>
             ) : null}

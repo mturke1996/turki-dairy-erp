@@ -113,6 +113,71 @@ export function allFarmerStats(data: ErpData): FarmerStats[] {
   return data.farmers.map((f) => computeFarmerStats(f, data.supplies, data.payments));
 }
 
+/** إحصاءات فلاح ضمن دورة (فترة) محددة — للتسوية نصف الشهرية. */
+export interface FarmerSessionStats {
+  farmerId: string;
+  sessionId: string;
+  fullName: string;
+  code: string;
+  suppliedQty: number;
+  sampleQty: number;
+  billableQty: number;
+  suppliedValue: number;
+  paidAmount: number;
+  balance: number;
+  status: 'pending' | 'partial' | 'paid' | 'none';
+  supplyCount: number;
+  paymentCount: number;
+}
+
+export function computeFarmerSessionStats(
+  farmer: Farmer,
+  sessionId: string,
+  supplies: SupplyTransaction[],
+  payments: Payment[],
+): FarmerSessionStats {
+  const fs = supplies.filter((s) => s.farmerId === farmer.id && s.sessionId === sessionId);
+  const ps = payments.filter(
+    (p) => p.kind === 'farmer_payment' && p.partyId === farmer.id && p.sessionId === sessionId,
+  );
+  const suppliedQty = sum(fs.map((s) => s.quantity));
+  const sampleQty = sum(fs.map((s) => s.sampleQty ?? 0));
+  const billableQty = round(suppliedQty - sampleQty);
+  const suppliedValue = sum(fs.map((s) => s.total));
+  const paidAmount = sum(ps.map((p) => p.amount));
+  const balance = round(Math.max(0, suppliedValue - paidAmount));
+
+  let status: FarmerSessionStats['status'] = 'none';
+  if (suppliedValue > 0.01) {
+    if (balance <= 0.01 || ps.some((p) => p.settlementComplete)) status = 'paid';
+    else if (paidAmount > 0.01) status = 'partial';
+    else status = 'pending';
+  }
+
+  return {
+    farmerId: farmer.id,
+    sessionId,
+    fullName: farmer.fullName,
+    code: farmer.code,
+    suppliedQty: round(suppliedQty),
+    sampleQty: round(sampleQty),
+    billableQty,
+    suppliedValue: round(suppliedValue),
+    paidAmount: round(paidAmount),
+    balance,
+    status,
+    supplyCount: fs.length,
+    paymentCount: ps.length,
+  };
+}
+
+export function allFarmerSessionStats(data: ErpData, sessionId: string): FarmerSessionStats[] {
+  return data.farmers
+    .map((f) => computeFarmerSessionStats(f, sessionId, data.supplies, data.payments))
+    .filter((s) => s.supplyCount > 0 || s.paymentCount > 0)
+    .sort((a, b) => b.balance - a.balance);
+}
+
 // ============================================================
 // العملاء + أعمار الديون
 // ============================================================
@@ -239,7 +304,7 @@ export function computeSessionSummary(
     data.payments.filter((p) => p.kind === 'customer_payment' && p.sessionId === session.id).map((p) => p.amount),
   );
   const adjQty = sum(data.adjustments.filter((a) => a.sessionId === session.id).map((a) => a.quantity));
-  const closingStock = round(session.openingStock + supplyQty - salesQty + adjQty);
+  const closingStock = round(Math.max(0, session.openingStock + supplyQty - salesQty + adjQty));
   return {
     session,
     supplyQty: round(supplyQty),

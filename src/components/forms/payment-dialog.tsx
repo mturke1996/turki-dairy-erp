@@ -1,10 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Field } from '@/components/shared/field';
 import { Money } from '@/components/shared/money';
@@ -20,9 +22,20 @@ type Props = {
   partyId: string;
   partyName: string;
   outstanding: number;
+  defaultAmount?: number;
+  settlementDefault?: boolean;
 };
 
-export function PaymentDialog({ open, onOpenChange, kind, partyId, partyName, outstanding }: Props) {
+export function PaymentDialog({
+  open,
+  onOpenChange,
+  kind,
+  partyId,
+  partyName,
+  outstanding,
+  defaultAmount,
+  settlementDefault,
+}: Props) {
   const recordFarmerPayment = useErpStore((s) => s.recordFarmerPayment);
   const recordCustomerPayment = useErpStore((s) => s.recordCustomerPayment);
   const vaults = useErpStore((s) => s.vaults);
@@ -33,12 +46,23 @@ export function PaymentDialog({ open, onOpenChange, kind, partyId, partyName, ou
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [reference, setReference] = useState('');
+  const [notes, setNotes] = useState('');
   const [source, setSource] = useState('none');
+  const [settlementComplete, setSettlementComplete] = useState(false);
 
   const isFarmer = kind === 'farmer';
   const val = Number(amount) || 0;
 
-  // خيارات الحساب النقدي (الخزن والبنوك النشطة)
+  useEffect(() => {
+    if (open) {
+      setAmount(defaultAmount ? String(defaultAmount) : '');
+      setSettlementComplete(settlementDefault ?? false);
+      setSource('none');
+      setReference('');
+      setNotes('');
+    }
+  }, [open, defaultAmount, settlementDefault]);
+
   const accounts = useMemo(
     () => [
       ...vaults.filter((v) => v.isActive).map((v) => ({ value: `vault:${v.id}`, label: v.name, type: 'vault' as const, id: v.id })),
@@ -60,8 +84,10 @@ export function PaymentDialog({ open, onOpenChange, kind, partyId, partyName, ou
       method,
       date: new Date(date + 'T10:00:00').toISOString(),
       reference: reference.trim() || undefined,
+      notes: notes.trim() || undefined,
       sourceType: selected?.type as AccountSourceType | undefined,
       sourceId: selected?.id,
+      settlementComplete: isFarmer ? settlementComplete : undefined,
     };
     const res = isFarmer
       ? recordFarmerPayment({ farmerId: partyId, ...base })
@@ -72,6 +98,7 @@ export function PaymentDialog({ open, onOpenChange, kind, partyId, partyName, ou
       });
       setAmount('');
       setReference('');
+      setNotes('');
       onOpenChange(false);
     } else {
       toast.error(res.error ?? 'تعذّر التسجيل');
@@ -98,14 +125,10 @@ export function PaymentDialog({ open, onOpenChange, kind, partyId, partyName, ou
           <div className="grid grid-cols-2 gap-3">
             <Field label="طريقة الدفع">
               <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {PAYMENT_METHOD_LABELS[k]}
-                    </SelectItem>
+                    <SelectItem key={k} value={k}>{PAYMENT_METHOD_LABELS[k]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -119,15 +142,11 @@ export function PaymentDialog({ open, onOpenChange, kind, partyId, partyName, ou
             hint={accounts.length === 0 ? 'لا توجد خزن/بنوك — أضِفها من صفحة النقد والبنوك' : undefined}
           >
             <Select value={source} onValueChange={setSource} disabled={accounts.length === 0}>
-              <SelectTrigger>
-                <SelectValue placeholder="بدون تأثير نقدي" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="بدون تأثير نقدي" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">تسجيل فقط (بدون حركة نقدية)</SelectItem>
                 {accounts.map((a) => (
-                  <SelectItem key={a.value} value={a.value}>
-                    {a.label}
-                  </SelectItem>
+                  <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -141,21 +160,31 @@ export function PaymentDialog({ open, onOpenChange, kind, partyId, partyName, ou
           <Field label="رقم المرجع / الشيك" hint="اختياري">
             <Input dir="ltr" value={reference} onChange={(e) => setReference(e.target.value)} />
           </Field>
+          {isFarmer ? (
+            <Field label="ملاحظات التسوية" hint="اختياري">
+              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="مثال: سداد دورة 1–15 يونيو" />
+            </Field>
+          ) : null}
+          {isFarmer ? (
+            <div className="flex items-center justify-between rounded-lg border border-meadow-100 bg-meadow-50/50 px-3 py-2.5">
+              <div>
+                <Label htmlFor="settlement" className="text-[13px] font-semibold">تم الدفع — تسوية كاملة</Label>
+                <p className="text-[11px] text-muted-foreground">يُعلّم حساب الفلاح في هذه الدورة كمسدّد</p>
+              </div>
+              <Switch id="settlement" checked={settlementComplete} onCheckedChange={setSettlementComplete} />
+            </div>
+          ) : null}
           {val > 0 ? (
             <div className="flex items-center justify-between rounded-lg border border-dashed border-border px-3 py-2 text-[12.5px]">
               <span className="text-muted-foreground">الرصيد بعد العملية</span>
-              <Money value={outstanding - val} className="font-semibold" />
+              <Money value={Math.max(0, outstanding - val)} className="font-semibold" />
             </div>
           ) : null}
         </div>
 
         <DialogFooter>
-          <Button onClick={submit} variant={isFarmer ? 'default' : 'meadow'}>
-            تأكيد
-          </Button>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            إلغاء
-          </Button>
+          <Button onClick={submit} variant={isFarmer ? 'default' : 'meadow'}>تأكيد</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>إلغاء</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

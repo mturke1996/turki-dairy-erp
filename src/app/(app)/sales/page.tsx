@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowUpFromLine, ShoppingCart, Lock, Warehouse, Wallet, TrendingUp, Receipt, AlertTriangle } from 'lucide-react';
+import { ArrowUpFromLine, ShoppingCart, Lock, Warehouse, Wallet, TrendingUp, Receipt } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

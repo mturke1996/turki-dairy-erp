@@ -118,6 +118,7 @@ create table if not exists public.farmers (
   livestock_type     livestock_type default 'cow',
   livestock_count    integer not null default 0,
   avg_daily_yield    numeric(12,2),
+  bank_name          text,
   bank_account       text,
   iban               text,
   quality_tier       quality_tier not null default 'A',

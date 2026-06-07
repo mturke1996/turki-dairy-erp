@@ -2,127 +2,108 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowDownToLine, ArrowUpToLine, Plug, Loader2 } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpToLine, Database, Loader2, Plug, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-import {
-  useSyncStore,
-  enableAndBootstrap,
-  pullFromCloud,
-  pushToCloud,
-  stopAutoSync,
-} from '@/lib/supabase/sync';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useSyncStore, pullFromCloud, pushToCloud } from '@/lib/supabase/sync';
 import { testConnection } from '@/lib/supabase/repository';
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'success' | 'info' | 'warning' | 'danger' | 'neutral' }> = {
-  disabled: { label: 'متوقفة', variant: 'neutral' },
-  idle: { label: 'متزامنة', variant: 'success' },
-  syncing: { label: 'جارٍ السحب…', variant: 'info' },
-  pushing: { label: 'جارٍ الرفع…', variant: 'info' },
+  idle: { label: 'متصل', variant: 'success' },
+  syncing: { label: 'جارٍ التحميل…', variant: 'info' },
+  pushing: { label: 'جارٍ الحفظ…', variant: 'info' },
+  conflict: { label: 'تعارض — جارٍ الحل', variant: 'warning' },
   error: { label: 'خطأ', variant: 'danger' },
   offline: { label: 'غير متصل', variant: 'warning' },
+  unconfigured: { label: 'غير مهيّأ', variant: 'neutral' },
 };
 
 export function CloudSyncPanel() {
   const [mounted, setMounted] = useState(false);
   const [working, setWorking] = useState(false);
-  const configured = useSyncStore((s) => s.configured);
-  const enabled = useSyncStore((s) => s.enabled);
   const status = useSyncStore((s) => s.status);
   const lastSyncAt = useSyncStore((s) => s.lastSyncAt);
   const lastError = useSyncStore((s) => s.lastError);
+  const remoteVersion = useSyncStore((s) => s.remoteVersion);
 
   useEffect(() => setMounted(true), []);
 
-  if (!configured) return null;
-
-  const badge = STATUS_BADGE[mounted ? status : 'disabled'] ?? STATUS_BADGE.disabled;
-  const isEnabled = mounted && enabled;
-
-  async function toggle(v: boolean) {
-    if (v) {
-      setWorking(true);
-      const res = await enableAndBootstrap();
-      setWorking(false);
-      toast[res.ok ? 'success' : 'error'](
-        res.ok ? 'تم تفعيل المزامنة ورفع البيانات الحالية' : `تعذّر التفعيل: ${res.error ?? ''}`,
-      );
-    } else {
-      stopAutoSync();
-      useSyncStore.getState().setEnabled(false);
-      toast.message('تم إيقاف المزامنة السحابية');
-    }
-  }
+  const badge = STATUS_BADGE[mounted ? status : 'idle'] ?? STATUS_BADGE.idle;
 
   async function doTest() {
     setWorking(true);
     const res = await testConnection();
     setWorking(false);
-    toast[res.ok ? 'success' : 'error'](res.ok ? 'الاتصال بـ Supabase سليم' : `فشل الاتصال: ${res.error ?? ''}`);
+    toast[res.ok ? 'success' : 'error'](res.ok ? 'الاتصال بقاعدة البيانات سليم' : `فشل الاتصال: ${res.error ?? ''}`);
   }
 
   async function doPull() {
     setWorking(true);
     const res = await pullFromCloud();
     setWorking(false);
-    toast[res.ok ? 'success' : 'error'](res.ok ? 'تم سحب البيانات من السحابة' : `تعذّر السحب: ${res.error ?? ''}`);
+    toast[res.ok ? 'success' : 'error'](res.ok ? 'تم تحميل البيانات من PostgreSQL' : `تعذّر التحميل: ${res.error ?? ''}`);
   }
 
   async function doPush() {
     setWorking(true);
     const res = await pushToCloud();
     setWorking(false);
-    toast[res.ok ? 'success' : 'error'](res.ok ? 'تم رفع البيانات إلى السحابة' : `تعذّر الرفع: ${res.error ?? ''}`);
+    toast[res.ok ? 'success' : 'error'](res.ok ? 'تم حفظ البيانات في PostgreSQL' : `تعذّر الحفظ: ${res.error ?? ''}`);
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-border p-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[13px] font-semibold">المزامنة السحابية</p>
-          <p className="text-[11.5px] text-muted-foreground">
-            {isEnabled
-              ? lastSyncAt
-                ? `آخر مزامنة: ${new Date(lastSyncAt).toLocaleString('ar-LY')}`
-                : 'مفعّلة'
-              : 'محلي فقط — فعّلها للمزامنة بين الأجهزة'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-[15px]">
+          <Database className="h-4.5 w-4.5 text-meadow-600" />
+          قاعدة البيانات (Supabase)
+        </CardTitle>
+        <CardDescription>
+          مصدر البيانات الوحيد — PostgreSQL. كل التعديلات تُحفظ تلقائياً بعد 1.5 ثانية.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between rounded-xl border border-border p-3">
+          <div>
+            <p className="text-[13px] font-semibold">حالة الاتصال</p>
+            {lastSyncAt ? (
+              <p className="text-[11.5px] text-muted-foreground">
+                آخر مزامنة: {new Date(lastSyncAt).toLocaleString('ar-LY')}
+                {remoteVersion > 0 ? ` · v${remoteVersion}` : ''}
+              </p>
+            ) : (
+              <p className="text-[11.5px] text-muted-foreground">PostgreSQL — Supabase</p>
+            )}
+          </div>
           <Badge variant={badge.variant}>{badge.label}</Badge>
-          <Switch checked={isEnabled} disabled={working} onCheckedChange={toggle} aria-label="تفعيل المزامنة" />
         </div>
-      </div>
 
-      {mounted && lastError && (status === 'error' || status === 'offline') && (
-        <p className="rounded-lg bg-rose-50 p-2 text-[11px] text-rose-600" dir="ltr">
-          {lastError}
-        </p>
-      )}
+        {mounted && lastError && (status === 'error' || status === 'offline') ? (
+          <p className="rounded-lg bg-rose-50 p-2 text-[11px] text-rose-600" dir="ltr">
+            {lastError}
+          </p>
+        ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={doTest} disabled={working}>
-          {working ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plug className="h-3.5 w-3.5" />}
-          اختبار الاتصال
-        </Button>
-        <Button variant="outline" size="sm" onClick={doPull} disabled={working || !isEnabled}>
-          <ArrowDownToLine className="h-3.5 w-3.5" />
-          سحب من السحابة
-        </Button>
-        <Button variant="outline" size="sm" onClick={doPush} disabled={working || !isEnabled}>
-          <ArrowUpToLine className="h-3.5 w-3.5" />
-          رفع إلى السحابة
-        </Button>
-      </div>
-
-      <p className="rounded-lg bg-canvas-sunken/60 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
-        قبل التفعيل: انشر مخطط قاعدة البيانات من الملف{' '}
-        <code className="rounded bg-canvas-sunken px-1 font-mono text-[10.5px]" dir="ltr">
-          supabase/migrations/0001_init_erp_schema.sql
-        </code>{' '}
-        في Supabase ← SQL Editor.
-      </p>
-    </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => void doTest()} disabled={working}>
+            {working ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plug className="h-3.5 w-3.5" />}
+            اختبار الاتصال
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => void doPull()} disabled={working}>
+            <ArrowDownToLine className="h-3.5 w-3.5" />
+            إعادة تحميل
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => void doPush()} disabled={working}>
+            <ArrowUpToLine className="h-3.5 w-3.5" />
+            حفظ الآن
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => window.location.reload()} disabled={working}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            تحديث الصفحة
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

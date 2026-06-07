@@ -184,6 +184,37 @@ export function buildInventoryLedger(
   };
 }
 
+/** صف افتتاحي/مرحّل لعرض دفتر دورة محددة (لا يغيّر الرصيد العالمي). */
+export function carryForwardEntry(session: Session): InventoryLedgerEntry | null {
+  if (session.openingStock <= 0) return null;
+  return {
+    id: `CARRY-${session.id}`,
+    ref: 'مرحّل',
+    date: session.periodFrom,
+    sessionId: session.id,
+    movementType: 'CARRY_FORWARD',
+    sourceKind: 'opening',
+    sourceId: session.id,
+    label: 'رصيد مرحّل من الدورة السابقة',
+    quantityIn: session.openingStock,
+    quantityOut: 0,
+    unitCost: session.openingAvgCost,
+    balanceAfter: session.openingStock,
+    valueAfter: round(session.openingStock * session.openingAvgCost),
+  };
+}
+
+/** دفتر حركة دورة واحدة مع صف الترحيل. */
+export function sessionLedgerEntries(
+  session: Session,
+  allEntries: InventoryLedgerEntry[],
+): InventoryLedgerEntry[] {
+  const carry = carryForwardEntry(session);
+  const inSession = allEntries.filter((e) => e.sessionId === session.id);
+  const merged = carry ? [carry, ...inSession] : inSession;
+  return merged.sort((a, b) => b.date.localeCompare(a.date));
+}
+
 export function round(n: number, d = 2): number {
   const f = 10 ** d;
   return Math.round((n + Number.EPSILON) * f) / f;

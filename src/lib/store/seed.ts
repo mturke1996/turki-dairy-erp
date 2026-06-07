@@ -100,6 +100,7 @@ function makeFarmers(): Farmer[] {
       livestockType: livestock,
       livestockCount: count,
       avgDailyYield: yield_,
+      bankName: pick(['مصرف الجمهورية', 'المصرف التجاري الوطني', 'مصرف الوحدة']),
       bankAccount: `${intBetween(1000, 9999)}-${intBetween(100000, 999999)}`,
       iban: `LY${intBetween(10, 99)}${intBetween(100000000000, 999999999999)}`,
       qualityTier: tier,

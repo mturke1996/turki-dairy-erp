@@ -1,4 +1,4 @@
-/** إعدادات Supabase المركزية — يُستخدم في العميل والخادم والـ middleware. */
+/** إعدادات Supabase — مصدر البيانات الوحيد (PostgreSQL). */
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(
@@ -8,17 +8,22 @@ export function isSupabaseConfigured(): boolean {
   );
 }
 
-/** الوضع المحلي: بدون مصادقة Supabase (تطوير / عمل offline). */
-export function isLocalDataSource(): boolean {
-  return process.env.NEXT_PUBLIC_DATA_SOURCE === 'local';
+/** التطبيق يعمل حصرياً على قاعدة البيانات — لا وضع localStorage. */
+export function isDatabaseMode(): boolean {
+  return isSupabaseConfigured();
 }
 
-/** هل يُفرَض Supabase Auth على المسارات المحمية؟ */
+/** مصادقة Supabase مطلوبة لكل المسارات المحمية. */
 export function isAuthRequired(): boolean {
-  return isSupabaseConfigured() && !isLocalDataSource();
+  return isSupabaseConfigured();
 }
 
-/** هل المزامنة السحابية متاحة؟ */
+/** @deprecated استخدم isDatabaseMode */
 export function isCloudSyncAvailable(): boolean {
   return isSupabaseConfigured();
+}
+
+/** @deprecated لا يوجد وضع محلي */
+export function isLocalDataSource(): boolean {
+  return false;
 }

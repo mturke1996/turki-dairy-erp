@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   ArrowDownToLine,
   ArrowUpFromLine,
-  Banknote,
   Building2,
   Coins,
   Gauge,
@@ -21,7 +20,6 @@ import { FlowChart } from '@/components/dashboard/flow-chart';
 import { ProfitBars } from '@/components/dashboard/profit-bars';
 import { DashboardV3Panels } from '@/components/dashboard/v3-panels';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Money, Liters } from '@/components/shared/money';
 import { EmptyState } from '@/components/shared/empty-state';

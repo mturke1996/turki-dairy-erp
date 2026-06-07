@@ -19,6 +19,7 @@ import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { usePermission } from '@/lib/store/use-permission';
 import { computeDailyFlow } from '@/lib/domain/calculations';
+import { sessionLedgerEntries } from '@/lib/domain/inventory';
 import { formatShortDate, formatNumber } from '@/lib/utils';
 
 const MOVEMENT_BADGE = {
@@ -26,6 +27,7 @@ const MOVEMENT_BADGE = {
   OUT: { variant: 'info' as const, label: 'صادر' },
   ADJUSTMENT: { variant: 'warning' as const, label: 'تسوية' },
   OPENING: { variant: 'neutral' as const, label: 'افتتاحي' },
+  CARRY_FORWARD: { variant: 'neutral' as const, label: 'مرحّل' },
 };
 
 export default function InventoryPage() {
@@ -38,9 +40,10 @@ export default function InventoryPage() {
 
   const session = data.sessions.find((s) => s.id === sessionId);
   const entries = useMemo(() => {
-    const list = sessionId === 'all' ? d.inv.entries : d.inv.entries.filter((e) => e.sessionId === sessionId);
-    return [...list].sort((a, b) => b.date.localeCompare(a.date));
-  }, [d.inv.entries, sessionId]);
+    if (sessionId === 'all') return [...d.inv.entries].sort((a, b) => b.date.localeCompare(a.date));
+    if (!session) return [];
+    return sessionLedgerEntries(session, d.inv.entries);
+  }, [d.inv.entries, sessionId, session]);
 
   const totals = useMemo(() => {
     const list = sessionId === 'all' ? d.inv.entries : d.inv.entries.filter((e) => e.sessionId === sessionId);

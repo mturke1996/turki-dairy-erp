@@ -27,9 +27,9 @@ const NUMERIC = new Set([
   'openingBalance', 'minThreshold',
   'budgetMonthly', 'baseSalary', 'totalAmount',
   'minStockThreshold',
+  'syncVersion',
+  'sampleQty',
 ]);
-
-/** كائن تطبيق → صف قاعدة بيانات. يتجاهل القيم undefined. */
 export function toRow<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {

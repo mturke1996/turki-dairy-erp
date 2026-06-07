@@ -14,13 +14,18 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { ROLE_LABELS } from '@/lib/domain/constants';
 import { initials } from '@/lib/utils';
+import { signOut } from '@/lib/supabase/auth';
 
 export function UserMenu() {
   const router = useRouter();
   const auth = useErpStore((s) => s.auth);
-  const logout = useErpStore((s) => s.logout);
 
   if (!auth) return null;
+
+  async function handleLogout() {
+    await signOut();
+    router.push('/login');
+  }
 
   return (
     <DropdownMenu>
@@ -47,10 +52,7 @@ export function UserMenu() {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={() => {
-            logout();
-            router.push('/login');
-          }}
+          onClick={() => void handleLogout()}
           className="text-rose-600 focus:bg-rose-50 [&>svg]:text-rose-600"
         >
           <LogOut />

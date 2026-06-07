@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import { StatTile } from '@/components/shared/stat-tile';
 import { Money, Liters } from '@/components/shared/money';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { SessionClosingPDF } from '@/features/pdf/SessionClosingPDF';
+import { FarmerCycleSettlement } from '@/components/farmers/farmer-cycle-settlement';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { useCycle } from '@/lib/store/use-cycle';
@@ -185,10 +186,12 @@ export default function SessionsPage() {
             <StatTile label="توريد" value={<Liters value={summary.supplyQty} />} icon={Droplets} tone="meadow" hint={`${summary.supplyCount} عملية`} />
             <StatTile label="مبيعات" value={<Money value={summary.salesRevenue} decimals={0} />} icon={ShoppingCart} tone="navy" hint={`${summary.salesCount} عملية`} />
             <StatTile label="الربح" value={<Money value={summary.grossProfit} decimals={0} />} icon={TrendingUp} tone="sun" hint={`هامش ${formatNumber(summary.marginPct, 1)}%`} />
-            <StatTile label="الرصيد الختامي" value={<Liters value={summary.closingStock} />} icon={Archive} tone="neutral" hint={`افتتاحي ${formatNumber(summary.openingStock, 0)}`} />
+            <StatTile label="الرصيد الختامي" value={<Liters value={summary.closingStock} />} icon={Archive} tone="neutral" hint={`افتtتاحي ${formatNumber(summary.openingStock, 0)} · يُرحَّل للدورة التالية`} />
           </CardContent>
         </Card>
       ) : null}
+
+      {active ? <FarmerCycleSettlement session={active} readonly={active.status === 'archived'} /> : null}
 
       {/* كل الفترات */}
       <Card>
@@ -270,9 +273,12 @@ export default function SessionsPage() {
           </DialogHeader>
           <div className="space-y-2 rounded-xl bg-canvas-sunken p-4 text-[12.5px]">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">مخزون مُرحّل</span>
-              <Liters value={summary.closingStock} className="font-semibold" />
+              <span className="text-muted-foreground">مخزون مُرحّل للدورة التالية</span>
+              <Liters value={summary.closingStock} className="font-semibold text-meadow-700" />
             </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              الحليب المتبقي ({formatNumber(summary.closingStock, 0)} لتر) يبقى في المخزون ويُفتح به الرصيد الافتتاحي للدورة الجديدة.
+            </p>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">مستحقات الفلاحين</span>
               <Money value={d.totals.payables} decimals={0} className="font-semibold" />
@@ -296,3 +302,4 @@ export default function SessionsPage() {
     </div>
   );
 }
+

@@ -5,19 +5,45 @@ import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/re
 import { ThemeProvider } from 'next-themes';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useErpStore } from '@/lib/store/use-erp-store';
+import { bootstrapAuthSession } from '@/lib/supabase/auth';
+import { isSupabaseConfigured } from '@/lib/supabase/config';
+import { initCloudSync } from '@/lib/supabase/sync';
+import { DatabaseSetupRequired } from '@/components/layout/database-setup-required';
+
+/** يزيل بيانات localStorage القديمة (لم تعد تُستخدم). */
+function purgeLegacyStorage() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('turki-dairy-erp');
+  localStorage.removeItem('turki-cloud-sync-enabled');
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const [ready, setReady] = useState(false);
+  const configured = isSupabaseConfigured();
+
   useEffect(() => {
+    purgeLegacyStorage();
+
     void (async () => {
-      await useErpStore.persist.rehydrate();
+      if (!configured) {
+        useErpStore.getState().setHydrated(true);
+        setReady(true);
+        return;
+      }
+
       try {
-        const { initCloudSync } = await import('@/lib/supabase/sync');
-        await initCloudSync();
+        const authed = await bootstrapAuthSession();
+        if (authed) {
+          await initCloudSync();
+        }
       } catch {
-        // المزامنة السحابية اختيارية — تجاهل الفشل بصمت
+        useErpStore.getState().logout();
+      } finally {
+        useErpStore.getState().setHydrated(true);
+        setReady(true);
       }
     })();
-  }, []);
+  }, [configured]);
 
   const [client] = useState(
     () =>
@@ -35,10 +61,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
 
+  if (!ready) return null;
+
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange={false}>
       <QueryClientProvider client={client}>
-        <TooltipProvider delayDuration={80}>{children}</TooltipProvider>
+        <TooltipProvider delayDuration={80}>
+          {!configured ? <DatabaseSetupRequired /> : children}
+        </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

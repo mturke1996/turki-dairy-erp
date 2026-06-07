@@ -15,7 +15,7 @@ export type PriceTier = 'wholesale' | 'premium' | 'standard';
 
 export type SessionStatus = 'open' | 'locked' | 'archived';
 
-export type MovementType = 'IN' | 'OUT' | 'ADJUSTMENT' | 'OPENING';
+export type MovementType = 'IN' | 'OUT' | 'ADJUSTMENT' | 'OPENING' | 'CARRY_FORWARD';
 export type PaymentMethod = 'cash' | 'bank' | 'cheque';
 
 export type TransactionKind =
@@ -50,6 +50,8 @@ export interface Farmer {
   fullName: string;
   region: string;
   phone: string;
+  /** اسم المصرف */
+  bankName?: string;
   /** رقم الحساب البنكي */
   bankAccount?: string;
   /** رقم الآيبان للتحويلات البنكية */
@@ -91,10 +93,12 @@ export interface SupplyTransaction {
   farmerId: string;
   sessionId: string;
   date: string; // ISO
-  quantity: number; // لتر
+  quantity: number; // لتر — الكمية الكلية الواردة للمخزون
   unitPrice: number;
-  total: number; // quantity * unitPrice
+  total: number; // (quantity - sampleQty) * unitPrice
   qualityTier: QualityTier;
+  /** لترات العينة — تدخل المخزون لكن لا تُحسب في مستحقات الفلاح */
+  sampleQty?: number;
   fatPct?: number;
   notes?: string;
   createdAt: string;
@@ -130,6 +134,8 @@ export interface Payment {
   paidFromId?: string;
   reference?: string;
   notes?: string;
+  /** تسوية دورة — الدفع يغطي كامل مستحقات الفلاح في هذه الدورة */
+  settlementComplete?: boolean;
   createdAt: string;
   createdBy?: string;
 }
@@ -154,7 +160,7 @@ export interface SessionArchive {
     cash: { farmerPayments: number; customerReceipts: number };
   };
   balancesSnapshot: {
-    farmers: { id: string; name: string; balance: number }[];
+    farmers: { id: string; name: string; balance: number; suppliedQty?: number; paidAmount?: number; status?: 'pending' | 'partial' | 'paid' }[];
     customers: { id: string; name: string; balance: number }[];
   };
   carryForward: {
