@@ -201,7 +201,7 @@ export default function SupplyPage() {
               </Select>
             </Field>
 
-            <Field label="وجبة الاستلام" required hint="بعض الفلاحين يوردون صباحاً ومساءً">
+            <Field label="وجبة الاستلام" required>
               <div className="grid grid-cols-2 gap-2">
                 {(['morning', 'evening'] as MilkShift[]).map((shift) => {
                   const active = milkShift === shift;
