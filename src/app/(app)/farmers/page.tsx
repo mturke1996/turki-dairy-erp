@@ -15,7 +15,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { FarmerFormDialog } from '@/components/farmers/farmer-form-dialog';
 import { FarmerDetailDialog } from '@/components/farmers/farmer-detail-dialog';
 import { useDerived } from '@/lib/store/use-derived';
-import { LIVESTOCK_LABELS, QUALITY_VARIANT, FARMER_STATUS_LABELS } from '@/lib/domain/constants';
+import { QUALITY_VARIANT, FARMER_STATUS_LABELS } from '@/lib/domain/constants';
 import type { FarmerStatus } from '@/lib/domain/types';
 
 const STATUS_VARIANT = { active: 'success', suspended: 'warning', inactive: 'neutral' } as const;
@@ -94,7 +94,7 @@ export default function FarmersPage() {
                 <TableRow>
                   <TableHead>الفلاح</TableHead>
                   <TableHead>المنطقة</TableHead>
-                  <TableHead className="text-center">الماشية</TableHead>
+                  <TableHead className="text-center">الحساب البنكي</TableHead>
                   <TableHead className="text-center">الجودة</TableHead>
                   <TableHead className="text-left">إجمالي التوريد</TableHead>
                   <TableHead className="text-left">الرصيد المستحق</TableHead>
@@ -109,8 +109,8 @@ export default function FarmersPage() {
                       <p className="font-mono text-[11px] text-muted-foreground" dir="ltr">{f.code}</p>
                     </TableCell>
                     <TableCell className="text-[12.5px] text-muted-foreground">{f.region}</TableCell>
-                    <TableCell className="text-center text-[12px] text-muted-foreground">
-                      {LIVESTOCK_LABELS[f.livestockType]} · {f.livestockCount}
+                    <TableCell className="text-center font-mono text-[11.5px] text-muted-foreground" dir="ltr">
+                      {f.bankAccount ?? (f.iban ? f.iban.slice(0, 14) + '…' : '—')}
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge variant={QUALITY_VARIANT[f.qualityTier]}>{f.qualityTier}</Badge>

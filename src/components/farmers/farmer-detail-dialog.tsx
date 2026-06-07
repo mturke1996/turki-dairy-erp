@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Banknote, MapPin, Phone, Pencil, Milk } from 'lucide-react';
+import { Banknote, MapPin, Phone, Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,6 @@ import { FarmerStatementPDF } from '@/features/pdf/FarmerStatementPDF';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { usePermission } from '@/lib/store/use-permission';
 import {
-  LIVESTOCK_LABELS,
   QUALITY_LABELS,
   QUALITY_VARIANT,
   FARMER_STATUS_LABELS,
@@ -114,7 +113,15 @@ export function FarmerDetailDialog({
           </div>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
-            <span className="flex items-center gap-1"><Milk className="h-3.5 w-3.5" /> {LIVESTOCK_LABELS[farmer.livestockType]} · {farmer.livestockCount} رأس</span>
+            {farmer.bankAccount ? (
+              <span className="font-mono" dir="ltr">حساب: {farmer.bankAccount}</span>
+            ) : null}
+            {farmer.iban ? (
+              <span className="font-mono" dir="ltr">IBAN: {farmer.iban}</span>
+            ) : null}
+            {farmer.avgDailyYield != null && farmer.avgDailyYield > 0 ? (
+              <span>متوسط الإنتاج: <Liters value={farmer.avgDailyYield} className="inline text-[12px]" />/يوم</span>
+            ) : null}
             <span>الجودة: <Badge variant={QUALITY_VARIANT[farmer.qualityTier]}>{QUALITY_LABELS[farmer.qualityTier]}</Badge></span>
             <span>متوسط السعر: <Money value={farmer.avgPrice} decimals={3} muted /></span>
           </div>

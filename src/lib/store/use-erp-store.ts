@@ -34,7 +34,7 @@ import { generateSeed } from './seed';
 import { generateSeedV3, DEFAULT_EXPENSE_CATEGORIES, emptyV3 } from './seed-v3';
 
 const DEFAULT_SETTINGS: AppSettings = {
-  minStockThreshold: 3000,
+  minStockThreshold: 5000,
   defaultBuyPrice: 1.85,
   defaultSellPrice: 2.55,
   currencyLabel: 'د.ل',
@@ -239,6 +239,13 @@ function currentStockOf(state: ErpState): number {
   return buildInventoryLedger(state.supplies, state.sales, state.adjustments, state.sessions).currentStock;
 }
 
+function requireOpenSession(state: ErpState): MutationResult & { session?: Session } {
+  const session = state.sessions.find((s) => s.id === state.activeSessionId);
+  if (!session) return { ok: false, error: 'لا توجد دورة نشطة.' };
+  if (session.status === 'archived') return { ok: false, error: 'الدورة مؤرشفة — لا يمكن تسجيل عمليات جديدة.' };
+  return { ok: true, session };
+}
+
 function makeAudit(
   state: { auth: AuthUser | null },
   entityType: string,
@@ -340,7 +347,7 @@ export const useErpStore = create<ErpState>()(
                 .map((c) => ({ id: c.id, name: c.entityName, balance: c.outstanding })),
             },
             carryForward: {
-              openingStock: summary.closingStock,
+              openingStock: round(inv.currentStock),
               payables,
               receivables,
             },
@@ -352,6 +359,7 @@ export const useErpStore = create<ErpState>()(
         dayAfter.setDate(dayAfter.getDate() + 1);
         const w = cycleForDate(dayAfter);
         const newId = cycleSessionId(w.year, w.month, w.cycleNumber);
+        const carriedStock = round(inv.currentStock);
         const next: Session = {
           id: newId,
           label: w.label,
@@ -359,7 +367,7 @@ export const useErpStore = create<ErpState>()(
           periodTo: fmtLocalDate(w.to),
           status: 'open',
           cycleNumber: w.cycleNumber,
-          openingStock: summary.closingStock,
+          openingStock: carriedStock,
           openingAvgCost: round(inv.currentWac, 3),
           openingPayables: payables,
           openingReceivables: receivables,
@@ -371,11 +379,13 @@ export const useErpStore = create<ErpState>()(
           'session',
           active.id,
           'close',
-          `إغلاق الدورة «${active.label}» — مبيعات ${round(summary.salesRevenue)} د.ل، ربح ${round(summary.grossProfit)} د.ل، مخزون مرحّل ${round(summary.closingStock)} لتر`,
+          `إغلاق الدورة «${active.label}» — مبيعات ${round(summary.salesRevenue)} د.ل، ربح ${round(summary.grossProfit)} د.ل، مخزون مرحّل ${carriedStock} لتر`,
         );
 
+        const archivedSessions = state.sessions.map((s) => (s.id === active.id ? archived : s));
+        const hasNext = archivedSessions.some((s) => s.id === newId);
         set({
-          sessions: [...state.sessions.map((s) => (s.id === active.id ? archived : s)), next],
+          sessions: hasNext ? archivedSessions : [...archivedSessions, next],
           activeSessionId: newId,
           auditLogs: [audit, ...state.auditLogs],
         });
@@ -404,6 +414,8 @@ export const useErpStore = create<ErpState>()(
 
       recordSupply: (input) => {
         const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
         if (input.quantity <= 0) return { ok: false, error: 'الكمية يجب أن تكون أكبر من صفر.' };
         if (input.unitPrice <= 0) return { ok: false, error: 'سعر الشراء يجب أن يكون أكبر من صفر.' };
         const farmer = state.farmers.find((f) => f.id === input.farmerId);
@@ -422,6 +434,7 @@ export const useErpStore = create<ErpState>()(
           fatPct: input.fatPct,
           notes: input.notes,
           createdAt: new Date().toISOString(),
+          createdBy: state.auth?.name,
         };
         set({ supplies: [tx, ...state.supplies] });
         return { ok: true, id: tx.id };
@@ -429,6 +442,8 @@ export const useErpStore = create<ErpState>()(
 
       recordSale: (input) => {
         const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
         if (input.quantity <= 0) return { ok: false, error: 'الكمية يجب أن تكون أكبر من صفر.' };
         if (input.unitPrice <= 0) return { ok: false, error: 'سعر البيع يجب أن يكون أكبر من صفر.' };
         const customer = state.customers.find((c) => c.id === input.customerId);
@@ -458,6 +473,7 @@ export const useErpStore = create<ErpState>()(
           dueDate: due,
           notes: input.notes,
           createdAt: new Date().toISOString(),
+          createdBy: state.auth?.name,
         };
         set({ sales: [tx, ...state.sales] });
         return { ok: true, id: tx.id };
@@ -465,19 +481,21 @@ export const useErpStore = create<ErpState>()(
 
       recordFarmerPayment: (input) => {
         const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
         if (input.amount <= 0) return { ok: false, error: 'المبلغ يجب أن يكون أكبر من صفر.' };
+        const farmer = state.farmers.find((f) => f.id === input.farmerId);
+        if (!farmer) return { ok: false, error: 'الفلاح غير موجود.' };
         const amount = round(input.amount);
         const date = input.date ?? new Date().toISOString();
         const useSource = Boolean(input.sourceType && input.sourceId);
 
-        // عند تحديد مصدر نقدي: تحقّق من كفاية الرصيد قبل الصرف
         if (useSource) {
           const bal = accountBalance(input.sourceType!, input.sourceId!, state.vaults, state.banks, state.cashMovements);
           if (amount > bal + 0.001)
             return { ok: false, error: `الرصيد المتاح (${Math.floor(bal).toLocaleString('en-US')} د.ل) لا يكفي للدفع.` };
         }
 
-        const farmer = state.farmers.find((f) => f.id === input.farmerId);
         const tx: Payment = {
           id: uid('pay-'),
           ref: nextRef('PAY', state.payments.filter((p) => p.kind === 'farmer_payment')),
@@ -487,9 +505,12 @@ export const useErpStore = create<ErpState>()(
           date,
           amount,
           method: input.method,
+          paidFromType: useSource ? input.sourceType : undefined,
+          paidFromId: useSource ? input.sourceId : undefined,
           reference: input.reference,
           notes: input.notes,
           createdAt: new Date().toISOString(),
+          createdBy: state.auth?.name,
         };
 
         const movement: CashMovement | null = useSource
@@ -523,12 +544,15 @@ export const useErpStore = create<ErpState>()(
 
       recordCustomerPayment: (input) => {
         const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
         if (input.amount <= 0) return { ok: false, error: 'المبلغ يجب أن يكون أكبر من صفر.' };
+        const customer = state.customers.find((c) => c.id === input.customerId);
+        if (!customer) return { ok: false, error: 'العميل غير موجود.' };
         const amount = round(input.amount);
         const date = input.date ?? new Date().toISOString();
         const useSource = Boolean(input.sourceType && input.sourceId);
 
-        const customer = state.customers.find((c) => c.id === input.customerId);
         const tx: Payment = {
           id: uid('pay-'),
           ref: nextRef('RCV', state.payments.filter((p) => p.kind === 'customer_payment')),
@@ -538,9 +562,12 @@ export const useErpStore = create<ErpState>()(
           date,
           amount,
           method: input.method,
+          paidFromType: useSource ? input.sourceType : undefined,
+          paidFromId: useSource ? input.sourceId : undefined,
           reference: input.reference,
           notes: input.notes,
           createdAt: new Date().toISOString(),
+          createdBy: state.auth?.name,
         };
 
         const movement: CashMovement | null = useSource
@@ -574,6 +601,8 @@ export const useErpStore = create<ErpState>()(
 
       addAdjustment: (input) => {
         const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
         if (input.quantity === 0) return { ok: false, error: 'حدّد كمية التسوية.' };
         const tx: InventoryAdjustment = {
           id: uid('adj-'),
@@ -624,6 +653,8 @@ export const useErpStore = create<ErpState>()(
 
       recordTransfer: (input) => {
         const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
         if (input.amount <= 0) return { ok: false, error: 'المبلغ يجب أن يكون أكبر من صفر.' };
         if (input.fromType === input.toType && input.fromId === input.toId)
           return { ok: false, error: 'لا يمكن التحويل إلى نفس الحساب.' };
@@ -688,6 +719,8 @@ export const useErpStore = create<ErpState>()(
       // ── v3.0: المصاريف ───────────────────────────────────
       recordExpense: (input) => {
         const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
         if (input.amount <= 0) return { ok: false, error: 'المبلغ يجب أن يكون أكبر من صفر.' };
         const cat = state.expenseCategories.find((c) => c.id === input.categoryId);
         if (!cat) return { ok: false, error: 'التصنيف غير موجود.' };
@@ -754,6 +787,8 @@ export const useErpStore = create<ErpState>()(
 
       createPayrollBatch: (input) => {
         const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
         const active = state.employees.filter((e) => e.status === 'active');
         if (!active.length) return { ok: false, error: 'لا يوجد موظفون نشطون لإنشاء كشف رواتب.' };
         const lines: PayrollLine[] = active.map((e) => {
@@ -794,6 +829,8 @@ export const useErpStore = create<ErpState>()(
 
       payPayrollBatch: (batchId, source) => {
         const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
         const batch = state.payrollBatches.find((b) => b.id === batchId);
         if (!batch) return { ok: false, error: 'كشف الرواتب غير موجود.' };
         if (batch.status === 'paid') return { ok: false, error: 'الكشف مصروف بالفعل.' };

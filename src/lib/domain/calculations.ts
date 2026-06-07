@@ -6,17 +6,26 @@
 import {
   buildTrialBalance,
   computePnL,
+  journalForAdjustment,
+  journalForExpense,
   journalForPayment,
+  journalForPayroll,
   journalForSale,
   journalForSupply,
 } from './accounting';
 import { buildInventoryLedger, round, type InventoryResult } from './inventory';
+import { computeTreasury } from './treasury';
 import type {
+  BankAccount,
+  CashMovement,
+  CashVault,
   Customer,
+  Expense,
   Farmer,
   InventoryAdjustment,
   JournalEntry,
   Payment,
+  PayrollBatch,
   SaleTransaction,
   Session,
   SupplyTransaction,
@@ -32,6 +41,11 @@ export interface ErpData {
   sales: SaleTransaction[];
   payments: Payment[];
   adjustments: InventoryAdjustment[];
+  expenses: Expense[];
+  payrollBatches: PayrollBatch[];
+  vaults: CashVault[];
+  banks: BankAccount[];
+  cashMovements: CashMovement[];
   settings: { minStockThreshold: number; defaultBuyPrice: number; defaultSellPrice: number };
 }
 
@@ -171,7 +185,17 @@ export function buildAllJournals(data: ErpData, saleCogs: Record<string, number>
   const entries: JournalEntry[] = [];
   for (const s of data.supplies) entries.push(journalForSupply(s));
   for (const s of data.sales) entries.push(journalForSale(s, saleCogs[s.id] ?? 0));
-  for (const p of data.payments) entries.push(journalForPayment(p));
+  for (const p of data.payments) {
+    const je = journalForPayment(p);
+    if (je) entries.push(je);
+  }
+  for (const e of data.expenses) {
+    if (e.status === 'approved') entries.push(journalForExpense(e));
+  }
+  for (const b of data.payrollBatches) {
+    if (b.status === 'paid') entries.push(journalForPayroll(b));
+  }
+  for (const a of data.adjustments) entries.push(journalForAdjustment(a));
   return entries.sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -214,7 +238,8 @@ export function computeSessionSummary(
   const customerReceipts = sum(
     data.payments.filter((p) => p.kind === 'customer_payment' && p.sessionId === session.id).map((p) => p.amount),
   );
-  const closingStock = round(session.openingStock + supplyQty - salesQty);
+  const adjQty = sum(data.adjustments.filter((a) => a.sessionId === session.id).map((a) => a.quantity));
+  const closingStock = round(session.openingStock + supplyQty - salesQty + adjQty);
   return {
     session,
     supplyQty: round(supplyQty),
@@ -298,10 +323,7 @@ export function computeDerived(data: ErpData): DerivedData {
   const payables = round(sum(farmers.map((f) => Math.max(0, f.creditBalance))));
   const receivables = round(sum(customers.map((c) => Math.max(0, c.outstanding))));
   const overdue = round(sum(customers.map((c) => c.overdueAmount)));
-  const farmerPaid = sum(data.payments.filter((p) => p.kind === 'farmer_payment').map((p) => p.amount));
-  const custReceived = sum(
-    data.payments.filter((p) => p.kind === 'customer_payment').map((p) => p.amount),
-  );
+  const treasury = computeTreasury(data.vaults, data.banks, data.cashMovements);
 
   const alerts = buildAlerts({ inv, customers, farmers, data });
 
@@ -321,7 +343,7 @@ export function computeDerived(data: ErpData): DerivedData {
       payables,
       receivables,
       overdue,
-      netCash: round(custReceived - farmerPaid),
+      netCash: treasury.total,
     },
     alerts,
   };

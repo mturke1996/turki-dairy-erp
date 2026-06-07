@@ -21,6 +21,36 @@ export interface CycleWindow {
   label: string;
 }
 
+const CYCLE_AR = ['١', '٢'] as const;
+
+/** تسمية مختصرة مناسبة للشريط العلوي والجوال. */
+export function cycleShortLabel(month: number, year: number, cycleNumber: 1 | 2): string {
+  return `${AR_MONTHS[month]} ${year} · ${CYCLE_AR[cycleNumber - 1]}`;
+}
+
+/** أقصر للشاشات الضيقة جداً. */
+export function cycleMicroLabel(month: number, cycleNumber: 1 | 2): string {
+  return `${AR_MONTHS[month]} · ${CYCLE_AR[cycleNumber - 1]}`;
+}
+
+/** تسمية كاملة للقوائم والتقارير. */
+export function cycleFullLabel(month: number, year: number, cycleNumber: 1 | 2): string {
+  return `${AR_MONTHS[month]} ${year} — الدورة ${cycleNumber === 1 ? 'الأولى' : 'الثانية'}`;
+}
+
+export function sessionDisplayLabel(
+  session: { label: string; periodFrom: string; cycleNumber?: 1 | 2 },
+  variant: 'micro' | 'compact' | 'full' = 'compact',
+): string {
+  if (variant === 'full') return session.label;
+  const d = new Date(`${session.periodFrom}T12:00:00`);
+  const month = d.getMonth();
+  const year = d.getFullYear();
+  const n = session.cycleNumber ?? 1;
+  if (variant === 'micro') return cycleMicroLabel(month, n);
+  return cycleShortLabel(month, year, n);
+}
+
 export function cycleForDate(d: Date): CycleWindow {
   const day = d.getDate();
   const month = d.getMonth();
@@ -34,7 +64,7 @@ export function cycleForDate(d: Date): CycleWindow {
     year,
     from,
     to,
-    label: `${AR_MONTHS[month]} ${year} — الدورة ${cycleNumber === 1 ? 'الأولى' : 'الثانية'}`,
+    label: cycleFullLabel(month, year, cycleNumber),
   };
 }
 
@@ -47,7 +77,7 @@ export function cycleOfMonth(year: number, month: number, cycleNumber: 1 | 2): C
     year,
     from,
     to,
-    label: `${AR_MONTHS[month]} ${year} — الدورة ${cycleNumber === 1 ? 'الأولى' : 'الثانية'}`,
+    label: cycleFullLabel(month, year, cycleNumber),
   };
 }
 

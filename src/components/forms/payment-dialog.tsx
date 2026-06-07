@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -46,11 +46,6 @@ export function PaymentDialog({ open, onOpenChange, kind, partyId, partyName, ou
     ],
     [vaults, banks],
   );
-
-  // اختيار أول حساب افتراضياً عند توفّره
-  useEffect(() => {
-    if (source === 'none' && accounts.length > 0) setSource(accounts[0].value);
-  }, [accounts, source]);
 
   const selected = accounts.find((a) => a.value === source) ?? null;
   const sourceBalance = selected ? accountBalance(selected.type, selected.id, vaults, banks, cashMovements) : 0;

@@ -18,14 +18,17 @@ import { computeAging } from '@/lib/domain/calculations';
 import { computePnL } from '@/lib/domain/accounting';
 import { ACCOUNT_LABELS } from '@/lib/domain/constants';
 import { formatNumber, formatShortDate } from '@/lib/utils';
+import type { TransactionKind } from '@/lib/domain/types';
 
-const KIND_LABEL = {
+const KIND_LABEL: Record<TransactionKind, string> = {
   supply: 'توريد',
   sale: 'بيع',
   farmer_payment: 'دفعة فلاح',
   customer_payment: 'تحصيل عميل',
   adjustment: 'تسوية',
-} as const;
+  expense: 'مصروف',
+  payroll: 'رواتب',
+};
 
 export default function ReportsPage() {
   const data = useErpData();

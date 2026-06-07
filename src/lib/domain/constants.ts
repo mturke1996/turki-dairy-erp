@@ -62,6 +62,8 @@ export const ACCOUNT_LABELS: Record<AccountKey, string> = {
   revenue: 'إيرادات المبيعات',
   cogs: 'تكلفة البضاعة المباعة',
   cash: 'النقدية والمصارف',
+  operating_expense: 'مصاريف تشغيلية',
+  payroll_expense: 'رواتب وأجور',
 };
 
 export const ROLE_LABELS: Record<Role, string> = {

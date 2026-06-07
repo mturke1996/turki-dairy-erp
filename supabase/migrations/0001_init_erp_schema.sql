@@ -113,13 +113,13 @@ create table if not exists public.farmers (
   id                 text primary key,
   code               text not null,
   full_name          text not null,
-  national_id        text,
   region             text not null default '',
   phone              text not null default '',
-  livestock_type     livestock_type not null default 'cow',
+  livestock_type     livestock_type default 'cow',
   livestock_count    integer not null default 0,
-  avg_daily_yield    numeric(12,2) not null default 0,
+  avg_daily_yield    numeric(12,2),
   bank_account       text,
+  iban               text,
   quality_tier       quality_tier not null default 'A',
   default_buy_price  numeric(12,3) not null default 0,
   status             farmer_status not null default 'active',
@@ -241,18 +241,20 @@ create index if not exists idx_sales_date     on public.sales(date);
 --     party_id يشير إلى فلاح أو عميل (متعدد الأشكال) لذا بلا FK مباشر.
 -- ----------------------------------------------------------------------------
 create table if not exists public.payments (
-  id         text primary key,
-  ref        text not null,
-  kind       payment_kind not null,
-  party_id   text not null,
-  session_id text not null references public.sessions(id) on delete cascade,
-  date       timestamptz not null default now(),
-  amount     numeric(14,2) not null default 0,
-  method     payment_method not null default 'cash',
-  reference  text,
-  notes      text,
-  created_at timestamptz not null default now(),
-  created_by text
+  id              text primary key,
+  ref             text not null,
+  kind            payment_kind not null,
+  party_id        text not null,
+  session_id      text not null references public.sessions(id) on delete cascade,
+  date            timestamptz not null default now(),
+  amount          numeric(14,2) not null default 0,
+  method          payment_method not null default 'cash',
+  paid_from_type  account_source_type,
+  paid_from_id    text,
+  reference       text,
+  notes           text,
+  created_at      timestamptz not null default now(),
+  created_by      text
 );
 create index if not exists idx_payments_party   on public.payments(party_id);
 create index if not exists idx_payments_session on public.payments(session_id);

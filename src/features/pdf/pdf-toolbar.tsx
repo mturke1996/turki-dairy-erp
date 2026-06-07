@@ -5,6 +5,7 @@ import { FileDown, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { usePermission } from '@/lib/store/use-permission';
 import { renderPdfBlob, savePdfBlob, shouldUseInAppPdfViewer } from './pdf-blob-utils';
 import { PdfPreviewDialog } from './pdf-preview-dialog';
 
@@ -30,6 +31,7 @@ export function TurkiPdfToolbar({
   size = 'sm',
   className,
 }: Props) {
+  const canExport = usePermission('data.export');
   const [openBusy, setOpenBusy] = useState(false);
   const [dlBusy, setDlBusy] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
@@ -127,6 +129,8 @@ export function TurkiPdfToolbar({
       setShareBusy(false);
     }
   }
+
+  if (!canExport) return null;
 
   return (
     <>

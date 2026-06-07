@@ -18,7 +18,14 @@ export type SessionStatus = 'open' | 'locked' | 'archived';
 export type MovementType = 'IN' | 'OUT' | 'ADJUSTMENT' | 'OPENING';
 export type PaymentMethod = 'cash' | 'bank' | 'cheque';
 
-export type TransactionKind = 'supply' | 'sale' | 'farmer_payment' | 'customer_payment' | 'adjustment';
+export type TransactionKind =
+  | 'supply'
+  | 'sale'
+  | 'farmer_payment'
+  | 'customer_payment'
+  | 'adjustment'
+  | 'expense'
+  | 'payroll';
 
 /** مفاتيح دليل الحسابات للمحرّك المزدوج القيد */
 export type AccountKey =
@@ -27,7 +34,9 @@ export type AccountKey =
   | 'customer_receivable' // ذمم العملاء (أصل)
   | 'revenue' // إيرادات المبيعات
   | 'cogs' // تكلفة البضاعة المباعة
-  | 'cash'; // النقدية والمصارف
+  | 'cash' // النقدية والمصارف
+  | 'operating_expense' // مصاريف تشغيلية
+  | 'payroll_expense'; // رواتب وأجور
 
 export type Role = 'admin' | 'accountant' | 'operator' | 'hr_manager' | 'viewer';
 
@@ -39,13 +48,18 @@ export interface Farmer {
   id: string;
   code: string; // معرّف بشري F-001
   fullName: string;
-  nationalId?: string;
   region: string;
   phone: string;
-  livestockType: LivestockType;
-  livestockCount: number;
-  avgDailyYield: number; // لتر/يوم
+  /** رقم الحساب البنكي */
   bankAccount?: string;
+  /** رقم الآيبان للتحويلات البنكية */
+  iban?: string;
+  /** لتر/يوم — اختياري */
+  avgDailyYield?: number;
+  /** @deprecated لم يعد يُطلب عند الإضافة */
+  livestockCount?: number;
+  /** @deprecated لم يعد يُطلب عند الإضافة */
+  livestockType?: LivestockType;
   qualityTier: QualityTier;
   defaultBuyPrice: number; // سعر شراء اللتر الافتراضي
   status: FarmerStatus;
@@ -111,6 +125,9 @@ export interface Payment {
   date: string;
   amount: number;
   method: PaymentMethod;
+  /** ربط الخزينة/البنك — يطابق paid_from_type/id في Supabase */
+  paidFromType?: AccountSourceType;
+  paidFromId?: string;
   reference?: string;
   notes?: string;
   createdAt: string;

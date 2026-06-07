@@ -12,9 +12,12 @@
 
 import type {
   AccountKey,
+  Expense,
+  InventoryAdjustment,
   JournalEntry,
   JournalLine,
   Payment,
+  PayrollBatch,
   SaleTransaction,
   SupplyTransaction,
 } from './types';
@@ -57,7 +60,9 @@ export function journalForSale(s: SaleTransaction, cogs: number): JournalEntry {
   };
 }
 
-export function journalForPayment(p: Payment): JournalEntry {
+/** يُنشئ قيداً فقط عند وجود ربط خزينة — لضمان توازن المدين والدائن مع حركة النقد. */
+export function journalForPayment(p: Payment): JournalEntry | null {
+  if (!p.paidFromType || !p.paidFromId) return null;
   if (p.kind === 'farmer_payment') {
     return {
       id: `JE-${p.id}`,
@@ -79,6 +84,59 @@ export function journalForPayment(p: Payment): JournalEntry {
     sourceId: p.id,
     description: 'تحصيل دفعة من عميل',
     lines: [line('cash', p.amount, 0), line('customer_receivable', 0, p.amount)],
+  };
+}
+
+export function journalForExpense(e: Expense): JournalEntry {
+  return {
+    id: `JE-${e.id}`,
+    ref: e.ref,
+    date: e.date,
+    sessionId: e.sessionId,
+    kind: 'expense',
+    sourceId: e.id,
+    description: e.description,
+    lines: [line('operating_expense', e.amount, 0), line('cash', 0, e.amount)],
+  };
+}
+
+export function journalForPayroll(batch: PayrollBatch): JournalEntry {
+  return {
+    id: `JE-${batch.id}`,
+    ref: batch.ref,
+    date: batch.paidAt ?? batch.createdAt,
+    sessionId: batch.sessionId,
+    kind: 'payroll',
+    sourceId: batch.id,
+    description: batch.label,
+    lines: [line('payroll_expense', batch.totalAmount, 0), line('cash', 0, batch.totalAmount)],
+  };
+}
+
+export function journalForAdjustment(a: InventoryAdjustment): JournalEntry {
+  const absQty = Math.abs(a.quantity);
+  const value = round(absQty * a.unitCost);
+  if (a.quantity > 0) {
+    return {
+      id: `JE-${a.id}`,
+      ref: a.ref,
+      date: a.date,
+      sessionId: a.sessionId,
+      kind: 'adjustment',
+      sourceId: a.id,
+      description: a.reason,
+      lines: [line('inventory', value, 0), line('operating_expense', 0, value)],
+    };
+  }
+  return {
+    id: `JE-${a.id}`,
+    ref: a.ref,
+    date: a.date,
+    sessionId: a.sessionId,
+    kind: 'adjustment',
+    sourceId: a.id,
+    description: a.reason,
+    lines: [line('operating_expense', value, 0), line('inventory', 0, value)],
   };
 }
 

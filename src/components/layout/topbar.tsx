@@ -1,11 +1,14 @@
 'use client';
 
+import Link from 'next/link';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { BrandLogo } from './brand-logo';
 import { CloudSyncButton } from './cloud-sync-button';
 import { SessionSwitcher } from './session-switcher';
 import { ThemeToggle } from './theme-toggle';
 import { UserMenu } from './user-menu';
+import { BRAND } from '@/lib/brand';
 
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   return (
@@ -14,7 +17,13 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         <Menu className="h-5 w-5" />
       </Button>
 
-      <div className="flex-1" />
+      <Link href="/dashboard" className="flex items-center gap-2.5 lg:hidden" aria-label={BRAND.name}>
+        <BrandLogo variant="mark" />
+        <span className="truncate text-[13px] font-semibold text-foreground">{BRAND.name}</span>
+      </Link>
+
+      <div className="hidden flex-1 lg:block" />
+      <div className="flex-1 lg:hidden" />
 
       <SessionSwitcher />
       <CloudSyncButton />

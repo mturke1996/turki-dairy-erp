@@ -1,28 +1,18 @@
 /**
  * مصدر الهوية الموحّد لمصنع التركي للحليب ومشتقاته.
  *
- * كل القيم هنا (الاسم، التواصل، لوحة ألوان الـ PDF) قابلة للتعديل من مكان واحد،
- * وتُستهلك في الواجهة وفي مستندات الـ PDF على حدٍ سواء.
- *
- * بيانات التواصل مأخوذة من الورقة الرسمية للمصنع (Letterhead).
+ * كل القيم هنا (الاسم، التواصل، الشعار، الألوان) قابلة للتعديل من مكان واحد،
+ * وتُستهلك في الواجهة وPWA ومستندات الـ PDF على حدٍ سواء.
  */
 
 export type Brand = {
-  /** اسم قصير (أزرار الواجهة والشريط الجانبي) */
   name: string;
-  /** الاسم الكامل الرسمي (ترويسة الوثائق) */
   fullName: string;
-  /** اسم لاتيني اختياري */
   nameLatin: string;
-  /** الوصف التعريفي تحت الاسم */
   tagline: string;
-  /** حرف الشعار في المربع الدائري */
   monogram: string;
-  /** رمز العملة */
   currency: string;
-  /** المنطقة */
   region: string;
-  /** بيانات التواصل المطبوعة على الـ PDF */
   contact: {
     phone: string;
     phone2: string;
@@ -33,11 +23,24 @@ export type Brand = {
   socials: {
     facebook: string;
   };
-  /** مسار الشعار من /public */
+  /** الشعار الأفقي الكامل */
   logoSrc: string;
-  /** مسار الورقة الرسمية من /public */
+  /** أيقونات PWA والمتصفح */
+  icons: {
+    favicon: string;
+    apple: string;
+    pwa192: string;
+    pwa512: string;
+    maskable: string;
+  };
   letterheadSrc: string;
-  /** لوحة ألوان الطباعة — يشاركها قالب react-pdf */
+  /** ألوان الشعار الرسمية */
+  colors: {
+    navy: string;
+    green: string;
+    sun: string;
+    white: string;
+  };
   pdfPalette: {
     primary: string;
     primaryDark: string;
@@ -72,6 +75,13 @@ export const BRAND: Brand = {
   currency: 'LYD',
   region: 'تاجوراء · طرابلس · ليبيا',
   logoSrc: '/turki-logo.png',
+  icons: {
+    favicon: '/icons/favicon-32.png',
+    apple: '/icons/apple-touch-icon.png',
+    pwa192: '/icons/icon-192.png',
+    pwa512: '/icons/icon-512.png',
+    maskable: '/icons/icon-maskable-512.png',
+  },
   letterheadSrc: '/turki-letterhead.png',
   contact: {
     phone: '021 - 714 7839',
@@ -83,34 +93,37 @@ export const BRAND: Brand = {
   socials: {
     facebook: '',
   },
+  colors: {
+    navy: '#0d3a7a',
+    green: '#3d9e2f',
+    sun: '#f5c518',
+    white: '#ffffff',
+  },
   pdfPalette: {
-    /** حبر فحمي — متوافق مع ثيم Fluxen */
-    primary: '#171717',
-    primaryDark: '#0a0a0a',
-    primaryLight: '#2e2e2e',
-    /** مرجاني — لمسة التركيز */
-    accent: '#e63946',
-    accentLight: '#fef0f0',
-    logoGreen: '#e63946',
-    logoGreenSoft: '#fef5f5',
-    sun: '#c9a227',
-    sunSoft: '#fdf8ec',
+    primary: '#0d3a7a',
+    primaryDark: '#082952',
+    primaryLight: '#1a4f96',
+    accent: '#3d9e2f',
+    accentLight: '#edf7eb',
+    logoGreen: '#3d9e2f',
+    logoGreenSoft: '#edf7eb',
+    sun: '#f5c518',
+    sunSoft: '#fef9e6',
     text: '#15171a',
     muted: '#6e7470',
-    border: '#eceae3',
-    rowAlt: '#f5f4ef',
-    headerBg: '#171717',
-    mutedBg: '#f2f0e9',
+    border: '#dce6f2',
+    rowAlt: '#f4f8fc',
+    headerBg: '#0d3a7a',
+    mutedBg: '#eef3f9',
     white: '#ffffff',
     paleGold: '#fbfbf9',
     success: '#2f7d32',
     warning: '#b45309',
     danger: '#b3261e',
-    info: '#171717',
+    info: '#0d3a7a',
   },
 };
 
-/** سطر تواصل موحّد لتذييل تقارير الـ PDF. */
 export function buildPdfFooterLine(brand: Brand = BRAND): string {
   return [brand.contact.address, brand.contact.phone, brand.contact.email]
     .filter(Boolean)

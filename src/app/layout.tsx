@@ -44,9 +44,18 @@ export const metadata: Metadata = {
   applicationName: BRAND.name,
   authors: [{ name: BRAND.fullName }],
   icons: {
-    icon: [{ url: '/turki-logo.png', type: 'image/png' }],
-    apple: [{ url: '/turki-logo.png' }],
-    shortcut: '/turki-logo.png',
+    icon: [
+      { url: BRAND.icons.favicon, sizes: '32x32', type: 'image/png' },
+      { url: BRAND.icons.pwa192, sizes: '192x192', type: 'image/png' },
+      { url: BRAND.icons.pwa512, sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: BRAND.icons.apple, sizes: '180x180', type: 'image/png' }],
+    shortcut: BRAND.icons.favicon,
+  },
+  appleWebApp: {
+    capable: true,
+    title: BRAND.name,
+    statusBarStyle: 'default',
   },
   openGraph: {
     type: 'website',
@@ -54,12 +63,15 @@ export const metadata: Metadata = {
     title: BRAND.fullName,
     description: BRAND.tagline,
     siteName: BRAND.name,
-    images: [{ url: '/turki-logo.png', width: 1024, height: 1000, alt: BRAND.fullName }],
+    images: [{ url: BRAND.logoSrc, width: 1200, height: 630, alt: BRAND.fullName }],
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#171717',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: BRAND.colors.navy },
+    { media: '(prefers-color-scheme: dark)', color: BRAND.colors.navy },
+  ],
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,

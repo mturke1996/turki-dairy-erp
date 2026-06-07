@@ -14,6 +14,11 @@ export function useErpData(): ErpData {
   const sales = useErpStore((s) => s.sales);
   const payments = useErpStore((s) => s.payments);
   const adjustments = useErpStore((s) => s.adjustments);
+  const expenses = useErpStore((s) => s.expenses);
+  const payrollBatches = useErpStore((s) => s.payrollBatches);
+  const vaults = useErpStore((s) => s.vaults);
+  const banks = useErpStore((s) => s.banks);
+  const cashMovements = useErpStore((s) => s.cashMovements);
   const settings = useErpStore((s) => s.settings);
 
   return useMemo(
@@ -26,13 +31,21 @@ export function useErpData(): ErpData {
       sales,
       payments,
       adjustments,
+      expenses,
+      payrollBatches,
+      vaults,
+      banks,
+      cashMovements,
       settings: {
         minStockThreshold: settings.minStockThreshold,
         defaultBuyPrice: settings.defaultBuyPrice,
         defaultSellPrice: settings.defaultSellPrice,
       },
     }),
-    [sessions, activeSessionId, farmers, customers, supplies, sales, payments, adjustments, settings],
+    [
+      sessions, activeSessionId, farmers, customers, supplies, sales, payments, adjustments,
+      expenses, payrollBatches, vaults, banks, cashMovements, settings,
+    ],
   );
 }
 

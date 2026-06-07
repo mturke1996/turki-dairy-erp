@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Field } from '@/components/shared/field';
 import { useErpStore } from '@/lib/store/use-erp-store';
-import { LIVESTOCK_LABELS, QUALITY_LABELS, FARMER_STATUS_LABELS } from '@/lib/domain/constants';
-import type { Farmer, FarmerStatus, LivestockType, QualityTier } from '@/lib/domain/types';
+import { QUALITY_LABELS, FARMER_STATUS_LABELS } from '@/lib/domain/constants';
+import type { Farmer, FarmerStatus, QualityTier } from '@/lib/domain/types';
 
 type Props = {
   open: boolean;
@@ -21,16 +21,18 @@ const EMPTY = {
   fullName: '',
   region: '',
   phone: '',
-  nationalId: '',
   bankAccount: '',
-  livestockType: 'cow' as LivestockType,
-  livestockCount: '',
+  iban: '',
   avgDailyYield: '',
   qualityTier: 'A' as QualityTier,
   defaultBuyPrice: '',
   status: 'active' as FarmerStatus,
   notes: '',
 };
+
+function normalizeIban(value: string): string {
+  return value.trim().replace(/\s+/g, '').toUpperCase();
+}
 
 export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
   const addFarmer = useErpStore((s) => s.addFarmer);
@@ -44,11 +46,9 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
           fullName: farmer.fullName,
           region: farmer.region,
           phone: farmer.phone,
-          nationalId: farmer.nationalId ?? '',
           bankAccount: farmer.bankAccount ?? '',
-          livestockType: farmer.livestockType,
-          livestockCount: String(farmer.livestockCount),
-          avgDailyYield: String(farmer.avgDailyYield),
+          iban: farmer.iban ?? '',
+          avgDailyYield: farmer.avgDailyYield != null ? String(farmer.avgDailyYield) : '',
           qualityTier: farmer.qualityTier,
           defaultBuyPrice: String(farmer.defaultBuyPrice),
           status: farmer.status,
@@ -64,15 +64,16 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
     if (!form.region.trim()) return toast.error('أدخل المنطقة.');
     if (!form.phone.trim()) return toast.error('أدخل رقم الهاتف.');
 
+    const iban = normalizeIban(form.iban);
+    if (iban && iban.length < 15) return toast.error('رقم الآيبان غير صالح.');
+
     const payload = {
       fullName: form.fullName.trim(),
       region: form.region.trim(),
       phone: form.phone.trim(),
-      nationalId: form.nationalId.trim() || undefined,
       bankAccount: form.bankAccount.trim() || undefined,
-      livestockType: form.livestockType,
-      livestockCount: Number(form.livestockCount) || 0,
-      avgDailyYield: Number(form.avgDailyYield) || 0,
+      iban: iban || undefined,
+      avgDailyYield: form.avgDailyYield.trim() ? Number(form.avgDailyYield) : undefined,
       qualityTier: form.qualityTier,
       defaultBuyPrice: Number(form.defaultBuyPrice) || defaultBuy,
       status: form.status,
@@ -107,32 +108,27 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
           <Field label="رقم الهاتف" required>
             <Input dir="ltr" value={form.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="091-xxxxxxx" />
           </Field>
-          <Field label="الرقم الوطني" hint="اختياري">
-            <Input dir="ltr" value={form.nationalId} onChange={(e) => set({ nationalId: e.target.value })} />
+          <Field label="رقم الحساب" hint="اختياري" className="sm:col-span-2">
+            <Input
+              dir="ltr"
+              value={form.bankAccount}
+              onChange={(e) => set({ bankAccount: e.target.value })}
+              placeholder="0021-554390"
+              className="font-mono"
+            />
           </Field>
-          <Field label="الحساب المصرفي" hint="اختياري">
-            <Input dir="ltr" value={form.bankAccount} onChange={(e) => set({ bankAccount: e.target.value })} />
+          <Field label="رقم الآيبان (IBAN)" hint="اختياري" className="sm:col-span-2">
+            <Input
+              dir="ltr"
+              value={form.iban}
+              onChange={(e) => set({ iban: e.target.value })}
+              placeholder="LY83 0021 0000 0000 5543 90"
+              className="font-mono uppercase"
+            />
           </Field>
 
-          <Field label="نوع الماشية">
-            <Select value={form.livestockType} onValueChange={(v) => set({ livestockType: v as LivestockType })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(LIVESTOCK_LABELS) as LivestockType[]).map((k) => (
-                  <SelectItem key={k} value={k}>
-                    {LIVESTOCK_LABELS[k]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="عدد رؤوس الماشية">
-            <Input type="number" dir="ltr" value={form.livestockCount} onChange={(e) => set({ livestockCount: e.target.value })} placeholder="0" />
-          </Field>
-          <Field label="متوسط الإنتاج اليومي (لتر)">
-            <Input type="number" dir="ltr" value={form.avgDailyYield} onChange={(e) => set({ avgDailyYield: e.target.value })} placeholder="0" />
+          <Field label="متوسط الإنتاج اليومي (لتر)" hint="اختياري">
+            <Input type="number" dir="ltr" value={form.avgDailyYield} onChange={(e) => set({ avgDailyYield: e.target.value })} placeholder="—" />
           </Field>
           <Field label="درجة الجودة">
             <Select value={form.qualityTier} onValueChange={(v) => set({ qualityTier: v as QualityTier })}>

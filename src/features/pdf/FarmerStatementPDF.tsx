@@ -5,7 +5,7 @@ import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
 import { PDF } from './pdfBase';
 import { PdfMoneyText, pdfFmtNum, pdfFmtDate } from './pdfBrandKit';
-import { LIVESTOCK_LABELS, QUALITY_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
+import { QUALITY_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import type { FarmerStats } from '@/lib/domain/calculations';
 import type { Payment, SupplyTransaction } from '@/lib/domain/types';
 
@@ -90,8 +90,16 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
           <Text style={[s.value, { direction: 'ltr', textAlign: 'right' }]}>{ar(farmer.phone)}</Text>
         </View>
         <View style={s.cell}>
-          <Text style={s.label}>{ar('نوع الماشية')}</Text>
-          <Text style={s.value}>{ar(LIVESTOCK_LABELS[farmer.livestockType])}</Text>
+          <Text style={s.label}>{ar('رقم الحساب')}</Text>
+          <Text style={[s.value, { direction: 'ltr', textAlign: 'right' }]}>
+            {ar(farmer.bankAccount ?? '—')}
+          </Text>
+        </View>
+        <View style={s.cell}>
+          <Text style={s.label}>{ar('رقم الآيبان')}</Text>
+          <Text style={[s.value, { direction: 'ltr', textAlign: 'right' }]}>
+            {ar(farmer.iban ?? '—')}
+          </Text>
         </View>
         <View style={s.cell}>
           <Text style={s.label}>{ar('متوسط سعر اللتر')}</Text>

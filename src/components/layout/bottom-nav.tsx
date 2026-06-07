@@ -8,7 +8,7 @@ import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NAV_ITEMS, NAV_GROUPS } from './nav-config';
 import { useRole } from '@/lib/store/use-permission';
-import { can } from '@/lib/domain/constants';
+import { can, type Permission } from '@/lib/domain/constants';
 
 interface PrimaryTab {
   href: string;
@@ -16,14 +16,12 @@ interface PrimaryTab {
   icon: LucideIcon;
 }
 
-const PRIMARY: PrimaryTab[] = [
+const PRIMARY_DEF: (PrimaryTab & { permission?: Permission })[] = [
   { href: '/dashboard', label: 'الرئيسية', icon: LayoutDashboard },
-  { href: '/supply', label: 'توريد', icon: Droplets },
-  { href: '/sales', label: 'بيع', icon: ShoppingCart },
+  { href: '/supply', label: 'توريد', icon: Droplets, permission: 'supply.record' },
+  { href: '/sales', label: 'بيع', icon: ShoppingCart, permission: 'sales.record' },
   { href: '/farmers', label: 'الفلاحون', icon: Tractor },
 ];
-
-const PRIMARY_HREFS = new Set(PRIMARY.map((p) => p.href));
 
 export function BottomNav() {
   const pathname = usePathname();
@@ -34,16 +32,22 @@ export function BottomNav() {
     setMoreOpen(false);
   }, [pathname]);
 
+  const primary = PRIMARY_DEF.filter((t) => !t.permission || can(role, t.permission));
+  const primaryHrefs = new Set(primary.map((p) => p.href));
+
   const moreItems = NAV_ITEMS.filter(
-    (i) => !PRIMARY_HREFS.has(i.href) && (!i.permission || can(role, i.permission)),
+    (i) => !primaryHrefs.has(i.href) && (!i.permission || can(role, i.permission)),
   );
   const moreActive = moreItems.some((i) => pathname === i.href || pathname.startsWith(`${i.href}/`));
 
   return (
     <>
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-md lg:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-5 pb-[env(safe-area-inset-bottom)]">
-          {PRIMARY.map((tab) => {
+        <div
+          className="mx-auto grid max-w-md pb-[env(safe-area-inset-bottom)]"
+          style={{ gridTemplateColumns: `repeat(${primary.length + 1}, minmax(0, 1fr))` }}
+        >
+          {primary.map((tab) => {
             const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
             const Icon = tab.icon;
             return (

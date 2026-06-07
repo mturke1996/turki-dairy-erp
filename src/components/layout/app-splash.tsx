@@ -1,15 +1,23 @@
 import { BrandLogo } from './brand-logo';
+import { BRAND } from '@/lib/brand';
 
-/** شاشة تحميل خفيفة — تظهر لحظات أثناء إعادة بناء الحالة من التخزين المحلي. */
+/** شاشة تحميل — تظهر أثناء استعادة الحالة من التخزين المحلي. */
 export function AppSplash() {
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-44 opacity-90">
-          <BrandLogo variant="full" />
+    <div
+      className="flex min-h-[100dvh] items-center justify-center"
+      style={{ backgroundColor: BRAND.colors.navy }}
+    >
+      <div className="flex flex-col items-center gap-5 px-6">
+        <div className="w-56 rounded-2xl bg-white px-5 py-4 shadow-lift">
+          <BrandLogo variant="full" priority />
         </div>
-        <div className="h-1 w-28 overflow-hidden rounded-full bg-canvas-sunken">
-          <div className="h-full w-1/2 animate-[shimmer_1.2s_ease-in-out_infinite] rounded-full bg-meadow-500/70" />
+        <p className="text-[13px] font-medium text-white/70">{BRAND.fullName}</p>
+        <div className="h-1 w-32 overflow-hidden rounded-full bg-white/15">
+          <div
+            className="h-full w-1/2 animate-[shimmer_1.2s_ease-in-out_infinite] rounded-full"
+            style={{ backgroundColor: BRAND.colors.green }}
+          />
         </div>
       </div>
     </div>

@@ -95,13 +95,13 @@ function makeFarmers(): Farmer[] {
       id: `farmer-${i + 1}`,
       code: `F-${String(i + 1).padStart(3, '0')}`,
       fullName,
-      nationalId: `1${intBetween(190, 199)}${intBetween(100000, 999999)}`,
       region: pick(REGIONS),
       phone: `09${pick(['1', '2', '3', '4'])}-${intBetween(2000000, 9999999)}`,
       livestockType: livestock,
       livestockCount: count,
       avgDailyYield: yield_,
-      bankAccount: `LY${intBetween(10, 99)} ٬ ${intBetween(100000, 999999)}`,
+      bankAccount: `${intBetween(1000, 9999)}-${intBetween(100000, 999999)}`,
+      iban: `LY${intBetween(10, 99)}${intBetween(100000000000, 999999999999)}`,
       qualityTier: tier,
       defaultBuyPrice: r2(base + between(-0.05, 0.08)),
       status: i === 9 ? 'suspended' : 'active',
@@ -145,7 +145,7 @@ function genSupplies(
   for (const d of days) {
     const active = farmers.filter((f) => f.status === 'active' && rnd() > 0.18);
     for (const f of active) {
-      const qty = r2(f.avgDailyYield * between(0.82, 1.12));
+      const qty = r2((f.avgDailyYield ?? 45) * between(0.82, 1.12));
       const unitPrice = r2(f.defaultBuyPrice + between(-0.04, 0.04));
       supCounter += 1;
       out.push({
@@ -343,7 +343,12 @@ export function generateSeed(): SeedResult {
     sales,
     payments,
     adjustments: [],
-    settings: { minStockThreshold: 3000, defaultBuyPrice: 1.85, defaultSellPrice: 2.55 },
+    expenses: [],
+    payrollBatches: [],
+    vaults: [],
+    banks: [],
+    cashMovements: [],
+    settings: { minStockThreshold: 5000, defaultBuyPrice: 1.85, defaultSellPrice: 2.55 },
   };
   const fullInv = buildInventoryLedger(supplies, sales, [], [may, june]);
   const maySummary = computeSessionSummary(may, data, fullInv);
