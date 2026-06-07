@@ -169,19 +169,22 @@ export function stopAutoSync() {
   }
 }
 
-export async function initCloudSync(): Promise<void> {
+/** يبدأ المزامنة في الخلفية دون حجب الواجهة — البيانات المحلية تظهر فوراً. */
+export function initCloudSync(): void {
   const { configured, enabled } = useSyncStore.getState();
   if (!configured || !enabled) {
     useSyncStore.setState({ status: enabled ? 'idle' : 'disabled' });
     return;
   }
-  const probe = await testConnection();
-  if (!probe.ok) {
-    useSyncStore.setState({ status: 'offline', lastError: probe.error ?? null });
-    return;
-  }
-  await pullFromCloud();
   startAutoPush();
+  void (async () => {
+    const probe = await testConnection();
+    if (!probe.ok) {
+      useSyncStore.setState({ status: 'offline', lastError: probe.error ?? null });
+      return;
+    }
+    await pullFromCloud();
+  })();
 }
 
 export async function enableAndBootstrap(): Promise<{ ok: boolean; error?: string }> {

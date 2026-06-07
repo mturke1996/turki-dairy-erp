@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowDownToLine, Droplets, Lock, Banknote, Tractor, Receipt, FlaskConical, Wallet, Sun, Moon } from 'lucide-react';
+import { ArrowDownToLine, Droplets, Lock, Banknote, Tractor, Receipt, Wallet, Sun, Moon } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ import { usePermission } from '@/lib/store/use-permission';
 import { accountBalance } from '@/lib/domain/treasury';
 import { COPY, MILK_SHIFT_LABELS, QUALITY_LABELS, QUALITY_VARIANT, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import type { MilkShift, PaymentMethod, QualityTier } from '@/lib/domain/types';
-import { formatShortDate } from '@/lib/utils';
+import { formatShortDate, sanitizeDecimalInput } from '@/lib/utils';
 
 const C = COPY.collection;
 
@@ -55,7 +55,6 @@ export default function SupplyPage() {
   const [farmerId, setFarmerId] = useState('');
   const [milkShift, setMilkShift] = useState<MilkShift>('morning');
   const [quantity, setQuantity] = useState('');
-  const [sampleQty, setSampleQty] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
   const [quality, setQuality] = useState<QualityTier>('A');
   const [fatPct, setFatPct] = useState('');
@@ -69,10 +68,8 @@ export default function SupplyPage() {
 
   const selectedFarmer = activeFarmers.find((f) => f.id === farmerId);
   const qty = Number(quantity) || 0;
-  const sample = Number(sampleQty) || 0;
   const price = Number(unitPrice) || 0;
-  const billableQty = Math.max(0, qty - sample);
-  const total = billableQty * price;
+  const total = qty * price;
   const payVal = Number(payAmount) || 0;
   const payAccount = accounts.find((a) => a.value === paySource) ?? null;
   const sourceBalance = payAccount
@@ -92,7 +89,6 @@ export default function SupplyPage() {
     setFarmerId('');
     setMilkShift('morning');
     setQuantity('');
-    setSampleQty('');
     setUnitPrice('');
     setQuality('A');
     setFatPct('');
@@ -105,7 +101,6 @@ export default function SupplyPage() {
   function submit() {
     if (!farmerId) return toast.error('اختر الفلاح المورّد.');
     if (qty <= 0) return toast.error('أدخل كمية صحيحة باللتر.');
-    if (sample > qty) return toast.error('كمية العينة أكبر من الكمية الكلية.');
     if (price <= 0) return toast.error('أدخل سعر شراء اللتر.');
 
     if (payNow) {
@@ -121,7 +116,6 @@ export default function SupplyPage() {
       unitPrice: price,
       qualityTier: quality,
       milkShift,
-      sampleQty: sample > 0 ? sample : undefined,
       fatPct: fatPct ? Number(fatPct) : undefined,
       date: new Date(`${date}T${String(hour).padStart(2, '0')}:00:00`).toISOString(),
       notes: notes.trim() || undefined,
@@ -187,7 +181,7 @@ export default function SupplyPage() {
               <ArrowDownToLine className="h-4.5 w-4.5 text-meadow-600" />
               {C.recordNew}
             </CardTitle>
-            <CardDescription>الكمية الكاملة تدخل المخزون. العينة لا تُحسب في مستحقات الفلاح.</CardDescription>
+            <CardDescription>الكمية تُضاف للمخزون وتُحسب مستحقات الفلاح تلقائياً.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Field label={C.farmer} required>
@@ -227,24 +221,19 @@ export default function SupplyPage() {
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="الكمية الكلية (لتر)" required>
-                <Input type="number" inputMode="decimal" dir="ltr" placeholder="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={!canSupply || sessionLocked} />
+              <Field label="الكمية (لتر)" required>
+                <Input type="text" inputMode="decimal" dir="ltr" placeholder="0" value={quantity} onChange={(e) => setQuantity(sanitizeDecimalInput(e.target.value))} disabled={!canSupply || sessionLocked} />
               </Field>
-              <Field label="عينة (لتر)" hint="تدخل المخزون — بدون مستحق">
-                <Input type="number" inputMode="decimal" dir="ltr" placeholder="0" value={sampleQty} onChange={(e) => setSampleQty(e.target.value)} disabled={!canSupply || sessionLocked} />
+              <Field label="سعر اللتر (د.ل)" required hint="يدعم الكسور — مثال: 1.250">
+                <Input type="text" inputMode="decimal" dir="ltr" placeholder="0.000" value={unitPrice} onChange={(e) => setUnitPrice(sanitizeDecimalInput(e.target.value))} disabled={!canSupply || sessionLocked} />
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="سعر اللتر (د.ل)" required>
-                <Input type="number" inputMode="decimal" dir="ltr" step="0.001" placeholder="0.000" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} disabled={!canSupply || sessionLocked} />
-              </Field>
-              <Field label="القابل للفوترة">
-                <div className="flex h-10 items-center rounded-md border border-border bg-canvas-sunken/40 px-3 text-[13px] font-semibold">
-                  <Liters value={billableQty} /> × {price.toFixed(3)}
-                </div>
-              </Field>
-            </div>
+            <Field label="الإجمالي">
+              <div className="flex h-10 items-center rounded-md border border-border bg-canvas-sunken/40 px-3 text-[13px] font-semibold">
+                <Liters value={qty} /> × {price.toFixed(3)} = <Money value={total} className="mr-1 inline" />
+              </div>
+            </Field>
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="درجة الجودة">
@@ -317,12 +306,7 @@ export default function SupplyPage() {
             </div>
 
             <div className="flex items-center justify-between rounded-xl bg-meadow-50 px-4 py-3 ring-1 ring-meadow-100">
-              <div>
-                <span className="text-[13px] font-medium text-meadow-800">مستحقات الفلاح</span>
-                {sample > 0 ? (
-                  <p className="flex items-center gap-1 text-[10.5px] text-meadow-700"><FlaskConical className="h-3 w-3" /> عينة {sample} ل — خارج الحساب</p>
-                ) : null}
-              </div>
+              <span className="text-[13px] font-medium text-meadow-800">مستحقات الفلاح</span>
               <Money value={total} className="text-[17px] font-bold text-meadow-800" />
             </div>
 
@@ -381,9 +365,6 @@ export default function SupplyPage() {
                         </TableCell>
                         <TableCell className="text-left">
                           <Liters value={s.quantity} className="text-[12.5px]" />
-                          {(s.sampleQty ?? 0) > 0 ? (
-                            <span className="block text-[10px] text-muted-foreground">عينة {s.sampleQty} ل</span>
-                          ) : null}
                         </TableCell>
                         <TableCell className="text-left">
                           <Money value={s.total} className="text-[13px] font-semibold" />

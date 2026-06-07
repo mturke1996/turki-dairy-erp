@@ -115,9 +115,6 @@ export function FarmerCycleSettlement({ session, readonly }: Props) {
                       </TableCell>
                       <TableCell className="text-left">
                         <Liters value={r.suppliedQty} className="text-[12px]" />
-                        {r.sampleQty > 0 ? (
-                          <span className="block text-[10px] text-muted-foreground">عينة {r.sampleQty} ل</span>
-                        ) : null}
                       </TableCell>
                       <TableCell className="text-left"><Money value={r.suppliedValue} className="text-[12.5px]" /></TableCell>
                       <TableCell className="text-left"><Money value={r.paidAmount} className="text-[12.5px] text-meadow-700" /></TableCell>

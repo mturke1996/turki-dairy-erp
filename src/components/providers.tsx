@@ -7,12 +7,12 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { bootstrapAuthSession } from '@/lib/supabase/auth';
 import { isAuthRequired } from '@/lib/supabase/config';
+import { initCloudSync } from '@/lib/supabase/sync';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
+    void useErpStore.persist.rehydrate();
     void (async () => {
-      await useErpStore.persist.rehydrate();
-
       if (isAuthRequired()) {
         try {
           await bootstrapAuthSession();
@@ -20,13 +20,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           useErpStore.getState().logout();
         }
       }
-
-      try {
-        const { initCloudSync } = await import('@/lib/supabase/sync');
-        await initCloudSync();
-      } catch {
-        /* المزامنة اختيارية */
-      }
+      initCloudSync();
     })();
   }, []);
 

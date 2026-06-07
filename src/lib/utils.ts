@@ -7,6 +7,14 @@ export function cn(...inputs: ClassValue[]) {
 
 export const CURRENCY_LABEL = 'د.ل';
 
+/** يقبل الأرقام العشرية بالفاصلة الإنجليزية أو العربية أثناء الكتابة */
+export function sanitizeDecimalInput(raw: string): string {
+  const normalized = raw.replace(/,/g, '.').replace(/[^\d.]/g, '');
+  const dot = normalized.indexOf('.');
+  if (dot === -1) return normalized;
+  return normalized.slice(0, dot + 1) + normalized.slice(dot + 1).replace(/\./g, '');
+}
+
 export function formatNumber(n: number | string, fractionDigits = 0) {
   const num = typeof n === 'string' ? Number(n) : n;
   if (!Number.isFinite(num)) return '0';

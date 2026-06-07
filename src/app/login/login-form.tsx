@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { BrandLogo } from '@/components/layout/brand-logo';
 import { BRAND } from '@/lib/brand';
 import { AuthError, signInWithPassword } from '@/lib/supabase/auth';
-import { initCloudSync, useSyncStore } from '@/lib/supabase/sync';
+import { initCloudSync } from '@/lib/supabase/sync';
 
 const FEATURES = [
   { icon: Droplets, title: 'تجميع وتوزيع', desc: 'مسار موثّق من الفلاح إلى العميل' },
@@ -33,15 +33,9 @@ export function LoginForm() {
     setBusy(true);
     try {
       await signInWithPassword(email.trim(), password);
-      await initCloudSync();
-      const syncStatus = useSyncStore.getState().status;
-      if (syncStatus === 'offline' || syncStatus === 'error') {
-        const err = useSyncStore.getState().lastError;
-        toast.warning('تم الدخول — تعذّر تحميل البيانات', { description: err ?? undefined });
-      } else {
-        toast.success('تم تسجيل الدخول وتحميل البيانات');
-      }
+      toast.success('تم تسجيل الدخول');
       router.push(searchParams.get('next') ?? '/dashboard');
+      initCloudSync();
     } catch (err) {
       toast.error(err instanceof AuthError ? err.message : 'تعذّر تسجيل الدخول');
     } finally {
