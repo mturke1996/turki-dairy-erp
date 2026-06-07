@@ -21,7 +21,7 @@ import { formatNumber, formatShortDate } from '@/lib/utils';
 import type { TransactionKind } from '@/lib/domain/types';
 
 const KIND_LABEL: Record<TransactionKind, string> = {
-  supply: 'توريد',
+  supply: 'استلام حليب',
   sale: 'بيع',
   farmer_payment: 'دفعة فلاح',
   customer_payment: 'تحصيل عميل',

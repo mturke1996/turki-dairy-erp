@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowDownToLine, Droplets, Lock, Banknote, Tractor, Receipt, FlaskConical, Wallet } from 'lucide-react';
+import { ArrowDownToLine, Droplets, Lock, Banknote, Tractor, Receipt, FlaskConical, Wallet, Sun, Moon } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,9 +26,11 @@ import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { usePermission } from '@/lib/store/use-permission';
 import { accountBalance } from '@/lib/domain/treasury';
-import { QUALITY_LABELS, QUALITY_VARIANT, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
-import type { PaymentMethod, QualityTier } from '@/lib/domain/types';
+import { COPY, MILK_SHIFT_LABELS, QUALITY_LABELS, QUALITY_VARIANT, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
+import type { MilkShift, PaymentMethod, QualityTier } from '@/lib/domain/types';
 import { formatShortDate } from '@/lib/utils';
+
+const C = COPY.collection;
 
 export default function SupplyPage() {
   const data = useErpData();
@@ -51,6 +53,7 @@ export default function SupplyPage() {
   );
 
   const [farmerId, setFarmerId] = useState('');
+  const [milkShift, setMilkShift] = useState<MilkShift>('morning');
   const [quantity, setQuantity] = useState('');
   const [sampleQty, setSampleQty] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
@@ -87,6 +90,7 @@ export default function SupplyPage() {
 
   function reset() {
     setFarmerId('');
+    setMilkShift('morning');
     setQuantity('');
     setSampleQty('');
     setUnitPrice('');
@@ -110,14 +114,16 @@ export default function SupplyPage() {
       if (payVal > sourceBalance + 0.001) return toast.error('رصيد الحساب لا يكفي.');
     }
 
+    const hour = milkShift === 'evening' ? 17 : 6;
     const res = recordSupply({
       farmerId,
       quantity: qty,
       unitPrice: price,
       qualityTier: quality,
+      milkShift,
       sampleQty: sample > 0 ? sample : undefined,
       fatPct: fatPct ? Number(fatPct) : undefined,
-      date: new Date(date + 'T09:00:00').toISOString(),
+      date: new Date(`${date}T${String(hour).padStart(2, '0')}:00:00`).toISOString(),
       notes: notes.trim() || undefined,
       immediatePayment: payNow && payAccount
         ? {
@@ -130,8 +136,10 @@ export default function SupplyPage() {
         : undefined,
     });
     if (res.ok) {
-      toast.success('تم تسجيل التوريد', {
-        description: payNow ? `${qty} لتر + دفع فوري ${payVal} د.ل` : `${qty.toLocaleString('en-US')} لتر — ${selectedFarmer?.fullName}`,
+      toast.success(C.success, {
+        description: payNow
+          ? `${MILK_SHIFT_LABELS[milkShift]} · ${qty} لتر + دفع فوري ${payVal} د.ل`
+          : `${MILK_SHIFT_LABELS[milkShift]} · ${qty.toLocaleString('en-US')} لتر — ${selectedFarmer?.fullName}`,
       });
       reset();
     } else {
@@ -153,13 +161,13 @@ export default function SupplyPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="العمليات"
-        title="التوريد"
-        description={`تسجيل شراء الحليب الخام من الفلاحين خلال فترة ${d.activeSession?.label ?? ''}.`}
+        title={C.title}
+        description={`تسجيل استلام الحليب الخام من الفلاحين خلال ${d.activeSession?.label ?? ''}.`}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatTile label="توريدات الفترة" value={<Liters value={sum?.supplyQty ?? 0} />} icon={Droplets} tone="meadow" hint={`${sum?.supplyCount ?? 0} عملية`} />
-        <StatTile label="تكلفة التوريد" value={<Money value={sum?.supplyCost ?? 0} decimals={0} />} icon={Banknote} tone="navy" />
+        <StatTile label={C.plural} value={<Liters value={sum?.supplyQty ?? 0} />} icon={Droplets} tone="meadow" hint={`${sum?.supplyCount ?? 0} عملية`} />
+        <StatTile label={C.cost} value={<Money value={sum?.supplyCost ?? 0} decimals={0} />} icon={Banknote} tone="navy" />
         <StatTile label="مستحقات الفلاحين" value={<Money value={d.totals.payables} decimals={0} />} icon={Tractor} tone="sun" hint="إجمالي غير المسدّد" />
       </div>
 
@@ -167,7 +175,7 @@ export default function SupplyPage() {
         <Card className="border-sun-200 bg-sun-50/50">
           <CardContent className="flex items-center gap-3 py-4 text-[13px] text-sun-900">
             <Lock className="h-5 w-5 shrink-0 text-sun-600" />
-            الفترة المعروضة مؤرشفة. انتقل إلى الفترة النشطة من المبدّل أعلى الشاشة لتسجيل عمليات جديدة.
+            {COPY.session.archived}
           </CardContent>
         </Card>
       ) : null}
@@ -177,12 +185,12 @@ export default function SupplyPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ArrowDownToLine className="h-4.5 w-4.5 text-meadow-600" />
-              تسجيل توريد جديد
+              {C.recordNew}
             </CardTitle>
             <CardDescription>الكمية الكاملة تدخل المخزون. العينة لا تُحسب في مستحقات الفلاح.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="الفلاح المورّد" required>
+            <Field label={C.farmer} required>
               <Select value={farmerId} onValueChange={onFarmerChange} disabled={!canSupply || sessionLocked}>
                 <SelectTrigger><SelectValue placeholder="اختر الفلاح" /></SelectTrigger>
                 <SelectContent>
@@ -191,6 +199,31 @@ export default function SupplyPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </Field>
+
+            <Field label="وجبة الاستلام" required hint="بعض الفلاحين يوردون صباحاً ومساءً">
+              <div className="grid grid-cols-2 gap-2">
+                {(['morning', 'evening'] as MilkShift[]).map((shift) => {
+                  const active = milkShift === shift;
+                  const Icon = shift === 'morning' ? Sun : Moon;
+                  return (
+                    <button
+                      key={shift}
+                      type="button"
+                      disabled={!canSupply || sessionLocked}
+                      onClick={() => setMilkShift(shift)}
+                      className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-[13px] font-semibold transition-colors ${
+                        active
+                          ? 'border-meadow-400 bg-meadow-50 text-meadow-800 ring-1 ring-meadow-200'
+                          : 'border-border bg-canvas-sunken/40 text-muted-foreground hover:bg-canvas-sunken'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {MILK_SHIFT_LABELS[shift]}
+                    </button>
+                  );
+                })}
+              </div>
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
@@ -277,7 +310,7 @@ export default function SupplyPage() {
                   ) : null}
                   <div className="flex items-center gap-2">
                     <Switch id="settle-full" checked={settleFull} onCheckedChange={setSettleFull} />
-                    <Label htmlFor="settle-full" className="text-[12px]">تم الدفع — تسوية كاملة لهذا التوريد</Label>
+                    <Label htmlFor="settle-full" className="text-[12px]">تم الدفع — تسوية كاملة لهذا الاستلام</Label>
                   </div>
                 </div>
               ) : null}
@@ -296,7 +329,7 @@ export default function SupplyPage() {
             <div className="flex gap-2">
               <Button className="flex-1" variant="meadow" onClick={submit} disabled={!canSupply || sessionLocked}>
                 <ArrowDownToLine className="h-4 w-4" />
-                تسجيل التوريد
+                {C.record}
               </Button>
               <Button variant="ghost" onClick={reset} disabled={!canSupply || sessionLocked}>مسح</Button>
             </div>
@@ -308,9 +341,9 @@ export default function SupplyPage() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Receipt className="h-4.5 w-4.5 text-navy-600" />
-                توريدات {d.activeSession?.label}
+                {C.plural} — {d.activeSession?.label}
               </CardTitle>
-              <CardDescription>أحدث العمليات المسجّلة في الفترة الحالية</CardDescription>
+              <CardDescription>أحدث عمليات الاستلام في الدورة الحالية</CardDescription>
             </div>
             <Badge variant="neutral">{sessionSupplies.length} عملية</Badge>
           </CardHeader>
@@ -321,6 +354,7 @@ export default function SupplyPage() {
                   <TableRow>
                     <TableHead>المرجع</TableHead>
                     <TableHead>الفلاح</TableHead>
+                    <TableHead className="text-center">الوجبة</TableHead>
                     <TableHead className="text-center">الجودة</TableHead>
                     <TableHead className="text-left">الكمية</TableHead>
                     <TableHead className="text-left">الإجمالي</TableHead>
@@ -329,6 +363,7 @@ export default function SupplyPage() {
                 <TableBody>
                   {sessionSupplies.slice(0, 40).map((s) => {
                     const farmer = data.farmers.find((f) => f.id === s.farmerId);
+                    const shift = s.milkShift ?? 'morning';
                     return (
                       <TableRow key={s.id}>
                         <TableCell className="font-mono text-[11.5px] text-muted-foreground" dir="ltr">
@@ -336,6 +371,11 @@ export default function SupplyPage() {
                           <span className="block text-[10.5px]">{formatShortDate(s.date)}</span>
                         </TableCell>
                         <TableCell className="text-[13px] font-medium">{farmer?.fullName ?? '—'}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={shift === 'morning' ? 'info' : 'neutral'} className="text-[10px]">
+                            {MILK_SHIFT_LABELS[shift]}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-center">
                           <Badge variant={QUALITY_VARIANT[s.qualityTier]}>{s.qualityTier}</Badge>
                         </TableCell>
@@ -354,7 +394,7 @@ export default function SupplyPage() {
                 </TableBody>
               </Table>
             ) : (
-              <EmptyState icon={Droplets} title="لا توريدات في هذه الفترة" description="ابدأ بتسجيل أول عملية توريد." />
+              <EmptyState icon={Droplets} title={C.empty} description={C.emptyHint} />
             )}
           </CardContent>
         </Card>

@@ -74,9 +74,8 @@ const SYNC_TABLES = [
   { table: 'audit_logs', key: 'auditLogs' as const },
 ] as const;
 
-/** نسخة المزامنة في الذاكرة فقط — تُحدَّث من السحابة بعد كل pull/push. */
-let memorySyncVersion = 0;
-let memoryDeviceId: string | null = null;
+const SYNC_VERSION_KEY = 'turki-sync-remote-version';
+const DEVICE_ID_KEY = 'turki-sync-device-id';
 
 export function isSupabaseConfigured(): boolean {
   return isCloudSyncAvailable();
@@ -84,18 +83,22 @@ export function isSupabaseConfigured(): boolean {
 
 function getDeviceId(): string {
   if (typeof window === 'undefined') return 'server';
-  if (!memoryDeviceId) {
-    memoryDeviceId = crypto.randomUUID();
+  let id = window.localStorage.getItem(DEVICE_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    window.localStorage.setItem(DEVICE_ID_KEY, id);
   }
-  return memoryDeviceId;
+  return id;
 }
 
 export function getLocalSyncVersion(): number {
-  return memorySyncVersion;
+  if (typeof window === 'undefined') return 0;
+  return Number(window.localStorage.getItem(SYNC_VERSION_KEY) ?? 0);
 }
 
 export function setLocalSyncVersion(v: number): void {
-  memorySyncVersion = v;
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(SYNC_VERSION_KEY, String(v));
 }
 
 export async function testConnection(): Promise<{ ok: boolean; error?: string }> {

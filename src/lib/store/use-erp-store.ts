@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { buildInventoryLedger, round } from '@/lib/domain/inventory';
 import { computeSessionSummary, computeFarmerStats, computeCustomerStats, computeFarmerSessionStats } from '@/lib/domain/calculations';
 import { accountBalance } from '@/lib/domain/treasury';
@@ -53,7 +54,6 @@ export interface MutationResult {
 
 interface ErpState {
   hydrated: boolean;
-  setHydrated: (v: boolean) => void;
   auth: AuthUser | null;
 
   sessions: Session[];
@@ -100,6 +100,7 @@ interface ErpState {
     date?: string;
     fatPct?: number;
     sampleQty?: number;
+    milkShift?: SupplyTransaction['milkShift'];
     notes?: string;
     /** دفع فوري كاش/تحويل عند الاستلام — يُخصم من الخزينة ويُسجّل دفعة للفلاح */
     immediatePayment?: {
@@ -280,9 +281,10 @@ function makeAudit(
 
 const INITIAL_SESSION = freshSession();
 
-export const useErpStore = create<ErpState>()((set, get) => ({
+export const useErpStore = create<ErpState>()(
+  persist(
+    (set, get) => ({
       hydrated: false,
-      setHydrated: (v) => set({ hydrated: v }),
       auth: null,
 
       // النظام يبدأ فارغاً تماماً — لا بيانات تجريبية افتراضية
@@ -452,7 +454,14 @@ export const useErpStore = create<ErpState>()((set, get) => ({
             return { ok: false, error: `رصيد الحساب (${Math.floor(bal).toLocaleString('en-US')} د.ل) لا يكفي للدفع الفوري.` };
         }
 
-        const date = input.date ?? new Date().toISOString();
+        const shift = input.milkShift ?? 'morning';
+        const date =
+          input.date ??
+          (() => {
+            const d = new Date();
+            d.setHours(shift === 'evening' ? 17 : 6, 0, 0, 0);
+            return d.toISOString();
+          })();
         const billableQty = round(input.quantity - sampleQty);
         const total = round(billableQty * input.unitPrice);
 
@@ -467,6 +476,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           total,
           qualityTier: input.qualityTier,
           sampleQty: sampleQty > 0 ? sampleQty : undefined,
+          milkShift: shift,
           fatPct: input.fatPct,
           notes: input.notes,
           createdAt: new Date().toISOString(),
@@ -490,7 +500,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
             paidFromType: ip.sourceType,
             paidFromId: ip.sourceId,
             reference: ip.reference,
-            notes: 'دفع فوري عند استلام التوريد',
+            notes: 'دفع فوري عند استلام الحليب',
             settlementComplete: ip.settlementComplete ?? (ip.amount >= total - 0.01),
             createdAt: new Date().toISOString(),
             createdBy: state.auth?.name,
@@ -505,7 +515,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
             direction: 'out',
             referenceType: 'payment',
             referenceId: payId,
-            description: `دفع فوري — توريد ${farmer.fullName}`,
+            description: `دفع فوري — استلام ${farmer.fullName}`,
             sessionId: state.activeSessionId,
             date,
             createdAt: new Date().toISOString(),
@@ -1005,4 +1015,36 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           if (data.settings) next.settings = { ...s.settings, ...data.settings };
           return next as Partial<ErpState>;
         }),
-}));
+    }),
+    {
+      name: 'turki-dairy-erp',
+      version: 3,
+      storage: createJSONStorage(() => localStorage),
+      skipHydration: true,
+      partialize: (s) => ({
+        auth: s.auth,
+        sessions: s.sessions,
+        activeSessionId: s.activeSessionId,
+        farmers: s.farmers,
+        customers: s.customers,
+        supplies: s.supplies,
+        sales: s.sales,
+        payments: s.payments,
+        adjustments: s.adjustments,
+        settings: s.settings,
+        vaults: s.vaults,
+        banks: s.banks,
+        cashMovements: s.cashMovements,
+        transfers: s.transfers,
+        expenseCategories: s.expenseCategories,
+        expenses: s.expenses,
+        employees: s.employees,
+        payrollBatches: s.payrollBatches,
+        auditLogs: s.auditLogs,
+      }),
+      onRehydrateStorage: () => () => {
+        useErpStore.setState({ hydrated: true });
+      },
+    },
+  ),
+);

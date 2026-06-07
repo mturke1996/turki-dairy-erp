@@ -45,8 +45,8 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       {
-        name: 'تسجيل توريد',
-        short_name: 'توريد',
+        name: 'تسجيل استلام',
+        short_name: 'استلام',
         url: '/supply',
         icons: [{ src: BRAND.icons.pwa192, sizes: '192x192' }],
       },

@@ -1,7 +1,7 @@
 import { BrandLogo } from './brand-logo';
 import { BRAND } from '@/lib/brand';
 
-/** شاشة تحميل — أثناء جلب البيانات من PostgreSQL. */
+/** شاشة تحميل — تظهر أثناء استعادة الحالة من التخزين المحلي. */
 export function AppSplash() {
   return (
     <div
@@ -13,7 +13,6 @@ export function AppSplash() {
           <BrandLogo variant="full" priority />
         </div>
         <p className="text-[13px] font-medium text-white/70">{BRAND.fullName}</p>
-        <p className="text-[12px] text-white/50">جارٍ تحميل البيانات من قاعدة البيانات…</p>
         <div className="h-1 w-32 overflow-hidden rounded-full bg-white/15">
           <div
             className="h-full w-1/2 animate-[shimmer_1.2s_ease-in-out_infinite] rounded-full"

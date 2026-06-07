@@ -1,9 +1,18 @@
+/**
+ * منسّق المزامنة السحابية (Supabase).
+ *
+ * الاستراتيجية: محلي-أولاً (Zustand + localStorage) مع مزامنة سحابية:
+ *   • السحب (pull): عند الإقلاع + عند التعارض + زر «سحب».
+ *   • الدفع (push): تلقائي مع debounce — upsert + حذف اليتيمة + sync_version.
+ *   • التعارض: إذا السحابة أحدث → سحب تلقائي ثم إعادة محاولة الدفع مرة واحدة.
+ */
+
 'use client';
 
 import { create } from 'zustand';
 import { useErpStore } from '@/lib/store/use-erp-store';
-import { isSupabaseConfigured } from './config';
 import {
+  isSupabaseConfigured,
   pullAll,
   pushAll,
   testConnection,
@@ -11,23 +20,39 @@ import {
   type ErpSnapshot,
 } from './repository';
 
-export type SyncStatus = 'idle' | 'syncing' | 'pushing' | 'conflict' | 'error' | 'offline' | 'unconfigured';
+export type SyncStatus = 'disabled' | 'idle' | 'syncing' | 'pushing' | 'conflict' | 'error' | 'offline';
 
 interface SyncState {
   configured: boolean;
+  enabled: boolean;
   status: SyncStatus;
   lastSyncAt: string | null;
   lastError: string | null;
   remoteVersion: number;
+  setEnabled: (v: boolean) => void;
   setStatus: (s: SyncStatus) => void;
+}
+
+const ENABLED_KEY = 'turki-cloud-sync-enabled';
+
+function readEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(ENABLED_KEY) === '1';
 }
 
 export const useSyncStore = create<SyncState>((set) => ({
   configured: isSupabaseConfigured(),
-  status: isSupabaseConfigured() ? 'idle' : 'unconfigured',
+  enabled: readEnabled(),
+  status: 'disabled',
   lastSyncAt: null,
   lastError: null,
   remoteVersion: 0,
+  setEnabled: (v) => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(ENABLED_KEY, v ? '1' : '0');
+    }
+    set({ enabled: v, status: v ? 'idle' : 'disabled' });
+  },
   setStatus: (s) => set({ status: s }),
 }));
 
@@ -63,7 +88,7 @@ function applyRemote(data: ErpSnapshot): void {
   applyingRemote = false;
 }
 
-/** يسحب كامل البيانات من PostgreSQL إلى الذاكرة. */
+/** يسحب كامل البيانات من السحابة إلى المتجر. */
 export async function pullFromCloud(): Promise<{ ok: boolean; error?: string }> {
   useSyncStore.setState({ status: 'syncing' });
   try {
@@ -90,13 +115,13 @@ export async function pullFromCloud(): Promise<{ ok: boolean; error?: string }> 
     return { ok: true };
   } catch (e) {
     applyingRemote = false;
-    const error = e instanceof Error ? e.message : 'فشل تحميل البيانات';
+    const error = e instanceof Error ? e.message : 'فشل السحب';
     useSyncStore.setState({ status: 'error', lastError: error });
     return { ok: false, error };
   }
 }
 
-/** يرفع التغييرات إلى PostgreSQL. */
+/** يرفع كامل الحالة — مع معالجة التعارض تلقائياً. */
 export async function pushToCloud(retryOnConflict = true): Promise<{ ok: boolean; error?: string; conflictResolved?: boolean }> {
   useSyncStore.setState({ status: 'pushing' });
   try {
@@ -115,7 +140,7 @@ export async function pushToCloud(retryOnConflict = true): Promise<{ ok: boolean
       if (!pulled.ok) return pulled;
       return pushToCloud(false).then((r) => ({ ...r, conflictResolved: true }));
     }
-    const error = e instanceof Error ? e.message : 'فشل حفظ البيانات';
+    const error = e instanceof Error ? e.message : 'فشل الرفع';
     useSyncStore.setState({ status: 'error', lastError: error });
     return { ok: false, error };
   }
@@ -128,11 +153,11 @@ function startAutoPush() {
   if (unsubscribe) return;
   unsubscribe = useErpStore.subscribe(() => {
     if (applyingRemote) return;
-    if (!isSupabaseConfigured()) return;
+    if (!useSyncStore.getState().enabled) return;
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       void pushToCloud();
-    }, 1500);
+    }, 2000);
   });
 }
 
@@ -144,27 +169,30 @@ export function stopAutoSync() {
   }
 }
 
-/** يحمّل البيانات من Supabase ويفعّل الحفظ التلقائي بعد كل تعديل. */
-export async function initCloudSync(): Promise<{ ok: boolean; error?: string }> {
-  if (!isSupabaseConfigured()) {
-    useSyncStore.setState({ status: 'unconfigured', lastError: 'Supabase غير مهيّأ' });
-    return { ok: false, error: 'Supabase غير مهيّأ' };
+export async function initCloudSync(): Promise<void> {
+  const { configured, enabled } = useSyncStore.getState();
+  if (!configured || !enabled) {
+    useSyncStore.setState({ status: enabled ? 'idle' : 'disabled' });
+    return;
   }
+  const probe = await testConnection();
+  if (!probe.ok) {
+    useSyncStore.setState({ status: 'offline', lastError: probe.error ?? null });
+    return;
+  }
+  await pullFromCloud();
+  startAutoPush();
+}
 
+export async function enableAndBootstrap(): Promise<{ ok: boolean; error?: string }> {
+  useSyncStore.getState().setEnabled(true);
   const probe = await testConnection();
   if (!probe.ok) {
     useSyncStore.setState({ status: 'offline', lastError: probe.error ?? null });
     return { ok: false, error: probe.error };
   }
-
-  const pulled = await pullFromCloud();
-  if (!pulled.ok) return pulled;
-
+  const pushed = await pushToCloud(false);
+  if (!pushed.ok) return pushed;
   startAutoPush();
   return { ok: true };
-}
-
-/** @deprecated — المزامنة دائماً مفعّلة */
-export async function enableAndBootstrap(): Promise<{ ok: boolean; error?: string }> {
-  return initCloudSync();
 }

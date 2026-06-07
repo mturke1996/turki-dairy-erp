@@ -4,28 +4,13 @@ import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
 import { PDF } from './pdfBase';
-import { PdfMoneyText, pdfFmtNum, pdfFmtDate } from './pdfBrandKit';
+import { PdfMoneyText, PdfInfoGrid, pdfFmtNum, pdfFmtDate } from './pdfBrandKit';
+import { PdfSectionTitle } from './PdfTable';
 import { CUSTOMER_TYPE_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import type { AgingBuckets, CustomerStats } from '@/lib/domain/calculations';
 import type { Payment, SaleTransaction } from '@/lib/domain/types';
 
 const s = StyleSheet.create({
-  infoBox: {
-    direction: 'rtl',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 14,
-    padding: 10,
-    backgroundColor: PDF.rowAlt,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: PDF.border,
-  },
-  cell: { width: '31%' },
-  label: { fontSize: 7.5, color: PDF.muted, marginBottom: 2, textAlign: 'right' },
-  value: { fontSize: 10, color: PDF.text, fontWeight: 'bold', textAlign: 'right' },
-
   head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.headerBg, paddingVertical: 7, paddingHorizontal: 8 },
   th: { color: PDF.white, fontSize: 8.5, fontWeight: 'bold', textAlign: 'center' },
   row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 6, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: PDF.border },
@@ -85,36 +70,18 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
         { label: 'الرصيد المستحق', moneyAmount: customer.outstanding },
       ]}
     >
-      <View style={s.infoBox}>
-        <View style={s.cell}>
-          <Text style={s.label}>{ar('النوع')}</Text>
-          <Text style={s.value}>{ar(CUSTOMER_TYPE_LABELS[customer.entityType])}</Text>
-        </View>
-        <View style={s.cell}>
-          <Text style={s.label}>{ar('الهاتف')}</Text>
-          <Text style={[s.value, { direction: 'ltr', textAlign: 'right' }]}>{ar(customer.phone)}</Text>
-        </View>
-        <View style={s.cell}>
-          <Text style={s.label}>{ar('حد الائتمان')}</Text>
-          <Text style={s.value}>{ar(`${pdfFmtNum(customer.creditLimit, 0)} د.ل`)}</Text>
-        </View>
-        <View style={s.cell}>
-          <Text style={s.label}>{ar('مدة السداد')}</Text>
-          <Text style={s.value}>{ar(`${customer.paymentTerms} يوم`)}</Text>
-        </View>
-        <View style={s.cell}>
-          <Text style={s.label}>{ar('إجمالي المحصّل')}</Text>
-          <Text style={s.value}>{ar(`${pdfFmtNum(customer.receivedTotal)} د.ل`)}</Text>
-        </View>
-        <View style={s.cell}>
-          <Text style={s.label}>{ar('نسبة استخدام الائتمان')}</Text>
-          <Text style={s.value}>{ar(`${pdfFmtNum(customer.creditUtilization, 1)}%`)}</Text>
-        </View>
-      </View>
+      <PdfInfoGrid
+        items={[
+          { label: 'النوع', value: CUSTOMER_TYPE_LABELS[customer.entityType] },
+          { label: 'الهاتف', value: customer.phone, ltr: true },
+          { label: 'حد الائتمان', value: `${pdfFmtNum(customer.creditLimit, 0)} د.ل` },
+          { label: 'مدة السداد', value: `${customer.paymentTerms} يوم` },
+          { label: 'إجمالي المحصّل', value: `${pdfFmtNum(customer.receivedTotal)} د.ل` },
+          { label: 'نسبة استخدام الائتمان', value: `${pdfFmtNum(customer.creditUtilization, 1)}%` },
+        ]}
+      />
 
-      <Text style={{ fontSize: 10.5, fontWeight: 'bold', color: PDF.primary, marginBottom: 6, textAlign: 'right' }}>
-        {ar('سجلّ المبيعات')}
-      </Text>
+      <PdfSectionTitle>سجلّ المبيعات</PdfSectionTitle>
       <View style={s.head}>
         <Text style={[s.th, { flex: 1.2 }]}>{ar('التاريخ')}</Text>
         <Text style={[s.th, { flex: 1.4 }]}>{ar('المرجع')}</Text>
@@ -140,9 +107,7 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
 
       {sortedPayments.length > 0 && (
         <>
-          <Text style={{ fontSize: 10.5, fontWeight: 'bold', color: PDF.primary, marginTop: 16, marginBottom: 6, textAlign: 'right' }}>
-            {ar('التحصيلات')}
-          </Text>
+          <PdfSectionTitle>التحصيلات</PdfSectionTitle>
           <View style={s.head}>
             <Text style={[s.th, { flex: 1.4 }]}>{ar('التاريخ')}</Text>
             <Text style={[s.th, { flex: 1.6 }]}>{ar('المرجع')}</Text>
@@ -165,9 +130,7 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
       )}
 
       {/* أعمار الديون */}
-      <Text style={{ fontSize: 10.5, fontWeight: 'bold', color: PDF.primary, marginTop: 16, marginBottom: 2, textAlign: 'right' }}>
-        {ar('أعمار الديون')}
-      </Text>
+      <PdfSectionTitle>أعمار الديون</PdfSectionTitle>
       <View style={s.agingWrap}>
         {[
           { l: 'غير مستحق', v: aging.current },

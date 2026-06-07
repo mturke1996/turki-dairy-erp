@@ -118,7 +118,7 @@ export function buildInventoryLedger(
         movementType: 'IN',
         sourceKind: 'supply',
         sourceId: s.id,
-        label: 'توريد حليب خام',
+        label: 'استلام حليب خام',
         quantityIn: s.quantity,
         quantityOut: 0,
         unitCost: s.unitPrice,

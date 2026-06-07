@@ -3,7 +3,12 @@ import React from 'react';
 import { Document, Page, Text, View, Image } from '@react-pdf/renderer';
 import { ar, arDateParts } from './arabicPDF';
 import { pdfBase } from './pdfBase';
-import { TurkiPdfFooter, PdfLogoMark, pdfFmtNum } from './pdfBrandKit';
+import {
+  TurkiPdfFooter,
+  PdfBrandIdentity,
+  PdfFactoryContactBar,
+  pdfFmtNum,
+} from './pdfBrandKit';
 import { usePdfLetterheadDataUri } from './pdf-logo-context';
 import { BRAND } from '@/lib/brand';
 
@@ -20,7 +25,7 @@ export type ReportShellMetaCell = {
   valueDirection?: 'ltr' | 'rtl';
 };
 
-/** هيكل صفحة PDF احترافي بهوية مصنع التركي. */
+/** هيكل صفحة PDF احترافي بهوية مصنع التركي للحليب ومشتقاته. */
 export function ReportShell({
   title,
   subtitle,
@@ -58,10 +63,11 @@ export function ReportShell({
   const bigDateLabel = summaryPrimaryDateLabel ?? 'تاريخ إصدار الوثيقة';
 
   return (
-    <Document title={`${BRAND.name} - ${title}`} author={BRAND.fullName}>
+    <Document title={`${BRAND.fullName} — ${title}`} author={BRAND.fullName} subject={BRAND.tagline}>
       <Page size="A4" style={pdfBase.page} wrap>
         <View style={pdfBase.pageAccentBar} fixed />
         <View style={pdfBase.pageAccentStripe} fixed />
+        <View style={pdfBase.pageAccentSun} fixed />
 
         {letterhead ? (
           <View style={pdfBase.letterheadWatermark} fixed>
@@ -69,9 +75,10 @@ export function ReportShell({
           </View>
         ) : null}
 
-        <Text style={pdfBase.docRef} fixed>{refId}</Text>
+        <Text style={pdfBase.docRef} fixed dir="ltr">
+          {refId}
+        </Text>
 
-        {/* الرأس — كتلتان مثبتتان */}
         <View style={pdfBase.header} fixed>
           <View style={pdfBase.titleBoxAtLeft} wrap={false}>
             <Text style={pdfBase.reportType}>{ar('وثيقة رسمية')}</Text>
@@ -79,16 +86,19 @@ export function ReportShell({
             {subtitle ? <Text style={pdfBase.reportSub}>{ar(subtitle)}</Text> : null}
           </View>
           <View style={pdfBase.brandBoxFixed} wrap={false}>
-            <PdfLogoMark width={158} height={48} />
+            <PdfBrandIdentity logoWidth={172} logoHeight={54} />
           </View>
         </View>
 
-        {/* بطاقة الملخص الفاخرة */}
+        <View style={pdfBase.headerContactWrap} fixed>
+          <PdfFactoryContactBar />
+        </View>
+
         {metaCells.length > 0 && (
           <View style={pdfBase.luxe} wrap={false}>
             <View style={pdfBase.luxeRibbon}>
               <Text style={pdfBase.luxeRibbonText}>{ar('ملخّص الوثيقة')}</Text>
-              <Text style={pdfBase.luxeRibbonHint}>{ar(BRAND.fullName)}</Text>
+              <Text style={pdfBase.luxeRibbonHint}>{ar(BRAND.name)}</Text>
             </View>
 
             <View style={pdfBase.luxeRow}>
@@ -129,7 +139,6 @@ export function ReportShell({
           </View>
         )}
 
-        {/* المحتوى */}
         <View style={pdfBase.contentLayer}>{children}</View>
 
         {showSignature ? (
@@ -137,20 +146,18 @@ export function ReportShell({
             <View style={pdfBase.signatureCell}>
               <Text style={pdfBase.signatureLabel}>{ar('التوقيع المعتمد')}</Text>
               <View style={pdfBase.signatureLine} />
-              <Text style={pdfBase.signatureHint}>{ar('الاسم والتوقيع')}</Text>
+              <Text style={pdfBase.signatureHint}>{ar(BRAND.fullName)}</Text>
             </View>
             <View style={pdfBase.signatureCell}>
               <Text style={pdfBase.signatureLabel}>{ar('ختم المصنع')}</Text>
               <View style={pdfBase.signatureLine} />
-              <Text style={pdfBase.signatureHint}>{ar(BRAND.fullName)}</Text>
+              <Text style={pdfBase.signatureHint}>{ar(BRAND.contact.address)}</Text>
             </View>
           </View>
         ) : null}
 
-        {/* التذييل */}
-        {showFooter && <TurkiPdfFooter fixed={footerFixed} />}
+        {showFooter && <TurkiPdfFooter fixed={footerFixed} docRef={refId} />}
 
-        {/* رقم الصفحة */}
         <Text
           style={pdfBase.pageNumber}
           render={({ pageNumber, totalPages }) => ar(`صفحة ${pageNumber ?? 1} من ${totalPages ?? 1}`)}

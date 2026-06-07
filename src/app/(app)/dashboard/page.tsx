@@ -26,7 +26,10 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { useDerived, useErpData } from '@/lib/store/use-derived';
 import { usePermission } from '@/lib/store/use-permission';
 import { computeDailyFlow } from '@/lib/domain/calculations';
+import { COPY } from '@/lib/domain/constants';
 import { formatNumber, formatShortDate } from '@/lib/utils';
+
+const C = COPY.collection;
 
 const ALERT_STYLE = {
   danger: { dot: 'bg-rose-500', badge: 'danger' as const },
@@ -75,7 +78,7 @@ export default function DashboardPage() {
               <Button asChild variant="meadow">
                 <Link href="/supply">
                   <ArrowDownToLine className="h-4 w-4" />
-                  تسجيل توريد
+                  {C.record}
                 </Link>
               </Button>
             ) : null}
@@ -186,7 +189,7 @@ export default function DashboardPage() {
             {flow.length ? (
               <FlowChart data={flow} />
             ) : (
-              <EmptyState icon={Warehouse} title="لا توجد حركة بعد" description="ابدأ بتسجيل عمليات التوريد والبيع." />
+              <EmptyState icon={Warehouse} title="لا توجد حركة بعد" description="ابدأ بتسجيل عمليات الاستلام والبيع." />
             )}
           </CardContent>
         </Card>
@@ -239,7 +242,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>أعلى الموردين</CardTitle>
-            <CardDescription>الأكثر توريداً في {d.activeSession?.label}</CardDescription>
+            <CardDescription>{C.topFarmers} في {d.activeSession?.label}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3.5">
             {topSuppliers.length ? (
@@ -263,7 +266,7 @@ export default function DashboardPage() {
                 </div>
               ))
             ) : (
-              <EmptyState icon={Tractor} title="لا توريدات بعد" />
+              <EmptyState icon={Tractor} title="لا عمليات استلام بعد" />
             )}
           </CardContent>
         </Card>
@@ -273,7 +276,7 @@ export default function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle>آخر الحركات</CardTitle>
-          <CardDescription>أحدث عمليات التوريد والبيع المسجّلة</CardDescription>
+          <CardDescription>أحدث عمليات الاستلام والبيع المسجّلة</CardDescription>
         </CardHeader>
         <CardContent>
           {recent.length ? (

@@ -41,8 +41,8 @@ export const pdfBase = {
     fontSize: 9,
     color: PDF.text,
     backgroundColor: PDF.white,
-    paddingTop: 26,
-    paddingBottom: 56,
+    paddingTop: 148,
+    paddingBottom: 68,
     paddingHorizontal: 34,
   },
 
@@ -64,12 +64,21 @@ export const pdfBase = {
     backgroundColor: PDF.accent,
   },
 
+  pageAccentSun: {
+    position: 'absolute',
+    top: 7,
+    left: 0,
+    width: 72,
+    height: 3,
+    backgroundColor: PDF.sun,
+  },
+
   letterheadWatermark: {
     position: 'absolute',
-    top: 90,
-    left: 34,
-    right: 34,
-    opacity: 0.045,
+    top: 100,
+    left: 48,
+    right: 48,
+    opacity: 0.055,
     zIndex: 0,
   },
 
@@ -81,12 +90,16 @@ export const pdfBase = {
   header: {
     position: 'relative',
     width: '100%',
-    minHeight: 60,
+    minHeight: 118,
+    marginBottom: 4,
+    paddingBottom: 8,
+    paddingTop: 8,
+    borderBottomWidth: 1.5,
+    borderBottomColor: PDF.primary,
+  },
+
+  headerContactWrap: {
     marginBottom: 14,
-    paddingBottom: 12,
-    paddingTop: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: PDF.border,
   },
 
   titleBoxAtLeft: {
@@ -101,10 +114,10 @@ export const pdfBase = {
   brandBoxFixed: {
     position: 'absolute',
     right: 0,
-    top: 2,
+    top: 0,
     direction: 'rtl',
     alignItems: 'flex-end',
-    maxWidth: '46%',
+    maxWidth: '48%',
   },
 
   reportType: {

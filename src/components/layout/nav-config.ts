@@ -35,9 +35,9 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     href: '/supply',
-    label: 'التوريد',
+    label: 'استلام الحليب',
     icon: Droplets,
-    description: 'شراء الحليب من الفلاحين',
+    description: 'استلام الحليب الخام من الفلاحين',
     group: 'main',
     permission: 'supply.record',
   },

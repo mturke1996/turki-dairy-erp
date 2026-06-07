@@ -45,7 +45,7 @@ export default function FarmersPage() {
       <PageHeader
         eyebrow="الأطراف"
         title="الفلاحون"
-        description="شبكة موردي الحليب الخام — الأرصدة، التوريدات، وكشوف الحساب."
+        description="شبكة موردي الحليب الخام — الأرصدة، عمليات الاستلام، وكشوف الحساب."
         actions={
           <Button onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4" />
@@ -57,7 +57,7 @@ export default function FarmersPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="إجمالي الفلاحين" value={d.farmers.length} icon={Users} tone="navy" />
         <StatTile label="نشطون" value={activeCount} icon={Tractor} tone="meadow" />
-        <StatTile label="إجمالي التوريد" value={<Liters value={totalSupplied} />} icon={Milk} tone="sun" />
+        <StatTile label="إجمالي الاستلام" value={<Liters value={totalSupplied} />} icon={Milk} tone="sun" />
         <StatTile label="مستحقات الفلاحين" value={<Money value={d.totals.payables} decimals={0} />} icon={Banknote} tone="rose" />
       </div>
 
@@ -96,7 +96,7 @@ export default function FarmersPage() {
                   <TableHead>المنطقة</TableHead>
                   <TableHead className="text-center">الحساب البنكي</TableHead>
                   <TableHead className="text-center">الجودة</TableHead>
-                  <TableHead className="text-left">إجمالي التوريد</TableHead>
+                  <TableHead className="text-left">إجمالي الاستلام</TableHead>
                   <TableHead className="text-left">الرصيد المستحق</TableHead>
                   <TableHead className="text-center">الحالة</TableHead>
                 </TableRow>

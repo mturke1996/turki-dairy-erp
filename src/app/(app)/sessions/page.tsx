@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -183,10 +183,10 @@ export default function SessionsPage() {
             </div>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4 pt-5 lg:grid-cols-4">
-            <StatTile label="توريد" value={<Liters value={summary.supplyQty} />} icon={Droplets} tone="meadow" hint={`${summary.supplyCount} عملية`} />
+            <StatTile label="استلام الحليب" value={<Liters value={summary.supplyQty} />} icon={Droplets} tone="meadow" hint={`${summary.supplyCount} عملية`} />
             <StatTile label="مبيعات" value={<Money value={summary.salesRevenue} decimals={0} />} icon={ShoppingCart} tone="navy" hint={`${summary.salesCount} عملية`} />
             <StatTile label="الربح" value={<Money value={summary.grossProfit} decimals={0} />} icon={TrendingUp} tone="sun" hint={`هامش ${formatNumber(summary.marginPct, 1)}%`} />
-            <StatTile label="الرصيد الختامي" value={<Liters value={summary.closingStock} />} icon={Archive} tone="neutral" hint={`افتtتاحي ${formatNumber(summary.openingStock, 0)} · يُرحَّل للدورة التالية`} />
+            <StatTile label="الرصيد الختامي" value={<Liters value={summary.closingStock} />} icon={Archive} tone="neutral" hint={`افتتاحي ${formatNumber(summary.openingStock, 0)} · يُرحَّل للدورة التالية`} />
           </CardContent>
         </Card>
       ) : null}

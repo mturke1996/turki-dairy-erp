@@ -78,7 +78,7 @@ export function FarmerCycleSettlement({ session, readonly }: Props) {
         <CardContent>
           <div className="mb-4 grid grid-cols-3 gap-2 text-center text-[12px]">
             <div className="rounded-lg bg-canvas-sunken/60 px-2 py-2">
-              <p className="text-muted-foreground">إجمالي التوريد</p>
+              <p className="text-muted-foreground">إجمالي الاستلام</p>
               <Money value={totals.value} decimals={0} className="font-semibold" />
             </div>
             <div className="rounded-lg bg-meadow-50 px-2 py-2">
@@ -143,7 +143,7 @@ export function FarmerCycleSettlement({ session, readonly }: Props) {
               </TableBody>
             </Table>
           ) : (
-            <p className="py-6 text-center text-[13px] text-muted-foreground">لا توريدات مسجّلة في هذه الدورة.</p>
+            <p className="py-6 text-center text-[13px] text-muted-foreground">لا عمليات استلام مسجّلة في هذه الدورة.</p>
           )}
         </CardContent>
       </Card>

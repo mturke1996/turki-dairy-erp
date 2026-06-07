@@ -176,7 +176,7 @@ export default function InventoryPage() {
               </TableBody>
             </Table>
           ) : (
-            <EmptyState icon={Warehouse} title="لا حركات مخزون" description="ستظهر الحركات تلقائياً مع التوريد والبيع." />
+            <EmptyState icon={Warehouse} title="لا حركات مخزون" description="ستظهر الحركات تلقائياً مع استلام الحليب والبيع." />
           )}
         </CardContent>
       </Card>

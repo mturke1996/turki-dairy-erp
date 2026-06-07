@@ -10,12 +10,50 @@ import type {
   ExpenseStatus,
   FarmerStatus,
   LivestockType,
+  MilkShift,
   PaymentMethod,
   PayrollStatus,
   PriceTier,
   QualityTier,
   Role,
 } from './types';
+
+/** مصطلحات الواجهة — استلام الحليب بدل «توريد» */
+export const MILK_SHIFT_LABELS: Record<MilkShift, string> = {
+  morning: 'وجبة صباحية',
+  evening: 'وجبة مسائية',
+};
+
+export const COPY = {
+  collection: {
+    title: 'استلام الحليب',
+    short: 'استلام',
+    record: 'تسجيل استلام',
+    recordNew: 'تسجيل استلام جديد',
+    plural: 'عمليات الاستلام',
+    sessionPlural: 'استلامات الدورة',
+    cost: 'تكلفة الاستلام',
+    total: 'إجمالي الاستلام',
+    value: 'قيمة الاستلام',
+    count: 'عمليات الاستلام',
+    farmer: 'الفلاح المورّد',
+    empty: 'لا عمليات استلام في هذه الدورة',
+    emptyHint: 'ابدأ بتسجيل أول عملية استلام.',
+    success: 'تم تسجيل الاستلام',
+    ledger: 'سجلّ الاستلام',
+    topFarmers: 'أكثر مورّدين',
+    movement: 'استلام حليب خام',
+  },
+  sale: {
+    title: 'البيع',
+    record: 'تسجيل بيع',
+    plural: 'عمليات البيع',
+  },
+  session: {
+    singular: 'الدورة',
+    archived: 'الدورة المعروضة مؤرشفة. انتقل إلى الدورة النشطة لتسجيل عمليات جديدة.',
+  },
+} as const;
 
 export const LIVESTOCK_LABELS: Record<LivestockType, string> = {
   cow: 'أبقار',

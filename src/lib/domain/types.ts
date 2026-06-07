@@ -8,6 +8,8 @@
 
 export type LivestockType = 'cow' | 'sheep' | 'goat' | 'mixed';
 export type QualityTier = 'A' | 'B' | 'C';
+/** وجبة استلام الحليب من الفلاح */
+export type MilkShift = 'morning' | 'evening';
 export type FarmerStatus = 'active' | 'suspended' | 'inactive';
 
 export type CustomerType = 'factory' | 'retailer' | 'distributor' | 'individual';
@@ -97,6 +99,8 @@ export interface SupplyTransaction {
   unitPrice: number;
   total: number; // (quantity - sampleQty) * unitPrice
   qualityTier: QualityTier;
+  /** وجبة الاستلام: صباحية أو مسائية */
+  milkShift?: MilkShift;
   /** لترات العينة — تدخل المخزون لكن لا تُحسب في مستحقات الفلاح */
   sampleQty?: number;
   fatPct?: number;

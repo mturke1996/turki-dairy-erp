@@ -17,6 +17,7 @@ import { FarmerStatementPDF } from '@/features/pdf/FarmerStatementPDF';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { usePermission } from '@/lib/store/use-permission';
 import {
+  MILK_SHIFT_LABELS,
   QUALITY_LABELS,
   QUALITY_VARIANT,
   FARMER_STATUS_LABELS,
@@ -81,8 +82,8 @@ export function FarmerDetailDialog({
 
           {/* ملخص */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <SummaryCell label="إجمالي التوريد" value={<Liters value={farmer.totalSupplied} />} />
-            <SummaryCell label="قيمة التوريد" value={<Money value={farmer.totalSupplyValue} decimals={0} />} />
+            <SummaryCell label="إجمالي الاستلام" value={<Liters value={farmer.totalSupplied} />} />
+            <SummaryCell label="قيمة الاستلام" value={<Money value={farmer.totalSupplyValue} decimals={0} />} />
             <SummaryCell label="المدفوع" value={<Money value={farmer.paidTotal} decimals={0} />} />
             <SummaryCell label="الرصيد المستحق" value={<Money value={farmer.creditBalance} decimals={0} />} highlight />
           </div>
@@ -136,7 +137,7 @@ export function FarmerDetailDialog({
 
           <Tabs defaultValue="supplies">
             <TabsList>
-              <TabsTrigger value="supplies">التوريدات ({supplies.length})</TabsTrigger>
+              <TabsTrigger value="supplies">عمليات الاستلام ({supplies.length})</TabsTrigger>
               <TabsTrigger value="payments">الدفعات ({payments.length})</TabsTrigger>
             </TabsList>
             <TabsContent value="supplies">
@@ -146,6 +147,7 @@ export function FarmerDetailDialog({
                     <TableHeader>
                       <TableRow>
                         <TableHead>التاريخ</TableHead>
+                        <TableHead className="text-center">الوجبة</TableHead>
                         <TableHead className="text-center">الجودة</TableHead>
                         <TableHead className="text-left">الكمية</TableHead>
                         <TableHead className="text-left">السعر</TableHead>
@@ -156,6 +158,11 @@ export function FarmerDetailDialog({
                       {supplies.map((s) => (
                         <TableRow key={s.id}>
                           <TableCell className="text-[12.5px]">{formatShortDate(s.date)}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={(s.milkShift ?? 'morning') === 'morning' ? 'info' : 'neutral'} className="text-[10px]">
+                              {MILK_SHIFT_LABELS[s.milkShift ?? 'morning']}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="text-center"><Badge variant={QUALITY_VARIANT[s.qualityTier]}>{s.qualityTier}</Badge></TableCell>
                           <TableCell className="text-left"><Liters value={s.quantity} className="text-[12px]" /></TableCell>
                           <TableCell className="text-left"><Money value={s.unitPrice} decimals={3} className="text-[12px]" muted /></TableCell>
@@ -165,7 +172,7 @@ export function FarmerDetailDialog({
                     </TableBody>
                   </Table>
                 ) : (
-                  <EmptyState title="لا توريدات" />
+                  <EmptyState title="لا عمليات استلام" />
                 )}
               </div>
             </TabsContent>

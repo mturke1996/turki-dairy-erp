@@ -77,8 +77,8 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
     >
       <Text style={s.section}>{ar('الملخص التشغيلي')}</Text>
       <View style={s.grid}>
-        <Stat title="عدد عمليات التوريد" value={pdfFmtNum(summary.supplyCount, 0)} sub={`${pdfFmtNum(summary.supplyQty, 0)} لتر`} color={PDF.logoGreen} />
-        <Stat title="تكلفة التوريد" value={`${pdfFmtNum(summary.supplyCost, 0)} د.ل`} sub="إجمالي المشتريات" />
+        <Stat title="عدد عمليات الاستلام" value={pdfFmtNum(summary.supplyCount, 0)} sub={`${pdfFmtNum(summary.supplyQty, 0)} لتر`} color={PDF.logoGreen} />
+        <Stat title="تكلفة الاستلام" value={`${pdfFmtNum(summary.supplyCost, 0)} د.ل`} sub="إجمالي المشتريات" />
         <Stat title="عدد عمليات البيع" value={pdfFmtNum(summary.salesCount, 0)} sub={`${pdfFmtNum(summary.salesQty, 0)} لتر`} />
         <Stat title="تكلفة البضاعة المباعة" value={`${pdfFmtNum(summary.cogs, 0)} د.ل`} sub="COGS" />
         <Stat title="الربح الإجمالي" value={`${pdfFmtNum(summary.grossProfit, 0)} د.ل`} sub={`هامش ${pdfFmtNum(summary.marginPct, 1)}%`} color={PDF.logoGreen} />

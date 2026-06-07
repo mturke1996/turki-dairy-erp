@@ -35,7 +35,7 @@ export function journalForSupply(s: SupplyTransaction): JournalEntry {
     sessionId: s.sessionId,
     kind: 'supply',
     sourceId: s.id,
-    description: 'توريد حليب خام من فلاح',
+    description: 'استلام حليب خام من فلاح',
     lines: [line('inventory', s.total, 0), line('farmer_payable', 0, s.total)],
   };
 }

@@ -18,7 +18,7 @@ interface PrimaryTab {
 
 const PRIMARY_DEF: (PrimaryTab & { permission?: Permission })[] = [
   { href: '/dashboard', label: 'الرئيسية', icon: LayoutDashboard },
-  { href: '/supply', label: 'توريد', icon: Droplets, permission: 'supply.record' },
+  { href: '/supply', label: 'استلام', icon: Droplets, permission: 'supply.record' },
   { href: '/sales', label: 'بيع', icon: ShoppingCart, permission: 'sales.record' },
   { href: '/farmers', label: 'الفلاحون', icon: Tractor },
 ];
