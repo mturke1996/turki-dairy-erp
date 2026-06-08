@@ -22,18 +22,22 @@ export function BrandLogo({
   const isLockup = variant === 'lockup' || variant === 'sidebar';
   const isHero = variant === 'hero' || variant === 'full';
 
-  const emblemSize = isCompact
-    ? 'h-11 w-11 sm:h-12 sm:w-12'
-    : isLockup
-      ? 'h-14 w-14 sm:h-16 sm:w-16'
-      : 'h-20 w-20 sm:h-24 sm:w-24';
+  const isMark = variant === 'mark';
+
+  const emblemSize = isMark
+    ? 'h-14 w-14'
+    : isCompact
+      ? 'h-11 w-11 sm:h-12 sm:w-12'
+      : isLockup
+        ? 'h-14 w-14 sm:h-16 sm:w-16'
+        : 'h-20 w-20 sm:h-24 sm:w-24';
 
   const emblem = (
     <Image
       src={BRAND.logoMarkSrc}
       alt=""
-      width={isHero ? 96 : isLockup ? 64 : 48}
-      height={isHero ? 96 : isLockup ? 64 : 48}
+      width={isHero ? 96 : isLockup ? 64 : isMark ? 56 : 48}
+      height={isHero ? 96 : isLockup ? 64 : isMark ? 56 : 48}
       priority={priority}
       className={cn('h-auto w-auto shrink-0 object-contain', emblemSize)}
     />

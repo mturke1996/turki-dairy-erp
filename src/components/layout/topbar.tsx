@@ -24,12 +24,12 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           <Menu className="h-5 w-5" />
         </Button>
 
-        {/* الشعار — جوال فقط (سطح المكتب: السايدبار) */}
-      <Link href="/dashboard" className="flex min-w-0 flex-1 items-center lg:hidden" aria-label={BRAND.fullName}>
-        <BrandLogo variant="compact" className="w-full max-w-[260px]" priority />
-      </Link>
+        {/* جوال — الشعار فقط (النص في السايدبار على سطح المكتب) */}
+        <Link href="/dashboard" className="flex shrink-0 items-center lg:hidden" aria-label={BRAND.fullName}>
+          <BrandLogo variant="mark" priority />
+        </Link>
 
-        <div className="hidden flex-1 lg:block" aria-hidden />
+        <div className="flex-1" aria-hidden />
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <SessionSwitcher />
