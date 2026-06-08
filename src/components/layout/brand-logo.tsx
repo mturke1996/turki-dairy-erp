@@ -1,62 +1,91 @@
-import { cn } from '@/lib/utils';
-import Image from 'next/image';
-import { BRAND } from '@/lib/brand';
-
-/** أبعاد الشعار الأفقي الكامل (نسبة تقريبية من الهوية الرسمية) */
-const LOCKUP = {
-  /** سايدبار — عرض كامل */
-  lockup: { width: 220, height: 72, h: 'h-[52px] sm:h-[58px]', w: 'w-full max-w-[220px]' },
-  /** شريط علوي — جوال */
-  compact: { width: 180, height: 56, h: 'h-9', w: 'max-w-[160px] sm:max-w-[180px]' },
-  /** صفحة الدخول */
-  hero: { width: 320, height: 104, h: 'h-20 sm:h-24', w: 'w-full max-w-[320px]' },
-  /** عرض كامل */
-  full: { width: 280, height: 92, h: 'h-[72px]', w: 'w-full max-w-[280px]' },
-  /** أيقونة فقط — PWA / favicon context */
-  mark: { width: 48, height: 48, h: 'h-10 w-10', w: 'h-10 w-10' },
-} as const;
-
-/**
- * شعار مصنع التركي — صورة الهوية الأفقية الكاملة (الاسم + الشعار).
- * variant=mark يستخدم الشعار الرسومي فقط للمساحات الضيقة.
- */
-export function BrandLogo({
-  variant = 'lockup',
-  className,
-  priority = false,
-}: {
-  variant?: 'mark' | 'lockup' | 'compact' | 'full' | 'hero';
-  className?: string;
-  priority?: boolean;
-}) {
-  const size = LOCKUP[variant === 'hero' ? 'hero' : variant === 'full' ? 'full' : variant === 'compact' ? 'compact' : variant === 'mark' ? 'mark' : 'lockup'];
-
-  if (variant === 'mark') {
-    return (
-      <div className={cn('relative shrink-0', className)} aria-hidden>
-        <Image
-          src={BRAND.logoMarkSrc}
-          alt=""
-          width={size.width}
-          height={size.height}
-          priority={priority}
-          className={cn('object-contain', size.h, size.w)}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className={cn('relative flex items-center justify-center', className)}>
-      <Image
-        src={BRAND.logoLockupSrc}
-        alt={BRAND.fullName}
-        width={size.width}
-        height={size.height}
-        priority={priority}
-        className={cn('object-contain object-right', size.h, size.w)}
-      />
-    </div>
-  );
-}
-
+import { cn } from '@/lib/utils';
+import Image from 'next/image';
+import { BRAND } from '@/lib/brand';
+
+/**
+ * شعار مصنع التركي — الاسم + الشعار الرسومي (icon-512).
+ * - mark: الشعار فقط
+ * - compact / navbar: للشريط العلوي
+ * - lockup / sidebar: للسايدبار
+ * - hero / full: صفحة الدخول
+ */
+export function BrandLogo({
+  variant = 'lockup',
+  className,
+  priority = false,
+}: {
+  variant?: 'mark' | 'lockup' | 'compact' | 'navbar' | 'sidebar' | 'full' | 'hero';
+  className?: string;
+  priority?: boolean;
+}) {
+  const isCompact = variant === 'compact' || variant === 'navbar';
+  const isLockup = variant === 'lockup' || variant === 'sidebar';
+  const isHero = variant === 'hero' || variant === 'full';
+
+  const emblemSize = isCompact
+    ? 'h-11 w-11 sm:h-12 sm:w-12'
+    : isLockup
+      ? 'h-14 w-14 sm:h-16 sm:w-16'
+      : 'h-20 w-20 sm:h-24 sm:w-24';
+
+  const emblem = (
+    <Image
+      src={BRAND.logoMarkSrc}
+      alt=""
+      width={isHero ? 96 : isLockup ? 64 : 48}
+      height={isHero ? 96 : isLockup ? 64 : 48}
+      priority={priority}
+      className={cn('h-auto w-auto shrink-0 object-contain', emblemSize)}
+    />
+  );
+
+  if (variant === 'mark') {
+    return (
+      <div className={cn('relative shrink-0', className)} aria-hidden>
+        {emblem}
+      </div>
+    );
+  }
+
+  if (isHero) {
+    return (
+      <div className={cn('flex flex-col items-center gap-4', className)}>
+        {emblem}
+        <div className="text-center">
+          <p className="text-lg font-bold text-foreground">{BRAND.name}</p>
+          <p className="mt-1 text-[13px] text-muted-foreground">{BRAND.taglineShort}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-3',
+        isCompact ? 'gap-2.5 sm:gap-3' : 'gap-3',
+        className,
+      )}
+    >
+      <div className="min-w-0 flex-1 text-right">
+        <p
+          className={cn(
+            'font-bold leading-tight text-foreground',
+            isCompact ? 'text-[14px] sm:text-[15px]' : 'text-[15px] sm:text-[16px]',
+          )}
+        >
+          {BRAND.name}
+        </p>
+        <p
+          className={cn(
+            'mt-0.5 leading-snug text-muted-foreground',
+            isCompact ? 'text-[10.5px] line-clamp-1 sm:text-[11px]' : 'text-[11px] sm:text-[12px]',
+          )}
+        >
+          {BRAND.taglineShort}
+        </p>
+      </div>
+      {emblem}
+    </div>
+  );
+}

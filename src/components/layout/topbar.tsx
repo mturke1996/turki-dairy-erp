@@ -12,22 +12,32 @@ import { BRAND } from '@/lib/brand';
 
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-card/80 px-4 backdrop-blur-md sm:px-6">
-      <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick} aria-label="القائمة">
-        <Menu className="h-5 w-5" />
-      </Button>
+    <header className="sticky top-0 z-30 border-b border-border bg-card/90 backdrop-blur-md">
+      <div className="flex h-[4.25rem] items-center gap-2 px-3 sm:gap-3 sm:px-5">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 lg:hidden"
+          onClick={onMenuClick}
+          aria-label="القائمة"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
 
-      <Link href="/dashboard" className="flex min-w-0 shrink items-center lg:hidden" aria-label={BRAND.fullName}>
-        <BrandLogo variant="compact" className="min-w-0" priority />
+        {/* الشعار — جوال فقط (سطح المكتب: السايدبار) */}
+      <Link href="/dashboard" className="flex min-w-0 flex-1 items-center lg:hidden" aria-label={BRAND.fullName}>
+        <BrandLogo variant="compact" className="w-full max-w-[260px]" priority />
       </Link>
 
-      <div className="hidden flex-1 lg:block" />
-      <div className="flex-1 lg:hidden" />
+        <div className="hidden flex-1 lg:block" aria-hidden />
 
-      <SessionSwitcher />
-      <CloudSyncButton />
-      <ThemeToggle />
-      <UserMenu />
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <SessionSwitcher />
+          <CloudSyncButton />
+          <ThemeToggle />
+          <UserMenu />
+        </div>
+      </div>
     </header>
   );
 }

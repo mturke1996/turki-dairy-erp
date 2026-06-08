@@ -16,9 +16,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col bg-card">
       {/* الشعار */}
-      <div className="border-b border-border px-3 py-4 sm:px-4">
+      <div className="border-b border-border px-4 py-4">
         <Link href="/dashboard" onClick={onNavigate} className="block transition-opacity hover:opacity-90">
-          <BrandLogo variant="lockup" className="mx-auto w-full" priority />
+          <BrandLogo variant="lockup" className="w-full" priority />
         </Link>
       </div>
 

@@ -80,9 +80,9 @@ export const BRAND: Brand = {
   monogram: 'ت',
   currency: 'LYD',
   region: 'تاجوراء · طرابلس · ليبيا',
-  logoLockupSrc: '/turki-logo-lockup.jpg',
-  logoMarkSrc: '/turki-logo.png',
-  logoSrc: '/turki-logo-lockup.jpg',
+  logoLockupSrc: '/icons/icon-512.png',
+  logoMarkSrc: '/icons/icon-512.png',
+  logoSrc: '/icons/icon-512.png',
   icons: {
     favicon: '/icons/favicon-32.png',
     apple: '/icons/apple-touch-icon.png',
