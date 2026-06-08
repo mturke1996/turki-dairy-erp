@@ -1,8 +1,26 @@
 'use client';
 
-import { Download, Loader2, Share2 } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { FileDown, Loader2, Share2, X } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { buildPdfViewerUrl } from './pdf-blob-utils';
+
+type PdfPreviewDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  url: string | null;
+  fileName: string;
+  onDownload: () => void;
+  downloadBusy?: boolean;
+  canShare?: boolean;
+  onShare?: () => void;
+  shareBusy?: boolean;
+};
 
 export function PdfPreviewDialog({
   open,
@@ -14,44 +32,83 @@ export function PdfPreviewDialog({
   canShare,
   onShare,
   shareBusy,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  url: string | null;
-  fileName: string;
-  onDownload: () => void;
-  downloadBusy?: boolean;
-  canShare?: boolean;
-  onShare?: () => void;
-  shareBusy?: boolean;
-}) {
+}: PdfPreviewDialogProps) {
+  const viewerUrl = url ? buildPdfViewerUrl(url) : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[92vh] max-w-4xl gap-0 overflow-hidden p-0">
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-          <p className="truncate text-[13px] font-semibold text-foreground" dir="ltr">
+      <DialogContent
+        className={cn(
+          'flex flex-col gap-0 overflow-hidden p-0',
+          'max-w-[100vw] w-[100vw] h-[100dvh] max-h-[100dvh] rounded-none border-0',
+          'sm:max-w-4xl sm:w-[min(100vw-2rem,56rem)] sm:h-[min(92dvh,900px)] sm:max-h-[92dvh] sm:rounded-2xl sm:border',
+        )}
+        dir="rtl"
+        aria-describedby={undefined}
+      >
+        <DialogTitle className="sr-only">عرض {fileName}</DialogTitle>
+
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-2.5 sm:px-4">
+          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground" dir="ltr">
             {fileName}
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1">
             {canShare && onShare ? (
-              <Button variant="outline" size="sm" onClick={onShare} disabled={shareBusy}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1 touch-manipulation"
+                disabled={shareBusy}
+                onClick={onShare}
+              >
                 {shareBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
-                مشاركة
+                <span className="sr-only sm:not-sr-only sm:inline">مشاركة</span>
               </Button>
             ) : null}
-            <Button size="sm" onClick={onDownload} disabled={downloadBusy}>
-              {downloadBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              تحميل
+            <Button
+              type="button"
+              variant="meadow"
+              size="sm"
+              className="h-9 gap-1 touch-manipulation"
+              disabled={downloadBusy}
+              onClick={onDownload}
+            >
+              {downloadBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+              <span className="sr-only sm:not-sr-only sm:inline">تحميل</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 touch-manipulation"
+              aria-label="إغلاق"
+              onClick={() => onOpenChange(false)}
+            >
+              <X className="h-5 w-5" />
             </Button>
           </div>
         </div>
-        {url ? (
-          <iframe title={fileName} src={url} className="h-full w-full flex-1 bg-canvas-sunken" />
-        ) : (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
-        )}
+
+        <div className="relative min-h-0 flex-1 bg-neutral-200 dark:bg-neutral-800">
+          {viewerUrl ? (
+            <embed
+              src={viewerUrl}
+              type="application/pdf"
+              title={fileName}
+              className="absolute inset-0 h-full w-full border-0 bg-white"
+            />
+          ) : (
+            <div className="flex h-full min-h-[50dvh] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+              <Loader2 className="h-7 w-7 animate-spin text-meadow-600" />
+              جارٍ تجهيز المعاينة…
+            </div>
+          )}
+        </div>
+
+        <p className="shrink-0 border-t border-border bg-canvas-sunken/60 px-3 py-2 text-center text-[11px] text-muted-foreground sm:hidden">
+          إن لم يظهر الملف، استخدم «مشاركة» أو «تحميل» أعلاه
+        </p>
       </DialogContent>
     </Dialog>
   );

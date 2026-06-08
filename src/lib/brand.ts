@@ -26,6 +26,8 @@ export type Brand = {
   };
   /** الشعار الأفقي الكامل — الاسم + الشعار (للسايدبار والـ PDF) */
   logoLockupSrc: string;
+  /** شعار رأس صفحات PDF — الهوية الأفقية الكاملة */
+  pdfLogoLockupSrc: string;
   /** الشعار الرسومي فقط */
   logoMarkSrc: string;
   /** @deprecated استخدم logoLockupSrc */
@@ -80,7 +82,8 @@ export const BRAND: Brand = {
   monogram: 'ت',
   currency: 'LYD',
   region: 'تاجوراء · طرابلس · ليبيا',
-  logoLockupSrc: '/icons/icon-512.png',
+  logoLockupSrc: '/turki-logo-lockup.jpg',
+  pdfLogoLockupSrc: '/turki-pdf-lockup.jpg',
   logoMarkSrc: '/icons/icon-512.png',
   logoSrc: '/icons/icon-512.png',
   icons: {

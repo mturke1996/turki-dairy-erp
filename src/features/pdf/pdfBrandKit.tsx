@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image } from '@react-pdf/renderer';
 import { PDF_FONT_FAMILY } from './pdfFonts';
 import { ar } from './arabicPDF';
 import { BRAND, buildPdfFooterLine } from '@/lib/brand';
-import { usePdfLogoDataUri } from './pdf-logo-context';
+import { usePdfLogoDataUri, usePdfMarkDataUri } from './pdf-logo-context';
 
 export const LIBYAN_CURRENCY_LABEL = 'د.ل';
 const P = BRAND.pdfPalette;
@@ -38,11 +38,37 @@ export const pdfBrandStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
+    gap: 10,
+  },
+  brandTextCol: {
+    alignItems: 'flex-end',
     maxWidth: 260,
   },
-  brandLockupImage: {
+  brandName: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: P.primary,
+    textAlign: 'right',
+    lineHeight: 1.25,
+  },
+  brandTagline: {
+    fontSize: 9,
+    color: P.muted,
+    textAlign: 'right',
+    marginTop: 3,
+    lineHeight: 1.35,
+  },
+  brandMarkShell: {
+    backgroundColor: P.white,
+    borderWidth: 0.75,
+    borderColor: P.border,
+    borderRadius: 8,
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandMarkImage: {
     objectFit: 'contain',
-    objectPosition: 'right center',
   },
 
   contactBar: {
@@ -50,10 +76,10 @@ export const pdfBrandStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 2,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    marginTop: 0,
+    marginBottom: 0,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
     backgroundColor: P.mutedBg,
     borderWidth: 0.5,
     borderColor: P.border,
@@ -72,9 +98,9 @@ export const pdfBrandStyles = StyleSheet.create({
 
   footer: {
     position: 'absolute',
-    bottom: 16,
-    left: 34,
-    right: 34,
+    bottom: 14,
+    left: 36,
+    right: 36,
   },
   footerTopLine: {
     flexDirection: 'row',
@@ -211,13 +237,15 @@ export const pdfBrandStyles = StyleSheet.create({
   docRef: { fontSize: 8, color: P.muted, marginTop: 4, textAlign: 'left' },
 });
 
-/** شعار المصنع — الشعار الرسومي */
+/** الشعار الرسومي — أيقونة المصنع */
 export const PdfLogoMark = ({ width = 56, height = 56 }: { width?: number; height?: number }) => {
-  const injected = usePdfLogoDataUri();
-  if (injected) {
+  const lockup = usePdfLogoDataUri();
+  const mark = usePdfMarkDataUri();
+  const src = mark ?? lockup;
+  if (src) {
     return (
       <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>
-        <Image src={injected} style={{ width, height, objectFit: 'contain' }} />
+        <Image src={src} style={{ width, height, objectFit: 'contain' }} />
       </View>
     );
   }
@@ -228,26 +256,25 @@ export const PdfLogoMark = ({ width = 56, height = 56 }: { width?: number; heigh
   );
 };
 
-/** هوية المصنع — الشعار الأفقي الكامل كما في الهوية الرسمية */
-export const PdfBrandIdentity = ({ logoWidth = 200, logoHeight = 64 }: { logoWidth?: number; logoHeight?: number }) => {
-  const injected = usePdfLogoDataUri();
-  if (injected) {
-    return (
-      <View style={pdfBrandStyles.brandBlock} wrap={false}>
-        <Image
-          src={injected}
-          style={[pdfBrandStyles.brandLockupImage, { width: logoWidth, height: logoHeight }]}
-        />
-      </View>
-    );
-  }
+/** هوية PDF — اسم المصنع + الشعار الرسومي (مقروء على A4، مثل الواجهة) */
+export const PdfBrandIdentity = ({ markSize = 68 }: { markSize?: number }) => {
+  const mark = usePdfMarkDataUri();
   return (
     <View style={pdfBrandStyles.brandBlock} wrap={false}>
-      <PdfLogoMark width={48} height={48} />
-      <View style={{ alignItems: 'flex-end', maxWidth: 160 }}>
-        <Text style={{ fontSize: 12, fontWeight: 'bold', color: P.primary, textAlign: 'right' }}>{ar(BRAND.fullName)}</Text>
-        <Text style={{ fontSize: 8, color: P.muted, textAlign: 'right', marginTop: 2 }}>{ar(BRAND.taglineShort)}</Text>
+      <View style={pdfBrandStyles.brandTextCol}>
+        <Text style={pdfBrandStyles.brandName}>{ar(BRAND.fullName)}</Text>
+        <Text style={pdfBrandStyles.brandTagline}>{ar(BRAND.taglineShort)}</Text>
       </View>
+      {mark ? (
+        <View style={pdfBrandStyles.brandMarkShell}>
+          <Image
+            src={mark}
+            style={[pdfBrandStyles.brandMarkImage, { width: markSize, height: markSize }]}
+          />
+        </View>
+      ) : (
+        <PdfLogoMark width={markSize} height={markSize} />
+      )}
     </View>
   );
 };
@@ -372,7 +399,7 @@ export const TurkiPdfHeader = ({
         {subtitleAr ? <Text style={pdfBrandStyles.docRef}>{ar(subtitleAr)}</Text> : null}
         {refLine ? <Text style={pdfBrandStyles.docRef} dir="ltr">{refLine}</Text> : null}
       </View>
-      <PdfBrandIdentity logoWidth={210} logoHeight={68} />
+      <PdfBrandIdentity />
     </View>
     <PdfFactoryContactBar />
   </View>

@@ -19,17 +19,21 @@ async function fetchAsDataUri(path: string): Promise<string | null> {
 }
 
 export type BrandPdfAssets = {
+  /** الشعار الأفقي الكامل في ترويسة PDF */
   logoDataUri: string | null;
+  /** الشعار الرسومي فقط (احتياطي) */
+  markDataUri: string | null;
   letterheadDataUri: string | null;
 };
 
-/** يحمّل الشعار والورقة الرسمية كـ data URI لاستخدامهما في react-pdf. */
+/** يحمّل شعار PDF والورقة الرسمية كـ data URI لاستخدامهما في react-pdf. */
 export async function fetchBrandPdfAssets(): Promise<BrandPdfAssets> {
-  const [logoDataUri, letterheadDataUri] = await Promise.all([
+  const [logoDataUri, markDataUri, letterheadDataUri] = await Promise.all([
+    fetchAsDataUri(BRAND.pdfLogoLockupSrc),
     fetchAsDataUri(BRAND.logoMarkSrc),
     fetchAsDataUri(BRAND.letterheadSrc),
   ]);
-  return { logoDataUri, letterheadDataUri };
+  return { logoDataUri, markDataUri, letterheadDataUri };
 }
 
 /** @deprecated استخدم fetchBrandPdfAssets */

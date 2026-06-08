@@ -41,9 +41,9 @@ export const pdfBase = {
     fontSize: 9,
     color: PDF.text,
     backgroundColor: PDF.white,
-    paddingTop: 148,
-    paddingBottom: 68,
-    paddingHorizontal: 34,
+    paddingTop: 118,
+    paddingBottom: 54,
+    paddingHorizontal: 36,
   },
 
   pageAccentBar: {
@@ -66,20 +66,24 @@ export const pdfBase = {
 
   pageAccentSun: {
     position: 'absolute',
-    top: 7,
+    top: 5,
     left: 0,
-    width: 72,
-    height: 3,
+    width: 64,
+    height: 2,
     backgroundColor: PDF.sun,
   },
 
-  letterheadWatermark: {
+  /** كتلة الترويسة المثبتة — عنوان + شعار + تواصل */
+  headerFixed: {
     position: 'absolute',
-    top: 100,
-    left: 48,
-    right: 48,
-    opacity: 0.055,
-    zIndex: 0,
+    top: 8,
+    left: 36,
+    right: 36,
+  },
+
+  headerContactInline: {
+    marginTop: 4,
+    marginBottom: 0,
   },
 
   contentLayer: {
@@ -90,16 +94,14 @@ export const pdfBase = {
   header: {
     position: 'relative',
     width: '100%',
-    minHeight: 118,
-    marginBottom: 4,
-    paddingBottom: 8,
-    paddingTop: 8,
-    borderBottomWidth: 1.5,
+    minHeight: 96,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
     borderBottomColor: PDF.primary,
   },
 
   headerContactWrap: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
   titleBoxAtLeft: {
@@ -108,7 +110,7 @@ export const pdfBase = {
     top: 8,
     direction: 'rtl',
     alignItems: 'flex-start',
-    maxWidth: '52%',
+    maxWidth: '44%',
   },
 
   brandBoxFixed: {
@@ -117,7 +119,7 @@ export const pdfBase = {
     top: 0,
     direction: 'rtl',
     alignItems: 'flex-end',
-    maxWidth: '48%',
+    maxWidth: '56%',
   },
 
   reportType: {
@@ -388,8 +390,8 @@ export const pdfBase = {
     direction: 'rtl',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 22,
-    paddingTop: 14,
+    marginTop: 14,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: PDF.border,
   },
@@ -404,7 +406,7 @@ export const pdfBase = {
     color: PDF.muted,
     fontWeight: 'bold',
     letterSpacing: 0.8,
-    marginBottom: 28,
+    marginBottom: 22,
     textAlign: 'right',
   },
 

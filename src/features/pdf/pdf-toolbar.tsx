@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { usePermission } from '@/lib/store/use-permission';
-import { renderPdfBlob, savePdfBlob, shouldUseInAppPdfViewer } from './pdf-blob-utils';
+import { renderPdfBlob, savePdfBlob } from './pdf-blob-utils';
 import { PdfPreviewDialog } from './pdf-preview-dialog';
 
 type Props = {
@@ -77,16 +77,6 @@ export function TurkiPdfToolbar({
     const id = toast.loading('جاري إنشاء ملف PDF…');
     try {
       const blob = await ensureBlob();
-      if (!shouldUseInAppPdfViewer()) {
-        const popupUrl = URL.createObjectURL(blob);
-        const tab = window.open(popupUrl, '_blank', 'noopener,noreferrer');
-        if (tab) {
-          toast.success('تم فتح PDF', { id });
-          setTimeout(() => URL.revokeObjectURL(popupUrl), 120_000);
-          return;
-        }
-        URL.revokeObjectURL(popupUrl);
-      }
       revokePreviewUrl();
       const url = URL.createObjectURL(blob);
       previewUrlRef.current = url;

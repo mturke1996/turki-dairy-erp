@@ -6,9 +6,9 @@ import { PdfLogoProvider } from './pdf-logo-context';
 
 /** يجلب أصول الهوية ثم يلفّ مستند PDF ليقرأها المكوّنات من السياق. */
 export async function preparePdfTree(element: ReactElement): Promise<ReactElement> {
-  const { logoDataUri, letterheadDataUri } = await fetchBrandPdfAssets();
+  const { logoDataUri, markDataUri, letterheadDataUri } = await fetchBrandPdfAssets();
   return (
-    <PdfLogoProvider uri={logoDataUri} letterheadUri={letterheadDataUri}>
+    <PdfLogoProvider uri={logoDataUri} markUri={markDataUri} letterheadUri={letterheadDataUri}>
       {element}
     </PdfLogoProvider>
   );

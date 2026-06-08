@@ -15,13 +15,15 @@ export function normalizePdfFileName(fileName: string): string {
   return fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
 }
 
+/** رابط عرض PDF داخل المتصفح — عرض مناسب للصفحة بدون شريط جانبي */
+export function buildPdfViewerUrl(blobUrl: string): string {
+  const base = blobUrl.split('#')[0];
+  return `${base}#view=FitH&navpanes=0&scrollbar=1`;
+}
+
 export function shouldUseInAppPdfViewer(): boolean {
   if (typeof navigator === 'undefined') return true;
-  const ua = navigator.userAgent;
-  const isIOS =
-    /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const isMobile = /Android|webOS|Mobile/i.test(ua);
-  return isIOS || isMobile;
+  return true;
 }
 
 export async function savePdfBlob(blob: Blob, fileName: string): Promise<'share' | 'download'> {

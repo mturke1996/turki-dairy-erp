@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React from 'react';
-import { Document, Page, Text, View, Image } from '@react-pdf/renderer';
+import { Document, Page, Text, View } from '@react-pdf/renderer';
 import { ar, arDateParts } from './arabicPDF';
 import { pdfBase } from './pdfBase';
 import {
@@ -9,7 +9,6 @@ import {
   PdfFactoryContactBar,
   pdfFmtMoneyLibyan,
 } from './pdfBrandKit';
-import { usePdfLetterheadDataUri } from './pdf-logo-context';
 import { BRAND } from '@/lib/brand';
 
 function docRefId(): string {
@@ -25,7 +24,10 @@ export type ReportShellMetaCell = {
   valueDirection?: 'ltr' | 'rtl';
 };
 
-/** هيكل صفحة PDF احترافي بهوية مصنع التركي للحليب ومشتقاته. */
+/**
+ * غلاف PDF موحّد — ترويسة مثبتة واحدة (بدون تكرار يُسبّب صفحات فارغة).
+ * مُحسَّن وفق منظومة Fluxen: هوامش معقولة + تذييل فقط مثبت.
+ */
 export function ReportShell({
   title,
   subtitle,
@@ -47,7 +49,6 @@ export function ReportShell({
   footerFixed?: boolean;
   showSignature?: boolean;
 }) {
-  const letterhead = usePdfLetterheadDataUri();
   const refId = docRefId();
   const summaryDate =
     summaryPrimaryDateIso != null && summaryPrimaryDateIso.trim() !== ''
@@ -63,35 +64,31 @@ export function ReportShell({
   const bigDateLabel = summaryPrimaryDateLabel ?? 'تاريخ إصدار الوثيقة';
 
   return (
-    <Document title={`${BRAND.fullName} — ${title}`} author={BRAND.fullName} subject={BRAND.tagline}>
+    <Document
+      title={`${BRAND.fullName} — ${title}`}
+      author={BRAND.fullName}
+      subject={BRAND.tagline}
+      producer={BRAND.fullName}
+    >
       <Page size="A4" style={pdfBase.page} wrap>
         <View style={pdfBase.pageAccentBar} fixed />
         <View style={pdfBase.pageAccentStripe} fixed />
-        <View style={pdfBase.pageAccentSun} fixed />
 
-        {letterhead ? (
-          <View style={pdfBase.letterheadWatermark} fixed>
-            <Image src={letterhead} style={{ width: '100%', height: 680, objectFit: 'contain' }} />
+        {/* ترويسة واحدة مثبتة — عنوان + شعار + تواصل */}
+        <View style={pdfBase.headerFixed} fixed wrap={false}>
+          <View style={pdfBase.header}>
+            <View style={pdfBase.titleBoxAtLeft}>
+              <Text style={pdfBase.reportType}>{ar('وثيقة رسمية')}</Text>
+              <Text style={pdfBase.reportTitle}>{ar(title)}</Text>
+              {subtitle ? <Text style={pdfBase.reportSub}>{ar(subtitle)}</Text> : null}
+            </View>
+            <View style={pdfBase.brandBoxFixed}>
+              <PdfBrandIdentity />
+            </View>
           </View>
-        ) : null}
-
-        <Text style={pdfBase.docRef} fixed dir="ltr">
-          {refId}
-        </Text>
-
-        <View style={pdfBase.header} fixed>
-          <View style={pdfBase.titleBoxAtLeft} wrap={false}>
-            <Text style={pdfBase.reportType}>{ar('وثيقة رسمية')}</Text>
-            <Text style={pdfBase.reportTitle}>{ar(title)}</Text>
-            {subtitle ? <Text style={pdfBase.reportSub}>{ar(subtitle)}</Text> : null}
+          <View style={pdfBase.headerContactInline}>
+            <PdfFactoryContactBar />
           </View>
-          <View style={pdfBase.brandBoxFixed} wrap={false}>
-            <PdfBrandIdentity logoWidth={58} logoHeight={58} />
-          </View>
-        </View>
-
-        <View style={pdfBase.headerContactWrap} fixed>
-          <PdfFactoryContactBar />
         </View>
 
         {metaCells.length > 0 && (
@@ -141,7 +138,7 @@ export function ReportShell({
         <View style={pdfBase.contentLayer}>{children}</View>
 
         {showSignature ? (
-          <View style={pdfBase.signatureStrip} wrap={false}>
+          <View style={pdfBase.signatureStrip}>
             <View style={pdfBase.signatureCell}>
               <Text style={pdfBase.signatureLabel}>{ar('التوقيع المعتمد')}</Text>
               <View style={pdfBase.signatureLine} />
@@ -155,7 +152,7 @@ export function ReportShell({
           </View>
         ) : null}
 
-        {showFooter && <TurkiPdfFooter fixed={footerFixed} docRef={refId} />}
+        {showFooter ? <TurkiPdfFooter fixed={footerFixed} docRef={refId} /> : null}
 
         <Text
           style={pdfBase.pageNumber}
