@@ -25,6 +25,7 @@ export type TransactionKind =
   | 'sale'
   | 'farmer_payment'
   | 'customer_payment'
+  | 'employee_advance'
   | 'adjustment'
   | 'expense'
   | 'payroll';
@@ -127,7 +128,7 @@ export interface SaleTransaction {
 export interface Payment {
   id: string;
   ref: string; // PAY-...
-  kind: 'farmer_payment' | 'customer_payment';
+  kind: 'farmer_payment' | 'customer_payment' | 'employee_advance';
   partyId: string; // farmerId أو customerId
   sessionId: string;
   date: string;
@@ -140,6 +141,22 @@ export interface Payment {
   notes?: string;
   /** تسوية دورة — الدفع يغطي كامل مستحقات الفلاح في هذه الدورة */
   settlementComplete?: boolean;
+  createdAt: string;
+  createdBy?: string;
+}
+
+/** دين مسجّل يدوياً — افتتاحي أو مستقل (بدون استلام/بيع/مخزون) */
+export type DebtPartyKind = 'farmer' | 'customer' | 'employee';
+
+export interface DebtEntry {
+  id: string;
+  ref: string; // DEB-2026-0001
+  sessionId: string;
+  date: string;
+  partyKind: DebtPartyKind;
+  partyId: string;
+  amount: number;
+  description?: string;
   createdAt: string;
   createdBy?: string;
 }

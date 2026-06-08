@@ -111,7 +111,7 @@ export function FarmerListCard({
           <Liters value={farmer.totalSupplied} decimals={0} className="mt-0.5 text-[14px] font-semibold" />
         </div>
         <div className="border-s border-border/80 ps-2.5">
-          <p className="text-[10.5px] font-medium text-muted-foreground">المستحق</p>
+          <p className="text-[10.5px] font-medium text-muted-foreground">الدين</p>
           <Money
             value={farmer.creditBalance}
             decimals={0}

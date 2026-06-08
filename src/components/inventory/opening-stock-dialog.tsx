@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/shared/field';
 import { AmountInput } from '@/components/shared/amount-input';
+import { VolumeInput } from '@/components/shared/volume-input';
 import { Liters, Money } from '@/components/shared/money';
 
 export function OpeningStockDialog({
@@ -87,8 +88,8 @@ export function OpeningStockDialog({
         </div>
 
         <div className="space-y-4">
-          <Field label="كمية الحليب (لتر)" required>
-            <Input type="number" inputMode="decimal" dir="ltr" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="15000" />
+          <Field label="كمية الحليب" required>
+            <VolumeInput value={quantity} onChange={setQuantity} placeholder="15000" />
           </Field>
           <Field label="متوسط تكلفة اللتر" required hint="تكلفة اللتر الافتتاحية">
             <AmountInput value={unitCost} onChange={setUnitCost} currency="د.ل/لتر" placeholder="1.250" />

@@ -120,7 +120,7 @@ export function DashboardV3Panels() {
             <Liters value={cycle.stats.sold} className="font-semibold" />
           </div>
           <div className="col-span-2 mt-0.5 border-t border-border pt-1.5">
-            <p className="text-muted-foreground">مستحقات الفلاحين عند الإغلاق</p>
+            <p className="text-muted-foreground">ديون الفلاحين عند الإغلاق</p>
             <Money value={cycle.stats.payoutsDue} decimals={0} className="font-semibold text-foreground" />
           </div>
         </div>

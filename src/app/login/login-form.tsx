@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import { BrandLogo } from '@/components/layout/brand-logo';
 import { BRAND } from '@/lib/brand';
 import { AuthError, signInWithPassword } from '@/lib/supabase/auth';
-import { initCloudSync } from '@/lib/supabase/sync';
 
 const FEATURES = [
   { icon: Droplets, title: 'تجميع وتوزيع', desc: 'مسار موثّق من الفلاح إلى العميل' },
@@ -35,7 +34,6 @@ export function LoginForm() {
       await signInWithPassword(email.trim(), password);
       toast.success('تم تسجيل الدخول');
       router.push(searchParams.get('next') ?? '/dashboard');
-      initCloudSync();
     } catch (err) {
       toast.error(err instanceof AuthError ? err.message : 'تعذّر تسجيل الدخول');
     } finally {

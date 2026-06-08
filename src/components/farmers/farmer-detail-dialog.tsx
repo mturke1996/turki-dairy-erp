@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Banknote, MapPin, Phone, Pencil } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -58,7 +58,19 @@ export function FarmerDetailDialog({
     [data.payments, farmerId],
   );
 
-  if (!farmer) return null;
+  if (!farmer) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>الفلاح</DialogTitle>
+            <DialogDescription className="sr-only">تفاصيل الفلاح</DialogDescription>
+          </DialogHeader>
+          <EmptyState title="الفلاح غير موجود" description="ربما حُذف أو لم يُحمَّل بعد." />
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <>
@@ -71,6 +83,9 @@ export function FarmerDetailDialog({
                   {farmer.fullName}
                   <Badge variant={STATUS_VARIANT[farmer.status]}>{FARMER_STATUS_LABELS[farmer.status]}</Badge>
                 </DialogTitle>
+                <DialogDescription className="sr-only">
+                  ملف الفلاح {farmer.code} — الاستلام والمدفوعات والرصيد
+                </DialogDescription>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
                   <span className="font-mono" dir="ltr">{farmer.code}</span>
                   <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {farmer.region}</span>
@@ -85,7 +100,7 @@ export function FarmerDetailDialog({
             <SummaryCell label="إجمالي الاستلام" value={<Liters value={farmer.totalSupplied} />} />
             <SummaryCell label="قيمة الاستلام" value={<Money value={farmer.totalSupplyValue} decimals={0} />} />
             <SummaryCell label="المدفوع" value={<Money value={farmer.paidTotal} decimals={0} />} />
-            <SummaryCell label="الرصيد المستحق" value={<Money value={farmer.creditBalance} decimals={0} />} highlight />
+            <SummaryCell label="الدين" value={<Money value={farmer.creditBalance} decimals={0} />} highlight />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

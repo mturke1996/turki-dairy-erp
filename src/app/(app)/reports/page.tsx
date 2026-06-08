@@ -25,6 +25,7 @@ const KIND_LABEL: Record<TransactionKind, string> = {
   sale: 'بيع',
   farmer_payment: 'دفعة فلاح',
   customer_payment: 'تحصيل عميل',
+  employee_advance: 'سلفة موظف',
   adjustment: 'تسوية',
   expense: 'مصروف',
   payroll: 'رواتب',
@@ -173,8 +174,8 @@ export default function ReportsPage() {
         <TabsContent value="aging">
           <Card>
             <CardHeader>
-              <CardTitle>أعمار ذمم العملاء</CardTitle>
-              <CardDescription>توزيع المبالغ المستحقة حسب التأخّر</CardDescription>
+              <CardTitle>أعمار ديون العملاء</CardTitle>
+              <CardDescription>توزيع الديون حسب التأخّر</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">

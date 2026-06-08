@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Banknote, Phone, Pencil, CreditCard } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -54,7 +54,19 @@ export function CustomerDetailDialog({
     [sales, customer],
   );
 
-  if (!customer || !aging) return null;
+  if (!customer || !aging) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>العميل</DialogTitle>
+            <DialogDescription className="sr-only">تفاصيل العميل</DialogDescription>
+          </DialogHeader>
+          <EmptyState title="العميل غير موجود" description="ربما حُذف أو لم يُحمَّل بعد." />
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   const agingCells = [
     { l: 'غير مستحق', v: aging.current, tone: 'text-meadow-700' },
@@ -75,6 +87,9 @@ export function CustomerDetailDialog({
                 <Badge variant="neutral">{CUSTOMER_TYPE_LABELS[customer.entityType]}</Badge>
                 {customer.onHold ? <Badge variant="danger">مجمّد</Badge> : null}
               </DialogTitle>
+              <DialogDescription className="sr-only">
+                ملف العميل {customer.code} — المبيعات والتحصيل والرصيد
+              </DialogDescription>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
                 <span className="font-mono" dir="ltr">{customer.code}</span>
                 <span className="flex items-center gap-1" dir="ltr"><Phone className="h-3.5 w-3.5" /> {customer.phone}</span>
@@ -87,7 +102,7 @@ export function CustomerDetailDialog({
             <SummaryCell label="إجمالي المشتريات" value={<Liters value={customer.totalPurchased} />} />
             <SummaryCell label="إجمالي المبيعات" value={<Money value={customer.totalRevenue} decimals={0} />} />
             <SummaryCell label="المحصّل" value={<Money value={customer.receivedTotal} decimals={0} />} />
-            <SummaryCell label="الرصيد المستحق" value={<Money value={customer.outstanding} decimals={0} />} highlight />
+            <SummaryCell label="الدين" value={<Money value={customer.outstanding} decimals={0} />} highlight />
           </div>
 
           {/* أعمار الديون */}
@@ -95,7 +110,7 @@ export function CustomerDetailDialog({
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[12px] font-semibold text-foreground">أعمار الديون (يوم)</p>
               <p className="text-[11px] text-muted-foreground">
-                حد الائتمان: {formatNumber(customer.creditLimit, 0)} د.ل · الاستخدام {formatNumber(customer.creditUtilization, 0)}%
+                حد الائتمان: <Money value={customer.creditLimit} decimals={0} className="inline text-[11px]" /> · الاستخدام {formatNumber(customer.creditUtilization, 0)}%
               </p>
             </div>
             <div className="grid grid-cols-5 gap-2">

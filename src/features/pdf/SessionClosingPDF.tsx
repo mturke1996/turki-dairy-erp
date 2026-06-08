@@ -95,7 +95,7 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       {/* أرصدة مُرحّلة */}
       {farmerBalances.length > 0 && (
         <>
-          <Text style={s.section}>{ar('أرصدة الفلاحين المستحقة')}</Text>
+          <Text style={s.section}>{ar('ديون الفلاحين')}</Text>
           <View style={s.head}>
             <Text style={[s.th, { flex: 3, textAlign: 'right' }]}>{ar('الفلاح')}</Text>
             <Text style={[s.th, { flex: 1.4, textAlign: 'left' }]}>{ar('الرصيد (د.ل)')}</Text>
@@ -132,11 +132,11 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
           <Text style={s.carryValue} dir="ltr">{ar(pdfFmtLiters(carryForward.openingStock, 0))}</Text>
         </View>
         <View style={s.carryCell}>
-          <Text style={s.carryLabel}>{ar('مستحقات الفلاحين')}</Text>
+          <Text style={s.carryLabel}>{ar('ديون الفلاحين')}</Text>
           <Text style={s.carryValue} dir="ltr">{ar(pdfFmtMoneyLibyan(carryForward.payables, 0))}</Text>
         </View>
         <View style={s.carryCell}>
-          <Text style={s.carryLabel}>{ar('ذمم العملاء')}</Text>
+          <Text style={s.carryLabel}>{ar('ديون العملاء')}</Text>
           <Text style={s.carryValue} dir="ltr">{ar(pdfFmtMoneyLibyan(carryForward.receivables, 0))}</Text>
         </View>
       </View>

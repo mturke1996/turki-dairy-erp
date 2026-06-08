@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BrandLogo } from './brand-logo';
-import { CloudSyncButton } from './cloud-sync-button';
 import { SessionSwitcher } from './session-switcher';
 import { ThemeToggle } from './theme-toggle';
 import { UserMenu } from './user-menu';
@@ -33,7 +32,6 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <SessionSwitcher />
-          <CloudSyncButton />
           <ThemeToggle />
           <UserMenu />
         </div>

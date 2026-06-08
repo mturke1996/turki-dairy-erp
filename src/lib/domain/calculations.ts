@@ -20,6 +20,9 @@ import type {
   CashMovement,
   CashVault,
   Customer,
+  DebtEntry,
+  DebtPartyKind,
+  Employee,
   Expense,
   Farmer,
   InventoryAdjustment,
@@ -37,9 +40,11 @@ export interface ErpData {
   activeSessionId: string;
   farmers: Farmer[];
   customers: Customer[];
+  employees: Employee[];
   supplies: SupplyTransaction[];
   sales: SaleTransaction[];
   payments: Payment[];
+  debtEntries: DebtEntry[];
   adjustments: InventoryAdjustment[];
   expenses: Expense[];
   payrollBatches: PayrollBatch[];
@@ -71,6 +76,42 @@ export interface CustomerStats extends Customer {
   lastSaleDate?: string;
 }
 
+export interface EmployeeStats extends Employee {
+  grossSalary: number;
+  advanceBalance: number;
+  advancesTotal: number;
+  advancesRecovered: number;
+  ytdPaid: number;
+  lastPayrollDate?: string;
+  payrollCount: number;
+}
+
+export type { DebtPartyKind };
+
+/** صف موحّد في مركز الديون */
+export interface DebtLedgerRow {
+  id: string;
+  kind: DebtPartyKind;
+  code: string;
+  name: string;
+  subtitle: string;
+  balance: number;
+  /** payable = علينا للطرف، receivable = على الطرف لنا */
+  direction: 'payable' | 'receivable';
+  statusLabel: string;
+  phone?: string;
+}
+
+export interface DebtSummary {
+  farmerPayables: number;
+  customerReceivables: number;
+  employeeAdvances: number;
+  totalPayables: number;
+  totalReceivables: number;
+  netPosition: number;
+  rows: DebtLedgerRow[];
+}
+
 export interface AgingBuckets {
   current: number;
   d1_30: number;
@@ -88,9 +129,13 @@ export function computeFarmerStats(
   farmer: Farmer,
   supplies: SupplyTransaction[],
   payments: Payment[],
+  debtEntries: DebtEntry[] = [],
 ): FarmerStats {
   const fs = supplies.filter((s) => s.farmerId === farmer.id);
   const ps = payments.filter((p) => p.kind === 'farmer_payment' && p.partyId === farmer.id);
+  const manualDebt = sum(
+    debtEntries.filter((d) => d.partyKind === 'farmer' && d.partyId === farmer.id).map((d) => d.amount),
+  );
   const totalSupplyValue = sum(fs.map((s) => s.total));
   const totalSupplied = sum(fs.map((s) => s.quantity));
   const paidTotal = sum(ps.map((p) => p.amount));
@@ -99,7 +144,7 @@ export function computeFarmerStats(
     : undefined;
   return {
     ...farmer,
-    creditBalance: round(totalSupplyValue - paidTotal),
+    creditBalance: round(totalSupplyValue - paidTotal + manualDebt),
     totalSupplied: round(totalSupplied),
     totalSupplyValue: round(totalSupplyValue),
     paidTotal: round(paidTotal),
@@ -110,7 +155,7 @@ export function computeFarmerStats(
 }
 
 export function allFarmerStats(data: ErpData): FarmerStats[] {
-  return data.farmers.map((f) => computeFarmerStats(f, data.supplies, data.payments));
+  return data.farmers.map((f) => computeFarmerStats(f, data.supplies, data.payments, data.debtEntries ?? []));
 }
 
 /** إحصاءات فلاح ضمن دورة (فترة) محددة — للتسوية نصف الشهرية. */
@@ -213,13 +258,17 @@ export function computeCustomerStats(
   customer: Customer,
   sales: SaleTransaction[],
   payments: Payment[],
+  debtEntries: DebtEntry[] = [],
 ): CustomerStats {
   const cs = sales.filter((s) => s.customerId === customer.id);
   const ps = payments.filter((p) => p.kind === 'customer_payment' && p.partyId === customer.id);
+  const manualDebt = sum(
+    debtEntries.filter((d) => d.partyKind === 'customer' && d.partyId === customer.id).map((d) => d.amount),
+  );
   const totalRevenue = sum(cs.map((s) => s.total));
   const totalPurchased = sum(cs.map((s) => s.quantity));
   const receivedTotal = sum(ps.map((p) => p.amount));
-  const outstanding = round(totalRevenue - receivedTotal);
+  const outstanding = round(totalRevenue - receivedTotal + manualDebt);
   const aging = computeAging(cs, receivedTotal);
   const overdueAmount = round(aging.d1_30 + aging.d31_60 + aging.d61_90 + aging.d90_plus);
   const lastSaleDate = cs.length
@@ -240,7 +289,139 @@ export function computeCustomerStats(
 }
 
 export function allCustomerStats(data: ErpData): CustomerStats[] {
-  return data.customers.map((c) => computeCustomerStats(c, data.sales, data.payments));
+  return data.customers.map((c) => computeCustomerStats(c, data.sales, data.payments, data.debtEntries ?? []));
+}
+
+// ============================================================
+// الموظفون — سلف ورواتب
+// ============================================================
+export function computeEmployeeAdvanceBalance(
+  employeeId: string,
+  payments: Payment[],
+  payrollBatches: PayrollBatch[],
+  debtEntries: DebtEntry[] = [],
+): number {
+  const advanced = sum(
+    payments.filter((p) => p.kind === 'employee_advance' && p.partyId === employeeId).map((p) => p.amount),
+  );
+  const manualDebt = sum(
+    debtEntries.filter((d) => d.partyKind === 'employee' && d.partyId === employeeId).map((d) => d.amount),
+  );
+  const recovered = sum(
+    payrollBatches
+      .flatMap((b) => b.lines)
+      .filter((l) => l.employeeId === employeeId)
+      .map((l) => l.advanceDeducted),
+  );
+  return round(Math.max(0, advanced - recovered + manualDebt));
+}
+
+export function computeEmployeeStats(
+  employee: Employee,
+  payments: Payment[],
+  payrollBatches: PayrollBatch[],
+  debtEntries: DebtEntry[] = [],
+): EmployeeStats {
+  const grossSalary = round(
+    employee.baseSalary + employee.allowances.housing + employee.allowances.transport + employee.allowances.food,
+  );
+  const advancesTotal = round(
+    sum(payments.filter((p) => p.kind === 'employee_advance' && p.partyId === employee.id).map((p) => p.amount)),
+  );
+  const advancesRecovered = round(
+    sum(
+      payrollBatches
+        .flatMap((b) => b.lines)
+        .filter((l) => l.employeeId === employee.id)
+        .map((l) => l.advanceDeducted),
+    ),
+  );
+  const advanceBalance = computeEmployeeAdvanceBalance(employee.id, payments, payrollBatches, debtEntries);
+  const paidBatches = payrollBatches.filter((b) => b.status === 'paid');
+  const paidLines = paidBatches.flatMap((b) => b.lines).filter((l) => l.employeeId === employee.id);
+  const ytdPaid = round(sum(paidLines.map((l) => l.netSalary)));
+  const lastPayrollDate = paidBatches
+    .filter((b) => b.lines.some((l) => l.employeeId === employee.id))
+    .sort((a, b) => (b.paidAt ?? '').localeCompare(a.paidAt ?? ''))[0]?.paidAt;
+  return {
+    ...employee,
+    grossSalary,
+    advanceBalance,
+    advancesTotal,
+    advancesRecovered,
+    ytdPaid,
+    lastPayrollDate,
+    payrollCount: paidLines.length,
+  };
+}
+
+export function allEmployeeStats(data: ErpData): EmployeeStats[] {
+  return data.employees.map((e) => computeEmployeeStats(e, data.payments, data.payrollBatches, data.debtEntries ?? []));
+}
+
+export function buildDebtSummary(
+  farmers: FarmerStats[],
+  customers: CustomerStats[],
+  employees: EmployeeStats[],
+): DebtSummary {
+  const farmerPayables = round(sum(farmers.map((f) => Math.max(0, f.creditBalance))));
+  const customerReceivables = round(sum(customers.map((c) => Math.max(0, c.outstanding))));
+  const employeeAdvances = round(sum(employees.map((e) => Math.max(0, e.advanceBalance))));
+
+  const rows: DebtLedgerRow[] = [
+    ...farmers
+      .filter((f) => f.creditBalance > 0.01)
+      .map((f) => ({
+        id: f.id,
+        kind: 'farmer' as const,
+        code: f.code,
+        name: f.fullName,
+        subtitle: f.region,
+        balance: f.creditBalance,
+        direction: 'payable' as const,
+        statusLabel: f.status,
+        phone: f.phone,
+      })),
+    ...customers
+      .filter((c) => c.outstanding > 0.01)
+      .map((c) => ({
+        id: c.id,
+        kind: 'customer' as const,
+        code: c.code,
+        name: c.entityName,
+        subtitle: c.entityType,
+        balance: c.outstanding,
+        direction: 'receivable' as const,
+        statusLabel: c.onHold ? 'on_hold' : 'active',
+        phone: c.phone,
+      })),
+    ...employees
+      .filter((e) => e.advanceBalance > 0.01)
+      .map((e) => ({
+        id: e.id,
+        kind: 'employee' as const,
+        code: e.code,
+        name: e.fullName,
+        subtitle: e.jobTitle,
+        balance: e.advanceBalance,
+        direction: 'receivable' as const,
+        statusLabel: e.status,
+        phone: e.phone,
+      })),
+  ].sort((a, b) => b.balance - a.balance);
+
+  const totalPayables = farmerPayables;
+  const totalReceivables = round(customerReceivables + employeeAdvances);
+
+  return {
+    farmerPayables,
+    customerReceivables,
+    employeeAdvances,
+    totalPayables,
+    totalReceivables,
+    netPosition: round(totalReceivables - totalPayables),
+    rows,
+  };
 }
 
 // ============================================================
@@ -358,6 +539,8 @@ export interface DerivedData {
   trialBalance: ReturnType<typeof buildTrialBalance>;
   farmers: FarmerStats[];
   customers: CustomerStats[];
+  employees: EmployeeStats[];
+  debts: DebtSummary;
   activeSession: Session;
   activeSummary: SessionSummary;
   sessionSummaries: SessionSummary[];
@@ -367,6 +550,7 @@ export interface DerivedData {
     wac: number;
     payables: number;
     receivables: number;
+    employeeAdvances: number;
     overdue: number;
     netCash: number;
   };
@@ -379,14 +563,16 @@ export function computeDerived(data: ErpData): DerivedData {
   const trialBalance = buildTrialBalance(journals);
   const farmers = allFarmerStats(data);
   const customers = allCustomerStats(data);
+  const employees = allEmployeeStats(data);
+  const debts = buildDebtSummary(farmers, customers, employees);
   const activeSession =
     data.sessions.find((s) => s.id === data.activeSessionId) ?? data.sessions[data.sessions.length - 1];
   const sessionSummaries = data.sessions.map((s) => computeSessionSummary(s, data, inv));
   const activeSummary =
     sessionSummaries.find((s) => s.session.id === activeSession?.id) ?? sessionSummaries[0];
 
-  const payables = round(sum(farmers.map((f) => Math.max(0, f.creditBalance))));
-  const receivables = round(sum(customers.map((c) => Math.max(0, c.outstanding))));
+  const payables = debts.totalPayables;
+  const receivables = debts.totalReceivables;
   const overdue = round(sum(customers.map((c) => c.overdueAmount)));
   const treasury = computeTreasury(data.vaults, data.banks, data.cashMovements);
 
@@ -398,6 +584,8 @@ export function computeDerived(data: ErpData): DerivedData {
     trialBalance,
     farmers,
     customers,
+    employees,
+    debts,
     activeSession,
     activeSummary,
     sessionSummaries,
@@ -407,6 +595,7 @@ export function computeDerived(data: ErpData): DerivedData {
       wac: round(inv.currentWac, 3),
       payables,
       receivables,
+      employeeAdvances: debts.employeeAdvances,
       overdue,
       netCash: treasury.total,
     },
@@ -421,15 +610,6 @@ function buildAlerts(ctx: {
   data: ErpData;
 }): SystemAlert[] {
   const alerts: SystemAlert[] = [];
-  if (ctx.inv.currentStock < ctx.data.settings.minStockThreshold) {
-    alerts.push({
-      id: 'low-stock',
-      level: 'danger',
-      title: 'انخفاض المخزون',
-      detail: `الرصيد الحالي ${Math.round(ctx.inv.currentStock).toLocaleString('en-US')} لتر — دون الحد الأدنى (${ctx.data.settings.minStockThreshold.toLocaleString('en-US')} لتر).`,
-      href: '/inventory',
-    });
-  }
   const overdueCustomers = ctx.customers.filter((c) => c.overdueAmount > 0);
   if (overdueCustomers.length) {
     alerts.push({

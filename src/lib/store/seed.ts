@@ -340,16 +340,18 @@ export function generateSeed(): SeedResult {
     activeSessionId: junId,
     farmers,
     customers,
+    employees: [],
     supplies,
     sales,
     payments,
+    debtEntries: [],
     adjustments: [],
     expenses: [],
     payrollBatches: [],
     vaults: [],
     banks: [],
     cashMovements: [],
-    settings: { minStockThreshold: 5000, defaultBuyPrice: 1.85, defaultSellPrice: 2.55 },
+    settings: { minStockThreshold: 0, defaultBuyPrice: 1.85, defaultSellPrice: 2.55 },
   };
   const fullInv = buildInventoryLedger(supplies, sales, [], [may, june]);
   const maySummary = computeSessionSummary(may, data, fullInv);

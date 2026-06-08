@@ -2,7 +2,7 @@ import { CURRENCY_LABEL, formatNumber } from '@/lib/utils';
 
 export type FormatUnitOptions = {
   decimals?: number;
-  /** يعزل اتجاه الرقم عن RTL الصفحة — افتراضي true */
+  /** يعزل الرقم فقط — الوحدة تتبعه في تدفق RTL (تُقرأ بعد الرقم) */
   isolate?: boolean;
 };
 
@@ -11,8 +11,8 @@ const PDI = '\u2069'; // Pop Directional Isolate
 const NBSP = '\u00A0';
 
 /**
- * تنسيق قيمة + وحدة بالعربية: الرقم ثم الوحدة (مثال: 1,250 د.ل · 500 لتر).
- * حل موحّد لكل العملة واللتر وأي وحدة — نص واحد مع عزل bidi.
+ * تنسيق قيمة + وحدة للعربية: يُقرأ الرقم أولاً ثم الوحدة (مثال: ‏1,250 د.ل).
+ * الرقم داخل عزل LTR؛ الوحدة خارجه في RTL فتظهر يسار الرقم = بعده في القراءة.
  */
 export function formatWithUnit(
   value: number | string,
@@ -24,8 +24,8 @@ export function formatWithUnit(
   const formatted = formatNumber(safe, decimals);
   const unitPart = String(unit ?? '').trim();
   if (!unitPart) return isolate ? `${LRI}${formatted}${PDI}` : formatted;
-  if (!isolate) return `${formatted}${NBSP}${unitPart}`;
-  return `${LRI}${formatted}${PDI}${NBSP}${unitPart}`;
+  const numberPart = isolate ? `${LRI}${formatted}${PDI}` : formatted;
+  return `${numberPart}${NBSP}${unitPart}`;
 }
 
 export type FormatMoneyOptions = FormatUnitOptions & {

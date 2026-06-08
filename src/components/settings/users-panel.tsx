@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -144,6 +145,7 @@ export function UsersPanel() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>مستخدم جديد</DialogTitle>
+            <DialogDescription>إنشاء حساب دخول جديد للفريق — يتطلب صلاحية مدير.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">

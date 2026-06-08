@@ -7,7 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Field } from '@/components/shared/field';
+import { AmountInput } from '@/components/shared/amount-input';
+import { VolumeInput } from '@/components/shared/volume-input';
 import { useErpStore } from '@/lib/store/use-erp-store';
+import { formatLiters } from '@/lib/format-currency';
 
 type Props = {
   open: boolean;
@@ -42,7 +45,7 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
       date: new Date(date + 'T11:00:00').toISOString(),
     });
     if (res.ok) {
-      toast.success('تم تسجيل التسوية', { description: `${signed > 0 ? '+' : ''}${signed.toLocaleString('en-US')} لتر` });
+      toast.success('تم تسجيل التسوية', { description: `${signed > 0 ? '+' : ''}${formatLiters(signed, 0, false)}` });
       setQuantity('');
       onOpenChange(false);
     } else {
@@ -71,11 +74,11 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
             </Select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="الكمية (لتر)" required>
-              <Input type="number" dir="ltr" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" />
+            <Field label="الكمية" required>
+              <VolumeInput value={quantity} onChange={setQuantity} />
             </Field>
-            <Field label="تكلفة الوحدة (د.ل)">
-              <Input type="number" dir="ltr" step="0.001" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
+            <Field label="تكلفة الوحدة">
+              <AmountInput value={unitCost} onChange={setUnitCost} placeholder="0.000" />
             </Field>
           </div>
           <Field label="السبب">
@@ -98,8 +101,8 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
 
           <div className="flex items-center justify-between rounded-lg bg-canvas-sunken px-3 py-2.5 text-[12.5px]">
             <span className="text-muted-foreground">الرصيد بعد التسوية</span>
-            <span className={`font-bold tabular ${projected < 0 ? 'text-rose-600' : 'text-foreground'}`} dir="ltr">
-              {projected.toLocaleString('en-US')} لتر
+            <span className={`unit-value font-bold ${projected < 0 ? 'text-rose-600' : 'text-foreground'}`}>
+              {formatLiters(projected, 0, false)}
             </span>
           </div>
         </div>

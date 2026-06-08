@@ -119,7 +119,7 @@ export function FinancialReportPDF({ trialBalance, pnl, aging, asOfLabel }: Fina
       </View>
 
       {/* أعمار الديون */}
-      <Text style={s.section}>{ar('أعمار ذمم العملاء')}</Text>
+      <Text style={s.section}>{ar('أعمار ديون العملاء')}</Text>
       <View style={s.head}>
         <Text style={[s.th, { flex: 1, textAlign: 'center' }]}>{ar('غير مستحق')}</Text>
         <Text style={[s.th, { flex: 1, textAlign: 'center' }]}>{ar('1-30')}</Text>

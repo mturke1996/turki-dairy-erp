@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Warehouse, Coins, Gauge, SlidersHorizontal, ArrowDownUp, AlertTriangle, PackagePlus } from 'lucide-react';
+import { Warehouse, Coins, Gauge, SlidersHorizontal, ArrowDownUp, PackagePlus } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import { usePermission } from '@/lib/store/use-permission';
 import { computeDailyFlow } from '@/lib/domain/calculations';
 import { sessionLedgerEntries } from '@/lib/domain/inventory';
-import { formatShortDate, formatNumber } from '@/lib/utils';
+import { formatShortDate } from '@/lib/utils';
 
 const MOVEMENT_BADGE = {
   IN: { variant: 'success' as const, label: 'وارد' },
@@ -35,7 +35,6 @@ const MOVEMENT_BADGE = {
 export default function InventoryPage() {
   const data = useErpData();
   const d = useDerived();
-  const minThreshold = useErpStore((s) => s.settings.minStockThreshold);
   const setSessionOpeningStock = useErpStore((s) => s.setSessionOpeningStock);
   const canAdjust = usePermission('supply.record');
   const [sessionId, setSessionId] = useState(() => d.activeSession?.id ?? 'all');
@@ -58,7 +57,6 @@ export default function InventoryPage() {
   }, [d.inv.entries, sessionId, session]);
 
   const flow = computeDailyFlow(sessionId, d.inv);
-  const belowMin = d.totals.currentStock < minThreshold;
 
   return (
     <div className="space-y-6">
@@ -84,17 +82,10 @@ export default function InventoryPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile
-          label="المخزون الحالي"
-          value={<Liters value={d.totals.currentStock} />}
-          icon={Warehouse}
-          tone={belowMin ? 'rose' : 'meadow'}
-          hint={belowMin ? `دون الحد الأدنى (${formatNumber(minThreshold, 0)})` : 'ضمن الحد الآمن'}
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatTile label="المخزون الحالي" value={<Liters value={d.totals.currentStock} />} icon={Warehouse} tone="meadow" />
         <StatTile label="قيمة المخزون" value={<Money value={d.totals.inventoryValue} decimals={0} />} icon={Coins} tone="navy" />
         <StatTile label="متوسط التكلفة" value={<Money value={d.totals.wac} decimals={3} />} icon={Gauge} tone="sun" hint="للّتر الواحد" />
-        <StatTile label="الحد الأدنى" value={<Liters value={minThreshold} />} icon={AlertTriangle} tone="neutral" hint="عتبة التنبيه" />
       </div>
 
       <Card>

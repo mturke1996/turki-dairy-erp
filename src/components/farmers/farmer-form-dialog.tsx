@@ -62,7 +62,9 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
 
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
 
-  function submit() {
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
     if (!form.fullName.trim()) return toast.error('أدخل اسم الفلاح.');
     if (!form.region.trim()) return toast.error('أدخل المنطقة.');
     if (!form.phone.trim()) return toast.error('أدخل رقم الهاتف.');
@@ -84,14 +86,32 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
       notes: form.notes.trim() || undefined,
     };
 
-    if (isEdit && farmer) {
-      updateFarmer(farmer.id, payload);
-      toast.success('تم تحديث بيانات الفلاح');
-    } else {
-      addFarmer({ ...payload, onboardingDate: new Date().toISOString() });
-      toast.success('تمت إضافة الفلاح');
+    setSaving(true);
+    try {
+      if (isEdit && farmer) {
+        const res = await updateFarmer(farmer.id, payload);
+        if (res.ok) {
+          toast.success('تم تحديث بيانات الفلاح');
+          onOpenChange(false);
+        } else {
+          toast.error(res.error ?? 'تعذّر تحديث الفلاح');
+        }
+      } else {
+        const res = await addFarmer({
+          ...payload,
+          onboardingDate: new Date().toISOString().slice(0, 10),
+        });
+        if (res.ok) {
+          toast.success('تمت إضافة الفلاح');
+          setForm({ ...EMPTY, defaultBuyPrice: String(defaultBuy) });
+          onOpenChange(false);
+        } else {
+          toast.error(res.error ?? 'تعذّرت إضافة الفلاح');
+        }
+      }
+    } finally {
+      setSaving(false);
     }
-    onOpenChange(false);
   }
 
   return (
@@ -181,7 +201,7 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
         </div>
 
         <DialogFooter>
-          <Button onClick={submit}>{isEdit ? 'حفظ التعديلات' : 'إضافة الفلاح'}</Button>
+          <Button onClick={submit} disabled={saving}>{saving ? 'جارٍ الحفظ…' : isEdit ? 'حفظ التعديلات' : 'إضافة الفلاح'}</Button>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             إلغاء
           </Button>

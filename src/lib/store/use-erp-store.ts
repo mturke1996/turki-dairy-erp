@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { buildInventoryLedger, round } from '@/lib/domain/inventory';
-import { computeSessionSummary, computeFarmerStats, computeCustomerStats, computeFarmerSessionStats } from '@/lib/domain/calculations';
+import { computeSessionSummary, computeFarmerStats, computeCustomerStats, computeFarmerSessionStats, computeEmployeeAdvanceBalance } from '@/lib/domain/calculations';
 import { accountBalance } from '@/lib/domain/treasury';
 import { cycleForDate } from '@/lib/domain/cycle';
 import type {
@@ -27,14 +27,17 @@ import type {
   SaleTransaction,
   Session,
   SupplyTransaction,
+  DebtEntry,
+  DebtPartyKind,
 } from '@/lib/domain/types';
 import { uid } from '@/lib/utils';
 import { formatLiters, formatMoney, formatPricePerLiter } from '@/lib/format-currency';
 import { generateSeed } from './seed';
 import { generateSeedV3, DEFAULT_EXPENSE_CATEGORIES, emptyV3 } from './seed-v3';
+import { isSupabaseConfigured } from '@/lib/supabase/repository';
 
 const DEFAULT_SETTINGS: AppSettings = {
-  minStockThreshold: 5000,
+  minStockThreshold: 0,
   defaultBuyPrice: 1.85,
   defaultSellPrice: 2.55,
   currencyLabel: 'د.ل',
@@ -45,6 +48,14 @@ const DEFAULT_USER: AuthUser = {
   role: 'admin',
   email: 'admin@alturki.ly',
 };
+
+function nextPartyCode(prefix: string, items: { code: string }[]): string {
+  const max = items.reduce((m, item) => {
+    const n = parseInt(item.code.replace(/\D/g, ''), 10);
+    return Number.isFinite(n) ? Math.max(m, n) : m;
+  }, 0);
+  return `${prefix}-${String(max + 1).padStart(3, '0')}`;
+}
 
 export interface MutationResult {
   ok: boolean;
@@ -64,6 +75,7 @@ interface ErpState {
   supplies: SupplyTransaction[];
   sales: SaleTransaction[];
   payments: Payment[];
+  debtEntries: DebtEntry[];
   adjustments: InventoryAdjustment[];
   settings: AppSettings;
 
@@ -87,10 +99,12 @@ interface ErpState {
   closeActiveSession: () => MutationResult;
 
   // entities
-  addFarmer: (input: Omit<Farmer, 'id' | 'code' | 'createdAt'>) => MutationResult;
-  updateFarmer: (id: string, patch: Partial<Farmer>) => void;
-  addCustomer: (input: Omit<Customer, 'id' | 'code' | 'createdAt'>) => MutationResult;
-  updateCustomer: (id: string, patch: Partial<Customer>) => void;
+  addFarmer: (input: Omit<Farmer, 'id' | 'code' | 'createdAt'>) => Promise<MutationResult>;
+  updateFarmer: (id: string, patch: Partial<Farmer>) => Promise<MutationResult>;
+  addCustomer: (input: Omit<Customer, 'id' | 'code' | 'createdAt'>) => Promise<MutationResult>;
+  updateCustomer: (id: string, patch: Partial<Customer>) => Promise<MutationResult>;
+  updateVault: (id: string, patch: Partial<CashVault>) => Promise<MutationResult>;
+  updateBank: (id: string, patch: Partial<BankAccount>) => Promise<MutationResult>;
 
   // transactions
   recordSupply: (input: {
@@ -142,13 +156,28 @@ interface ErpState {
     sourceType?: AccountSourceType;
     sourceId?: string;
   }) => MutationResult;
+  recordEmployeeAdvance: (input: {
+    employeeId: string;
+    amount: number;
+    method: Payment['method'];
+    date?: string;
+    reference?: string;
+    notes?: string;
+    sourceType: AccountSourceType;
+    sourceId: string;
+  }) => MutationResult;
+  recordDebtEntry: (input: {
+    partyKind: DebtPartyKind;
+    partyId: string;
+    amount: number;
+    date?: string;
+    description?: string;
+  }) => Promise<MutationResult>;
   addAdjustment: (input: { quantity: number; unitCost: number; reason: string; date?: string }) => MutationResult;
 
   // v3.0 — الخزن والبنوك
   addVault: (input: Omit<CashVault, 'id' | 'code' | 'createdAt'>) => MutationResult;
-  updateVault: (id: string, patch: Partial<CashVault>) => void;
   addBank: (input: Omit<BankAccount, 'id' | 'code' | 'createdAt'>) => MutationResult;
-  updateBank: (id: string, patch: Partial<BankAccount>) => void;
   /** ينشئ خزنة رئيسية إذا لم يوجد أي حساب — لتفعيل المصاريف والمدفوعات */
   setupMainVault: (input: { openingBalance: number; name?: string }) => MutationResult;
   /** ضبط الرصيد الافتتاحي لخزنة أو بنك (لبدء التشغيل من رصيد قائم) */
@@ -187,8 +216,8 @@ interface ErpState {
   }) => MutationResult;
 
   // v3.0 — الموظفون والرواتب
-  addEmployee: (input: Omit<Employee, 'id' | 'code' | 'createdAt'>) => MutationResult;
-  updateEmployee: (id: string, patch: Partial<Employee>) => void;
+  addEmployee: (input: Omit<Employee, 'id' | 'code' | 'createdAt'>) => Promise<MutationResult>;
+  updateEmployee: (id: string, patch: Partial<Employee>) => Promise<MutationResult>;
   createPayrollBatch: (input: {
     label: string;
     payrollType: PayrollBatch['payrollType'];
@@ -198,7 +227,7 @@ interface ErpState {
   payPayrollBatch: (batchId: string, source: { type: AccountSourceType; id: string }) => MutationResult;
 
   // settings & demo
-  updateSettings: (patch: Partial<AppSettings>) => void;
+  updateSettings: (patch: Partial<AppSettings>) => Promise<MutationResult>;
   resetDemo: () => void;
   clearData: () => void;
   setRole: (role: AuthUser['role']) => void;
@@ -212,6 +241,7 @@ interface ErpState {
     supplies: SupplyTransaction[];
     sales: SaleTransaction[];
     payments: Payment[];
+    debtEntries: DebtEntry[];
     adjustments: InventoryAdjustment[];
     settings: Partial<AppSettings>;
     vaults: CashVault[];
@@ -310,6 +340,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       supplies: [],
       sales: [],
       payments: [],
+      debtEntries: [],
       adjustments: [],
       settings: DEFAULT_SETTINGS,
 
@@ -337,12 +368,12 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         const inv = buildInventoryLedger(state.supplies, state.sales, state.adjustments, state.sessions);
         const summary = computeSessionSummary(active, state as any, inv);
 
-        const farmerStats = state.farmers.map((f) => computeFarmerStats(f, state.supplies, state.payments));
+        const farmerStats = state.farmers.map((f) => computeFarmerStats(f, state.supplies, state.payments, state.debtEntries));
         const sessionFarmerStats = state.farmers.map((f) =>
           computeFarmerSessionStats(f, active.id, state.supplies, state.payments),
         );
         const customerStats = state.customers.map((c) =>
-          computeCustomerStats(c, state.sales, state.payments),
+          computeCustomerStats(c, state.sales, state.payments, state.debtEntries),
         );
         const payables = round(farmerStats.reduce((s, f) => s + Math.max(0, f.creditBalance), 0));
         const receivables = round(customerStats.reduce((s, c) => s + Math.max(0, c.outstanding), 0));
@@ -429,25 +460,113 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         return { ok: true, id: newId };
       },
 
-      addFarmer: (input) => {
+      addFarmer: async (input) => {
         const state = get();
-        const code = `F-${String(state.farmers.length + 1).padStart(3, '0')}`;
-        const farmer: Farmer = { ...input, id: uid('farmer-'), code, createdAt: new Date().toISOString() };
-        set({ farmers: [farmer, ...state.farmers] });
+        const code = nextPartyCode('F', state.farmers);
+        const farmer: Farmer = {
+          ...input,
+          id: uid('farmer-'),
+          code,
+          onboardingDate: input.onboardingDate.slice(0, 10),
+          createdAt: new Date().toISOString(),
+        };
+        const audit = makeAudit(state, 'farmer', farmer.id, 'create', `إضافة فلاح: ${farmer.fullName}`);
+        if (isSupabaseConfigured()) {
+          try {
+            const { persistMutation } = await import('@/lib/supabase/live-db');
+            await persistMutation(
+              [{ table: 'farmers', rows: [farmer as unknown as Record<string, unknown>] }],
+              () =>
+                set((s) => ({
+                  farmers: [farmer, ...s.farmers],
+                  auditLogs: [audit, ...s.auditLogs],
+                })),
+            );
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : 'فشل حفظ الفلاح في قاعدة البيانات' };
+          }
+          return { ok: true, id: farmer.id };
+        }
+        set({
+          farmers: [farmer, ...state.farmers],
+          auditLogs: [audit, ...state.auditLogs],
+        });
         return { ok: true, id: farmer.id };
       },
-      updateFarmer: (id, patch) =>
-        set((s) => ({ farmers: s.farmers.map((f) => (f.id === id ? { ...f, ...patch } : f)) })),
-
-      addCustomer: (input) => {
+      updateFarmer: async (id, patch) => {
         const state = get();
-        const code = `C-${String(state.customers.length + 1).padStart(3, '0')}`;
-        const customer: Customer = { ...input, id: uid('customer-'), code, createdAt: new Date().toISOString() };
-        set({ customers: [customer, ...state.customers] });
+        const existing = state.farmers.find((f) => f.id === id);
+        if (!existing) return { ok: false, error: 'الفلاح غير موجود.' };
+        const updated: Farmer = {
+          ...existing,
+          ...patch,
+          onboardingDate: (patch.onboardingDate ?? existing.onboardingDate).slice(0, 10),
+        };
+        if (isSupabaseConfigured()) {
+          try {
+            const { persistMutation } = await import('@/lib/supabase/live-db');
+            await persistMutation(
+              [{ table: 'farmers', rows: [updated as unknown as Record<string, unknown>] }],
+              () => set((s) => ({ farmers: s.farmers.map((f) => (f.id === id ? updated : f)) })),
+            );
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : 'فشل تحديث الفلاح' };
+          }
+          return { ok: true, id };
+        }
+        set((s) => ({ farmers: s.farmers.map((f) => (f.id === id ? updated : f)) }));
+        return { ok: true, id };
+      },
+
+      addCustomer: async (input) => {
+        const state = get();
+        const code = nextPartyCode('C', state.customers);
+        const customer: Customer = {
+          ...input,
+          id: uid('customer-'),
+          code,
+          onboardingDate: input.onboardingDate.slice(0, 10),
+          createdAt: new Date().toISOString(),
+        };
+        if (isSupabaseConfigured()) {
+          try {
+            const { persistMutation } = await import('@/lib/supabase/live-db');
+            await persistMutation(
+              [{ table: 'customers', rows: [customer as unknown as Record<string, unknown>] }],
+              () => set((s) => ({ customers: [customer, ...s.customers] })),
+            );
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : 'فشل حفظ العميل' };
+          }
+          return { ok: true, id: customer.id };
+        }
+        set((s) => ({ customers: [customer, ...s.customers] }));
         return { ok: true, id: customer.id };
       },
-      updateCustomer: (id, patch) =>
-        set((s) => ({ customers: s.customers.map((c) => (c.id === id ? { ...c, ...patch } : c)) })),
+      updateCustomer: async (id, patch) => {
+        const state = get();
+        const existing = state.customers.find((c) => c.id === id);
+        if (!existing) return { ok: false, error: 'العميل غير موجود.' };
+        const updated: Customer = {
+          ...existing,
+          ...patch,
+          onboardingDate: (patch.onboardingDate ?? existing.onboardingDate).slice(0, 10),
+        };
+        if (isSupabaseConfigured()) {
+          try {
+            const { persistMutation } = await import('@/lib/supabase/live-db');
+            await persistMutation(
+              [{ table: 'customers', rows: [updated as unknown as Record<string, unknown>] }],
+              () => set((s) => ({ customers: s.customers.map((c) => (c.id === id ? updated : c)) })),
+            );
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : 'فشل تحديث العميل' };
+          }
+          return { ok: true, id };
+        }
+        set((s) => ({ customers: s.customers.map((c) => (c.id === id ? updated : c)) }));
+        return { ok: true, id };
+      },
 
       recordSupply: (input) => {
         const state = get();
@@ -703,6 +822,131 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         return { ok: true, id: tx.id };
       },
 
+      recordEmployeeAdvance: (input) => {
+        const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
+        if (input.amount <= 0) return { ok: false, error: 'المبلغ يجب أن يكون أكبر من صفر.' };
+        const employee = state.employees.find((e) => e.id === input.employeeId);
+        if (!employee) return { ok: false, error: 'الموظف غير موجود.' };
+        const amount = round(input.amount);
+        const date = input.date ?? new Date().toISOString();
+        const bal = accountBalance(input.sourceType, input.sourceId, state.vaults, state.banks, state.cashMovements);
+        if (amount > bal + 0.001)
+          return { ok: false, error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي للسلفة.` };
+
+        const tx: Payment = {
+          id: uid('pay-'),
+          ref: nextRef('ADV', state.payments.filter((p) => p.kind === 'employee_advance')),
+          kind: 'employee_advance',
+          partyId: input.employeeId,
+          sessionId: state.activeSessionId,
+          date,
+          amount,
+          method: input.method,
+          paidFromType: input.sourceType,
+          paidFromId: input.sourceId,
+          reference: input.reference,
+          notes: input.notes,
+          createdAt: new Date().toISOString(),
+          createdBy: state.auth?.name,
+        };
+
+        const movement: CashMovement = {
+          id: uid('cm-'),
+          ref: nextRef('CM', state.cashMovements),
+          movementType: 'expense',
+          sourceType: input.sourceType,
+          sourceId: input.sourceId,
+          amount,
+          direction: 'out',
+          referenceType: 'payment',
+          referenceId: tx.id,
+          description: `سلفة للموظف ${employee.fullName}`.trim(),
+          sessionId: state.activeSessionId,
+          date,
+          createdAt: new Date().toISOString(),
+        };
+
+        set({
+          payments: [tx, ...state.payments],
+          cashMovements: [movement, ...state.cashMovements],
+          auditLogs: [
+            makeAudit(state, 'payment', tx.id, 'pay', `سلفة للموظف ${employee.fullName}: ${formatMoney(amount, { decimals: 0 })}`),
+            ...state.auditLogs,
+          ],
+        });
+        return { ok: true, id: tx.id };
+      },
+
+      recordDebtEntry: async (input) => {
+        const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
+        if (input.amount <= 0) return { ok: false, error: 'المبلغ يجب أن يكون أكبر من صفر.' };
+
+        let partyName = '';
+        if (input.partyKind === 'farmer') {
+          const farmer = state.farmers.find((f) => f.id === input.partyId);
+          if (!farmer) return { ok: false, error: 'الفلاح غير موجود.' };
+          partyName = farmer.fullName;
+        } else if (input.partyKind === 'customer') {
+          const customer = state.customers.find((c) => c.id === input.partyId);
+          if (!customer) return { ok: false, error: 'العميل غير موجود.' };
+          partyName = customer.entityName;
+        } else {
+          const employee = state.employees.find((e) => e.id === input.partyId);
+          if (!employee) return { ok: false, error: 'الموظف غير موجود.' };
+          partyName = employee.fullName;
+        }
+
+        const amount = round(input.amount);
+        const dateRaw = input.date ?? new Date().toISOString();
+        const entry: DebtEntry = {
+          id: uid('deb-'),
+          ref: nextRef('DEB', state.debtEntries),
+          sessionId: state.activeSessionId,
+          date: dateRaw.slice(0, 10),
+          partyKind: input.partyKind,
+          partyId: input.partyId,
+          amount,
+          description: input.description?.trim() || undefined,
+          createdAt: new Date().toISOString(),
+          createdBy: state.auth?.name,
+        };
+
+        const kindLabel =
+          input.partyKind === 'farmer' ? 'فلاح' : input.partyKind === 'customer' ? 'عميل' : 'موظف';
+        const audit = makeAudit(
+          state,
+          'debt',
+          entry.id,
+          'create',
+          `تسجيل دين — ${kindLabel} ${partyName}: ${formatMoney(amount, { decimals: 0 })}${entry.description ? ` (${entry.description})` : ''}`,
+        );
+
+        const apply = () =>
+          set((s) => ({
+            debtEntries: [entry, ...s.debtEntries],
+            auditLogs: [audit, ...s.auditLogs],
+          }));
+
+        if (isSupabaseConfigured()) {
+          try {
+            const { persistMutation } = await import('@/lib/supabase/live-db');
+            await persistMutation(
+              [{ table: 'debt_entries', rows: [entry as unknown as Record<string, unknown>] }],
+              apply,
+            );
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : 'فشل تسجيل الدين' };
+          }
+          return { ok: true, id: entry.id };
+        }
+        apply();
+        return { ok: true, id: entry.id };
+      },
+
       addAdjustment: (input) => {
         const state = get();
         const gate = requireOpenSession(state);
@@ -733,11 +977,34 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         });
         return { ok: true, id: vault.id };
       },
-      updateVault: (id, patch) =>
+      updateVault: async (id, patch) => {
+        const state = get();
+        const existing = state.vaults.find((v) => v.id === id);
+        if (!existing) return { ok: false, error: 'الخزنة غير موجودة.' };
+        const updated = { ...existing, ...patch };
+        const audit = makeAudit(state, 'vault', id, 'update', 'تعديل بيانات خزنة');
+        if (isSupabaseConfigured()) {
+          try {
+            const { persistMutation } = await import('@/lib/supabase/live-db');
+            await persistMutation(
+              [{ table: 'cash_vaults', rows: [updated as unknown as Record<string, unknown>] }],
+              () =>
+                set((s) => ({
+                  vaults: s.vaults.map((v) => (v.id === id ? updated : v)),
+                  auditLogs: [audit, ...s.auditLogs],
+                })),
+            );
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : 'فشل تحديث الخزنة' };
+          }
+          return { ok: true, id };
+        }
         set((s) => ({
-          vaults: s.vaults.map((v) => (v.id === id ? { ...v, ...patch } : v)),
-          auditLogs: [makeAudit(s, 'vault', id, 'update', 'تعديل بيانات خزنة'), ...s.auditLogs],
-        })),
+          vaults: s.vaults.map((v) => (v.id === id ? updated : v)),
+          auditLogs: [audit, ...s.auditLogs],
+        }));
+        return { ok: true, id };
+      },
 
       addBank: (input) => {
         const state = get();
@@ -749,11 +1016,34 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         });
         return { ok: true, id: bank.id };
       },
-      updateBank: (id, patch) =>
+      updateBank: async (id, patch) => {
+        const state = get();
+        const existing = state.banks.find((b) => b.id === id);
+        if (!existing) return { ok: false, error: 'الحساب البنكي غير موجود.' };
+        const updated = { ...existing, ...patch };
+        const audit = makeAudit(state, 'bank', id, 'update', 'تعديل بيانات بنك');
+        if (isSupabaseConfigured()) {
+          try {
+            const { persistMutation } = await import('@/lib/supabase/live-db');
+            await persistMutation(
+              [{ table: 'bank_accounts', rows: [updated as unknown as Record<string, unknown>] }],
+              () =>
+                set((s) => ({
+                  banks: s.banks.map((b) => (b.id === id ? updated : b)),
+                  auditLogs: [audit, ...s.auditLogs],
+                })),
+            );
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : 'فشل تحديث البنك' };
+          }
+          return { ok: true, id };
+        }
         set((s) => ({
-          banks: s.banks.map((b) => (b.id === id ? { ...b, ...patch } : b)),
-          auditLogs: [makeAudit(s, 'bank', id, 'update', 'تعديل بيانات بنك'), ...s.auditLogs],
-        })),
+          banks: s.banks.map((b) => (b.id === id ? updated : b)),
+          auditLogs: [audit, ...s.auditLogs],
+        }));
+        return { ok: true, id };
+      },
 
       setupMainVault: (input) => {
         const state = get();
@@ -1011,21 +1301,71 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       },
 
       // ── v3.0: الموظفون والرواتب ──────────────────────────
-      addEmployee: (input) => {
+      addEmployee: async (input) => {
         const state = get();
-        const code = `E-${String(state.employees.length + 1).padStart(3, '0')}`;
-        const emp: Employee = { ...input, id: uid('emp-'), code, createdAt: new Date().toISOString() };
+        const code = nextPartyCode('E', state.employees);
+        const emp: Employee = {
+          ...input,
+          id: uid('emp-'),
+          code,
+          hireDate: input.hireDate?.slice(0, 10),
+          createdAt: new Date().toISOString(),
+        };
+        const audit = makeAudit(state, 'employee', emp.id, 'create', `إضافة موظف: ${emp.fullName}`);
+        if (isSupabaseConfigured()) {
+          try {
+            const { persistMutation } = await import('@/lib/supabase/live-db');
+            await persistMutation(
+              [{ table: 'employees', rows: [emp as unknown as Record<string, unknown>] }],
+              () =>
+                set((s) => ({
+                  employees: [emp, ...s.employees],
+                  auditLogs: [audit, ...s.auditLogs],
+                })),
+            );
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : 'فشل حفظ الموظف' };
+          }
+          return { ok: true, id: emp.id };
+        }
         set({
           employees: [emp, ...state.employees],
-          auditLogs: [makeAudit(state, 'employee', emp.id, 'create', `إضافة موظف: ${emp.fullName}`), ...state.auditLogs],
+          auditLogs: [audit, ...state.auditLogs],
         });
         return { ok: true, id: emp.id };
       },
-      updateEmployee: (id, patch) =>
+      updateEmployee: async (id, patch) => {
+        const state = get();
+        const existing = state.employees.find((e) => e.id === id);
+        if (!existing) return { ok: false, error: 'الموظف غير موجود.' };
+        const updated: Employee = {
+          ...existing,
+          ...patch,
+          hireDate: patch.hireDate != null ? patch.hireDate.slice(0, 10) : existing.hireDate,
+        };
+        const audit = makeAudit(state, 'employee', id, 'update', 'تعديل بيانات موظف');
+        if (isSupabaseConfigured()) {
+          try {
+            const { persistMutation } = await import('@/lib/supabase/live-db');
+            await persistMutation(
+              [{ table: 'employees', rows: [updated as unknown as Record<string, unknown>] }],
+              () =>
+                set((s) => ({
+                  employees: s.employees.map((e) => (e.id === id ? updated : e)),
+                  auditLogs: [audit, ...s.auditLogs],
+                })),
+            );
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : 'فشل تحديث الموظف' };
+          }
+          return { ok: true, id };
+        }
         set((s) => ({
-          employees: s.employees.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-          auditLogs: [makeAudit(s, 'employee', id, 'update', 'تعديل بيانات موظف'), ...s.auditLogs],
-        })),
+          employees: s.employees.map((e) => (e.id === id ? updated : e)),
+          auditLogs: [audit, ...s.auditLogs],
+        }));
+        return { ok: true, id };
+      },
 
       createPayrollBatch: (input) => {
         const state = get();
@@ -1035,15 +1375,20 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         if (!active.length) return { ok: false, error: 'لا يوجد موظفون نشطون لإنشاء كشف رواتب.' };
         const lines: PayrollLine[] = active.map((e) => {
           const allowancesTotal = e.allowances.housing + e.allowances.transport + e.allowances.food;
+          const gross = round(e.baseSalary + allowancesTotal);
+          const advanceBal = computeEmployeeAdvanceBalance(e.id, state.payments, state.payrollBatches, state.debtEntries);
+          const advanceDeducted = round(Math.min(advanceBal, gross));
+          const deductionsTotal = advanceDeducted;
+          const netSalary = round(gross - advanceDeducted);
           return {
             employeeId: e.id,
             baseSalary: e.baseSalary,
             allowancesTotal,
-            deductionsTotal: 0,
-            netSalary: round(e.baseSalary + allowancesTotal),
+            deductionsTotal,
+            netSalary,
             attendanceDays: 30,
             absenceDays: 0,
-            advanceDeducted: 0,
+            advanceDeducted,
           };
         });
         const totalAmount = round(lines.reduce((s, l) => s + l.netSalary, 0));
@@ -1105,7 +1450,23 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         return { ok: true, id: batchId };
       },
 
-      updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+      updateSettings: async (patch) => {
+        const state = get();
+        const settings = { ...state.settings, ...patch };
+        if (isSupabaseConfigured()) {
+          try {
+            const { applyLocalDbWrite } = await import('@/lib/supabase/live-db');
+            const { persistAppSettings } = await import('@/lib/supabase/repository');
+            await persistAppSettings({ activeSessionId: state.activeSessionId, settings });
+            applyLocalDbWrite(() => set({ settings }));
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : 'فشل حفظ الإعدادات' };
+          }
+          return { ok: true };
+        }
+        set({ settings });
+        return { ok: true };
+      },
 
       resetDemo: () => {
         const fresh = generateSeed();
@@ -1118,6 +1479,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           supplies: fresh.supplies,
           sales: fresh.sales,
           payments: fresh.payments,
+          debtEntries: [],
           adjustments: [],
           settings: DEFAULT_SETTINGS,
           vaults: freshV3.vaults,
@@ -1143,6 +1505,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           supplies: [],
           sales: [],
           payments: [],
+          debtEntries: [],
           adjustments: [],
           vaults: blank.vaults,
           banks: blank.banks,

@@ -15,10 +15,10 @@ describe('formatWithUnit', () => {
     expect(formatLiters(1200, 0, false)).toBe('1,200\u00A0لتر');
   });
 
-  it('يعزل bidi افتراضياً', () => {
+  it('يعزل الرقم فقط — الوحدة خارجه في RTL', () => {
     const s = formatMoney(100, { decimals: 0 });
     expect(s.startsWith('\u2066')).toBe(true);
-    expect(s).toContain('100');
-    expect(s.endsWith('د.ل')).toBe(true);
+    expect(s).toContain('\u2069\u00A0د.ل');
+    expect(s.indexOf('100')).toBeLessThan(s.indexOf('د.ل'));
   });
 });

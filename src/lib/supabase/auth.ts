@@ -4,6 +4,7 @@ import { createClient } from '@/lib/client';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import type { Role } from '@/lib/domain/types';
 import { isAuthRequired } from './config';
+import { initDatabase, stopDatabase } from './live-db';
 
 interface ProfileRow {
   id: string;
@@ -23,7 +24,6 @@ async function fetchProfile(userId: string): Promise<ProfileRow | null> {
   const sb = createClient();
   const { data, error } = await sb.from('profiles').select('id,email,name,role').eq('id', userId).maybeSingle();
   if (error) {
-    // RLS recursion أو جدول غير مهيأ — نكمل ببيانات Auth بدل إيقاف التطبيق
     console.warn('[auth] profile fetch failed:', error.message);
     return null;
   }
@@ -58,7 +58,6 @@ export async function bootstrapAuthSession(): Promise<boolean> {
     return true;
   }
 
-  // ملف جديد — استخدم بيانات Auth حتى يُنشأ الـ trigger
   useErpStore.getState().login({
     name: (session.user.user_metadata?.name as string) ?? session.user.email?.split('@')[0] ?? 'مستخدم',
     email: session.user.email ?? '',
@@ -78,20 +77,25 @@ export async function signInWithPassword(email: string, password: string): Promi
   const profile = await fetchProfile(user.id);
   if (profile) {
     applyProfile(profile, user.email ?? email);
-    return;
+  } else {
+    useErpStore.getState().login({
+      name: email.split('@')[0],
+      email,
+      role: 'admin',
+    });
   }
 
-  useErpStore.getState().login({
-    name: email.split('@')[0],
-    email,
-    role: 'admin',
-  });
+  const db = await initDatabase();
+  if (!db.ok) throw new AuthError(db.error ?? 'تعذّر تحميل البيانات من قاعدة البيانات');
 }
 
 export async function signOut(): Promise<void> {
+  stopDatabase();
   if (isAuthRequired()) {
     const sb = createClient();
     await sb.auth.signOut();
   }
-  useErpStore.getState().logout();
+  const store = useErpStore.getState();
+  store.clearData();
+  store.logout();
 }

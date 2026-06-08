@@ -19,6 +19,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Field } from '@/components/shared/field';
 import { StatTile } from '@/components/shared/stat-tile';
 import { Money, Liters } from '@/components/shared/money';
+import { VolumeInput } from '@/components/shared/volume-input';
+import { AmountInput } from '@/components/shared/amount-input';
 import { EmptyState } from '@/components/shared/empty-state';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
@@ -113,7 +115,7 @@ export default function SalesPage() {
         <StatTile label="المخزون المتاح" value={<Liters value={stock} />} icon={Warehouse} tone="meadow" hint={`تكلفة ${formatPricePerLiter(wac, 3)}`} />
         <StatTile label="مبيعات الفترة" value={<Money value={sum?.salesRevenue ?? 0} decimals={0} />} icon={Wallet} tone="navy" hint={`${sum?.salesCount ?? 0} عملية`} />
         <StatTile label="ربح الفترة" value={<Money value={sum?.grossProfit ?? 0} decimals={0} />} icon={TrendingUp} tone="sun" hint={`هامش ${formatNumber(sum?.marginPct ?? 0, 1)}%`} />
-        <StatTile label="ذمم العملاء" value={<Money value={d.totals.receivables} decimals={0} />} icon={Receipt} tone="rose" hint={`متأخر ${formatMoney(d.totals.overdue, { decimals: 0, isolate: false })}`} />
+        <StatTile label="ديون العملاء" value={<Money value={d.totals.receivables} decimals={0} />} icon={Receipt} tone="rose" hint={`متأخر ${formatMoney(d.totals.overdue, { decimals: 0, isolate: false })}`} />
       </div>
 
       {sessionLocked ? (
@@ -152,27 +154,19 @@ export default function SalesPage() {
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="الكمية (لتر)" required error={exceedsStock ? `يتجاوز المخزون (${formatNumber(stock, 0)})` : undefined}>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  dir="ltr"
-                  placeholder="0"
+              <Field label="الكمية" required error={exceedsStock ? `يتجاوز المخزون (${formatNumber(stock, 0)} لتر)` : undefined}>
+                <VolumeInput
                   value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
+                  onChange={setQuantity}
                   disabled={!canSell || sessionLocked}
-                  className={exceedsStock ? 'border-rose-300 focus:border-rose-400' : undefined}
+                  className={exceedsStock ? 'border-rose-300 focus-within:ring-rose-200' : undefined}
                 />
               </Field>
-              <Field label="سعر اللتر (د.ل)" required>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  dir="ltr"
-                  step="0.001"
-                  placeholder="0.000"
+              <Field label="سعر اللتر" required>
+                <AmountInput
                   value={unitPrice}
-                  onChange={(e) => setUnitPrice(e.target.value)}
+                  onChange={setUnitPrice}
+                  placeholder="0.000"
                   disabled={!canSell || sessionLocked}
                 />
               </Field>

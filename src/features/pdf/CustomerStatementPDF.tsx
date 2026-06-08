@@ -61,13 +61,13 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
   return (
     <ReportShell
       title="كشف حساب عميل"
-      subtitle={sessionLabel ? `الفترة: ${sessionLabel}` : 'كشف ذمم'}
+      subtitle={sessionLabel ? `الفترة: ${sessionLabel}` : 'كشف الديون'}
       summaryPrimaryDateLabel="تاريخ الإصدار"
       metaCells={[
         { label: 'العميل', value: customer.entityName },
         { label: 'الكود', value: customer.code, valueDirection: 'ltr' },
         { label: 'إجمالي المشتريات', value: pdfFmtLiters(customer.totalPurchased, 0) },
-        { label: 'الرصيد المستحق', moneyAmount: customer.outstanding },
+        { label: 'الدين', moneyAmount: customer.outstanding },
       ]}
     >
       <PdfInfoGrid
@@ -147,7 +147,7 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
       </View>
 
       <View style={s.balanceBox}>
-        <Text style={{ fontSize: 9, color: PDF.muted, marginBottom: 4 }}>{ar('الرصيد المستحق على العميل')}</Text>
+        <Text style={{ fontSize: 9, color: PDF.muted, marginBottom: 4 }}>{ar('الدين على العميل')}</Text>
         <PdfMoneyText amount={customer.outstanding} size="lg" />
         <Text style={{ fontSize: 8, color: PDF.muted, marginTop: 6 }}>{ar('إجمالي المبيعات − إجمالي المحصّل')}</Text>
       </View>

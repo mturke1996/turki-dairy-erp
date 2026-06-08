@@ -57,7 +57,9 @@ export function CustomerFormDialog({ open, onOpenChange, customer }: Props) {
 
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
 
-  function submit() {
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
     if (!form.entityName.trim()) return toast.error('أدخل اسم العميل.');
     if (!form.phone.trim()) return toast.error('أدخل رقم الهاتف.');
 
@@ -74,14 +76,31 @@ export function CustomerFormDialog({ open, onOpenChange, customer }: Props) {
       notes: form.notes.trim() || undefined,
     };
 
-    if (isEdit && customer) {
-      updateCustomer(customer.id, payload);
-      toast.success('تم تحديث بيانات العميل');
-    } else {
-      addCustomer({ ...payload, onboardingDate: new Date().toISOString() });
-      toast.success('تمت إضافة العميل');
+    setSaving(true);
+    try {
+      if (isEdit && customer) {
+        const res = await updateCustomer(customer.id, payload);
+        if (res.ok) {
+          toast.success('تم تحديث بيانات العميل');
+          onOpenChange(false);
+        } else {
+          toast.error(res.error ?? 'تعذّر تحديث العميل');
+        }
+      } else {
+        const res = await addCustomer({
+          ...payload,
+          onboardingDate: new Date().toISOString().slice(0, 10),
+        });
+        if (res.ok) {
+          toast.success('تمت إضافة العميل');
+          onOpenChange(false);
+        } else {
+          toast.error(res.error ?? 'تعذّرت إضافة العميل');
+        }
+      }
+    } finally {
+      setSaving(false);
     }
-    onOpenChange(false);
   }
 
   return (
@@ -152,7 +171,7 @@ export function CustomerFormDialog({ open, onOpenChange, customer }: Props) {
         </div>
 
         <DialogFooter>
-          <Button onClick={submit}>{isEdit ? 'حفظ التعديلات' : 'إضافة العميل'}</Button>
+          <Button onClick={submit} disabled={saving}>{saving ? 'جارٍ الحفظ…' : isEdit ? 'حفظ التعديلات' : 'إضافة العميل'}</Button>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             إلغاء
           </Button>

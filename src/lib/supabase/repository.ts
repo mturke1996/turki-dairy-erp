@@ -11,7 +11,7 @@ import { isCloudSyncAvailable } from '@/lib/supabase/config';
 import type {
   AuditLog, BankAccount, CashMovement, CashTransfer, CashVault, Customer, Employee,
   Expense, ExpenseCategory, Farmer, InventoryAdjustment, Payment, PayrollBatch,
-  SaleTransaction, Session, SupplyTransaction, AppSettings,
+  SaleTransaction, Session, SupplyTransaction, AppSettings, DebtEntry,
 } from '@/lib/domain/types';
 import { fromRow, rowsFrom, toRow } from './mappers';
 
@@ -23,6 +23,7 @@ export interface ErpSnapshot {
   supplies: SupplyTransaction[];
   sales: SaleTransaction[];
   payments: Payment[];
+  debtEntries: DebtEntry[];
   adjustments: InventoryAdjustment[];
   vaults: CashVault[];
   banks: BankAccount[];
@@ -65,6 +66,7 @@ const SYNC_TABLES = [
   { table: 'supplies', key: 'supplies' as const },
   { table: 'sales', key: 'sales' as const },
   { table: 'payments', key: 'payments' as const },
+  { table: 'debt_entries', key: 'debtEntries' as const },
   { table: 'inventory_adjustments', key: 'adjustments' as const },
   { table: 'cash_movements', key: 'cashMovements' as const },
   { table: 'cash_transfers', key: 'transfers' as const },
@@ -73,6 +75,18 @@ const SYNC_TABLES = [
   { table: 'payroll_batches', key: 'payrollBatches' as const },
   { table: 'audit_logs', key: 'auditLogs' as const },
 ] as const;
+
+/** بيانات رئيسية — لا تُحذف أثناء المزامنة (يتجنّب حذف سجلات أُضيفت في دفعة متزامنة). */
+const SKIP_PRUNE_TABLES = new Set([
+  'sessions',
+  'farmers',
+  'customers',
+  'cash_vaults',
+  'bank_accounts',
+  'expense_categories',
+  'employees',
+  'debt_entries',
+]);
 
 let memorySyncVersion = 0;
 let memoryDeviceId: string | null = null;
@@ -100,7 +114,7 @@ export async function testConnection(): Promise<{ ok: boolean; error?: string }>
     const sb = createClient();
     const { data: authData } = await sb.auth.getSession();
     if (!authData.session) {
-      return { ok: false, error: 'يجب تسجيل الدخول لتفعيل المزامنة السحابية.' };
+      return { ok: false, error: 'يجب تسجيل الدخول للاتصال بقاعدة البيانات.' };
     }
     const { error } = await sb.from('app_settings').select('id').eq('id', 'singleton').limit(1);
     if (error) return { ok: false, error: error.message };
@@ -125,7 +139,10 @@ async function selectIds(sb: Sb, table: string): Promise<string[]> {
 async function upsert(sb: Sb, table: string, rows: Record<string, unknown>[]): Promise<void> {
   if (!rows.length) return;
   const { error } = await sb.from(table).upsert(rows, { onConflict: 'id' });
-  if (error) throw new Error(`${table}: ${error.message}`);
+  if (error) {
+    const detail = [error.message, error.details, error.hint].filter(Boolean).join(' — ');
+    throw new Error(`${table}: ${detail}`);
+  }
 }
 
 async function pruneOrphans(sb: Sb, table: string, localIds: string[]): Promise<void> {
@@ -138,10 +155,53 @@ async function pruneOrphans(sb: Sb, table: string, localIds: string[]): Promise<
 
 const mapRows = (items: Record<string, unknown>[]) => items.map((i) => toRow(i));
 
+export { SYNC_TABLES as ERP_TABLES };
+
+/** حفظ صفوف محددة — بدون لقطة كاملة ولا حذف يتيم */
+export async function upsertRows(table: string, items: Record<string, unknown>[]): Promise<void> {
+  if (!items.length) return;
+  const sb = createClient();
+  await upsert(sb, table, mapRows(items));
+}
+
+/** حذف صفوف محددة — فقط عند الحذف الصريح من التطبيق */
+export async function deleteRows(table: string, ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const sb = createClient();
+  const { error } = await sb.from(table).delete().in('id', ids);
+  if (error) throw new Error(`${table} delete: ${error.message}`);
+}
+
+/** إعدادات التطبيق والدورة النشطة */
+export async function persistAppSettings(state: Pick<ErpSnapshot, 'activeSessionId' | 'settings'>): Promise<void> {
+  const sb = createClient();
+  const settingsRow = toRow((state.settings ?? {}) as Record<string, unknown>);
+  const { error } = await sb.from('app_settings').upsert(
+    {
+      id: 'singleton',
+      ...settingsRow,
+      active_session_id: state.activeSessionId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' },
+  );
+  if (error) throw new Error(`app_settings: ${error.message}`);
+}
+
+/** تهيئة أولية لقاعدة فارغة */
+export async function bootstrapDatabase(state: ErpSnapshot): Promise<void> {
+  const sb = createClient();
+  for (const { table, key } of SYNC_TABLES) {
+    const items = state[key] as { id: string }[];
+    await upsert(sb, table, mapRows(items as unknown as Record<string, unknown>[]));
+  }
+  await persistAppSettings(state);
+}
+
 export async function pullAll(): Promise<PullResult> {
   const sb = createClient();
   const [
-    sessions, farmers, customers, supplies, sales, payments, adjustments,
+    sessions, farmers, customers, supplies, sales, payments, debtEntries, adjustments,
     vaults, banks, cashMovements, transfers, expenseCategories, expenses,
     employees, payrollBatches, auditLogs,
   ] = await Promise.all([
@@ -151,6 +211,7 @@ export async function pullAll(): Promise<PullResult> {
     select<SupplyTransaction>(sb, 'supplies'),
     select<SaleTransaction>(sb, 'sales'),
     select<Payment>(sb, 'payments'),
+    select<DebtEntry>(sb, 'debt_entries'),
     select<InventoryAdjustment>(sb, 'inventory_adjustments'),
     select<CashVault>(sb, 'cash_vaults'),
     select<BankAccount>(sb, 'bank_accounts'),
@@ -192,7 +253,7 @@ export async function pullAll(): Promise<PullResult> {
   setLocalSyncVersion(syncVersion);
 
   return {
-    sessions, activeSessionId, farmers, customers, supplies, sales, payments, adjustments,
+    sessions, activeSessionId, farmers, customers, supplies, sales, payments, debtEntries, adjustments,
     vaults, banks, cashMovements, transfers, expenseCategories, expenses,
     employees, payrollBatches, auditLogs, settings, syncVersion,
   };
@@ -222,8 +283,9 @@ export async function pushAll(state: ErpSnapshot, opts?: { skipConflictCheck?: b
     await upsert(sb, table, mapRows(items as unknown as Record<string, unknown>[]));
   }
 
-  // حذف اليتيمة: الأبناء أولاً احتراماً للمفاتيح الأجنبية
+  // حذف اليتيمة للحركات فقط — البيانات الرئيسية لا تُ prune لتفادي سباقات الدفع المتزامن
   for (const { table, key } of [...SYNC_TABLES].reverse()) {
+    if (SKIP_PRUNE_TABLES.has(table)) continue;
     const items = state[key] as { id: string }[];
     const localIds = items.map((i) => i.id);
     await pruneOrphans(sb, table, localIds);

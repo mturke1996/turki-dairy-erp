@@ -11,11 +11,24 @@ import {
   YAxis,
 } from 'recharts';
 import type { DailyFlowPoint } from '@/lib/domain/calculations';
-import { formatNumber } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
 
 function shortDate(iso: string) {
   const d = new Date(iso);
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function FlowRow({ label, value, className }: { label: string; value: number; className?: string }) {
+  const formatted = formatNumber(value, 0);
+  return (
+    <p className={cn('flex items-center justify-between gap-4', className)}>
+      <span>{label}</span>
+      <span dir="rtl" className="inline-flex items-baseline gap-1">
+        <bdi dir="ltr" className="tabular">{formatted}</bdi>
+        <span>لتر</span>
+      </span>
+    </p>
+  );
 }
 
 function FlowTooltip({ active, payload, label }: any) {
@@ -24,19 +37,10 @@ function FlowTooltip({ active, payload, label }: any) {
   return (
     <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] shadow-lift">
       <p className="mb-1 font-semibold text-foreground">{shortDate(label)}</p>
-      <div className="space-y-0.5 tabular" dir="ltr">
-        <p className="flex items-center justify-between gap-4">
-          <span className="text-meadow-600">وارد</span>
-          <span>{formatNumber(get('inQty'))} لتر</span>
-        </p>
-        <p className="flex items-center justify-between gap-4">
-          <span className="text-navy-600">صادر</span>
-          <span>{formatNumber(get('outQty'))} لتر</span>
-        </p>
-        <p className="flex items-center justify-between gap-4 border-t border-border pt-0.5">
-          <span className="text-sun-600">الرصيد</span>
-          <span>{formatNumber(get('balance'))} لتر</span>
-        </p>
+      <div className="space-y-0.5">
+        <FlowRow label="وارد" value={get('inQty')} className="text-meadow-600" />
+        <FlowRow label="صادر" value={get('outQty')} className="text-navy-600" />
+        <FlowRow label="الرصيد" value={get('balance')} className="border-t border-border pt-0.5 text-sun-600" />
       </div>
     </div>
   );

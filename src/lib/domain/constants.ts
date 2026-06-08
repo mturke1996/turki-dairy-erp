@@ -93,10 +93,22 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cheque: 'شيك',
 };
 
+export const DEBT_PARTY_LABELS: Record<'farmer' | 'customer' | 'employee', string> = {
+  farmer: 'فلاح',
+  customer: 'عميل',
+  employee: 'موظف',
+};
+
+export const DEBT_PARTY_HINTS: Record<'farmer' | 'customer' | 'employee', string> = {
+  farmer: 'دين علينا — مبلغ مستحق للفلاح',
+  customer: 'دين لنا — مبلغ على العميل',
+  employee: 'دين لنا — سلفة أو مستحق على الموظف',
+};
+
 export const ACCOUNT_LABELS: Record<AccountKey, string> = {
   inventory: 'حساب المخزون',
-  farmer_payable: 'مستحقات الفلاحين',
-  customer_receivable: 'ذمم العملاء',
+  farmer_payable: 'ديون الفلاحين',
+  customer_receivable: 'ديون العملاء',
   revenue: 'إيرادات المبيعات',
   cogs: 'تكلفة البضاعة المباعة',
   cash: 'النقدية والمصارف',

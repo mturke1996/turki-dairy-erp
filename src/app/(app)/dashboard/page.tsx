@@ -28,7 +28,7 @@ import { usePermission } from '@/lib/store/use-permission';
 import { computeDailyFlow } from '@/lib/domain/calculations';
 import { COPY } from '@/lib/domain/constants';
 import { formatNumber, formatShortDate } from '@/lib/utils';
-import { formatLiters, formatMoney } from '@/lib/format-currency';
+import { formatLiters } from '@/lib/format-currency';
 
 const C = COPY.collection;
 
@@ -102,7 +102,11 @@ export default function DashboardPage() {
           value={<Liters value={d.totals.currentStock} />}
           icon={Warehouse}
           accent="meadow"
-          hint={`قيمة تقديرية: ${formatMoney(d.totals.inventoryValue, { decimals: 0, isolate: false })}`}
+          hint={
+            <>
+              قيمة تقديرية: <Money value={d.totals.inventoryValue} decimals={0} className="inline text-[11.5px]" muted />
+            </>
+          }
           href="/inventory"
         />
         <KpiCard
@@ -110,7 +114,11 @@ export default function DashboardPage() {
           value={<Money value={s?.salesRevenue ?? 0} decimals={0} />}
           icon={Wallet}
           accent="navy"
-          hint={`${formatLiters(s?.salesQty ?? 0, 0, false)} عبر ${s?.salesCount ?? 0} عملية`}
+          hint={
+            <>
+              {formatLiters(s?.salesQty ?? 0, 0, false)} عبر {s?.salesCount ?? 0} عملية
+            </>
+          }
         />
         <KpiCard
           label="صافي الربح"
@@ -132,20 +140,24 @@ export default function DashboardPage() {
       {/* مؤشرات ثانوية */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label="مستحقات الفلاحين"
+          label="ديون الفلاحين"
           value={<Money value={d.totals.payables} decimals={0} />}
           icon={Tractor}
           accent="navy"
-          hint="إجمالي المبالغ المستحقة للموردين"
-          href="/farmers"
+          hint="فلاحون + موظفون"
+          href="/debts"
         />
         <KpiCard
-          label="ذمم العملاء"
+          label="ديون العملاء"
           value={<Money value={d.totals.receivables} decimals={0} />}
           icon={Building2}
           accent="meadow"
-          hint={`منها متأخر: ${formatMoney(d.totals.overdue, { decimals: 0, isolate: false })}`}
-          href="/customers"
+          hint={
+            <>
+              منها متأخر: <Money value={d.totals.overdue} decimals={0} className="inline text-[11.5px]" muted />
+            </>
+          }
+          href="/debts"
         />
         <KpiCard
           label="متوسط تكلفة اللتر"

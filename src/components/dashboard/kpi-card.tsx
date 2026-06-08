@@ -24,7 +24,7 @@ export function KpiCard({
   value: React.ReactNode;
   icon: LucideIcon;
   accent?: Accent;
-  hint?: string;
+  hint?: React.ReactNode;
   delta?: { value: number; label?: string };
   href?: string;
 }) {

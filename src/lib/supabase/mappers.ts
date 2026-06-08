@@ -17,6 +17,26 @@ function toCamel(key: string): string {
 /** حقول jsonb تُنسخ كما هي (دون لمس مفاتيحها الداخلية). */
 const OPAQUE = new Set(['archive', 'allowances', 'lines']);
 
+/** حقول Postgres من نوع date — تُرسل بصيغة YYYY-MM-DD فقط. */
+const DATE_ONLY = new Set([
+  'onboardingDate',
+  'periodFrom',
+  'periodTo',
+  'dueDate',
+  'hireDate',
+  'date',
+]);
+
+function normalizeForDb(key: string, v: unknown): unknown {
+  if (v === null || v === undefined) return undefined;
+  if (typeof v === 'string' && v.trim() === '') return undefined;
+  if (typeof v === 'number' && Number.isNaN(v)) return undefined;
+  if (DATE_ONLY.has(key) && typeof v === 'string') {
+    return v.slice(0, 10);
+  }
+  return v;
+}
+
 /** أسماء الحقول الرقمية (camelCase) لإجبار التحويل إلى Number عند القراءة. */
 const NUMERIC = new Set([
   'openingStock', 'openingAvgCost', 'openingPayables', 'openingReceivables', 'cycleNumber',
@@ -33,8 +53,9 @@ const NUMERIC = new Set([
 export function toRow<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
-    if (v === undefined) continue;
-    out[OPAQUE.has(k) ? k : toSnake(k)] = v;
+    const normalized = normalizeForDb(k, v);
+    if (normalized === undefined) continue;
+    out[OPAQUE.has(k) ? k : toSnake(k)] = normalized;
   }
   return out;
 }

@@ -1,16 +1,16 @@
 'use client';
 
 import { Input } from '@/components/ui/input';
-import { CURRENCY_LABEL, cn, sanitizeDecimalInput } from '@/lib/utils';
+import { cn, sanitizeDecimalInput } from '@/lib/utils';
 
 /**
- * حقل مبلغ للعربية (RTL):
- * الرقم على اليمين ← العملة على اليسار (تُقرأ بعد الرقم).
+ * حقل كمية للعربية (RTL):
+ * الرقم على اليمين ← «لتر» على اليسار (تُقرأ بعد الرقم).
  */
-export function AmountInput({
+export function VolumeInput({
   value,
   onChange,
-  currency = CURRENCY_LABEL,
+  unit = 'لتر',
   placeholder = '0',
   className,
   id,
@@ -19,7 +19,7 @@ export function AmountInput({
 }: {
   value: string;
   onChange: (value: string) => void;
-  currency?: string;
+  unit?: string;
   placeholder?: string;
   className?: string;
   id?: string;
@@ -49,7 +49,7 @@ export function AmountInput({
         className="h-full flex-1 border-0 bg-transparent text-left shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
       />
       <span className="flex shrink-0 items-center border-s border-input bg-canvas-sunken px-3 text-[13px] font-medium text-muted-foreground">
-        {currency}
+        {unit}
       </span>
     </div>
   );

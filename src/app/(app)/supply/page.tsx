@@ -21,6 +21,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Field } from '@/components/shared/field';
 import { StatTile } from '@/components/shared/stat-tile';
 import { Money, Liters } from '@/components/shared/money';
+import { VolumeInput } from '@/components/shared/volume-input';
+import { AmountInput } from '@/components/shared/amount-input';
 import { EmptyState } from '@/components/shared/empty-state';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
@@ -28,7 +30,8 @@ import { usePermission } from '@/lib/store/use-permission';
 import { accountBalance } from '@/lib/domain/treasury';
 import { COPY, MILK_SHIFT_LABELS, QUALITY_LABELS, QUALITY_VARIANT, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import type { MilkShift, PaymentMethod, QualityTier } from '@/lib/domain/types';
-import { formatShortDate, sanitizeDecimalInput } from '@/lib/utils';
+import { formatShortDate } from '@/lib/utils';
+import { formatLiters, formatMoney } from '@/lib/format-currency';
 
 const C = COPY.collection;
 
@@ -132,8 +135,8 @@ export default function SupplyPage() {
     if (res.ok) {
       toast.success(C.success, {
         description: payNow
-          ? `${MILK_SHIFT_LABELS[milkShift]} · ${qty} لتر + دفع فوري ${payVal} د.ل`
-          : `${MILK_SHIFT_LABELS[milkShift]} · ${qty.toLocaleString('en-US')} لتر — ${selectedFarmer?.fullName}`,
+          ? `${MILK_SHIFT_LABELS[milkShift]} · ${formatLiters(qty, 0, false)} + دفع فوري ${formatMoney(payVal, { decimals: 0 })}`
+          : `${MILK_SHIFT_LABELS[milkShift]} · ${formatLiters(qty, 0, false)} — ${selectedFarmer?.fullName}`,
       });
       reset();
     } else {
@@ -162,7 +165,7 @@ export default function SupplyPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatTile label={C.plural} value={<Liters value={sum?.supplyQty ?? 0} />} icon={Droplets} tone="meadow" hint={`${sum?.supplyCount ?? 0} عملية`} />
         <StatTile label={C.cost} value={<Money value={sum?.supplyCost ?? 0} decimals={0} />} icon={Banknote} tone="navy" />
-        <StatTile label="مستحقات الفلاحين" value={<Money value={d.totals.payables} decimals={0} />} icon={Tractor} tone="sun" hint="إجمالي غير المسدّد" />
+        <StatTile label="ديون الفلاحين" value={<Money value={d.totals.payables} decimals={0} />} icon={Tractor} tone="sun" hint="إجمالي غير المسدّد" />
       </div>
 
       {sessionLocked ? (
@@ -181,7 +184,7 @@ export default function SupplyPage() {
               <ArrowDownToLine className="h-4.5 w-4.5 text-meadow-600" />
               {C.recordNew}
             </CardTitle>
-            <CardDescription>الكمية تُضاف للمخزون وتُحسب مستحقات الفلاح تلقائياً.</CardDescription>
+            <CardDescription>الكمية تُضاف للمخزون ويُحسب دين الفلاح تلقائياً.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Field label={C.farmer} required>
@@ -221,17 +224,19 @@ export default function SupplyPage() {
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="الكمية (لتر)" required>
-                <Input type="text" inputMode="decimal" dir="ltr" placeholder="0" value={quantity} onChange={(e) => setQuantity(sanitizeDecimalInput(e.target.value))} disabled={!canSupply || sessionLocked} />
+              <Field label="الكمية" required>
+                <VolumeInput value={quantity} onChange={setQuantity} disabled={!canSupply || sessionLocked} />
               </Field>
-              <Field label="سعر اللتر (د.ل)" required hint="يدعم الكسور — مثال: 1.250">
-                <Input type="text" inputMode="decimal" dir="ltr" placeholder="0.000" value={unitPrice} onChange={(e) => setUnitPrice(sanitizeDecimalInput(e.target.value))} disabled={!canSupply || sessionLocked} />
+              <Field label="سعر اللتر" required hint="يدعم الكسور — مثال: 1.250">
+                <AmountInput value={unitPrice} onChange={setUnitPrice} placeholder="0.000" disabled={!canSupply || sessionLocked} />
               </Field>
             </div>
 
             <Field label="الإجمالي">
-              <div className="flex h-10 items-center rounded-md border border-border bg-canvas-sunken/40 px-3 text-[13px] font-semibold">
-                <Liters value={qty} /> × {price.toFixed(3)} = <Money value={total} className="mr-1 inline" />
+              <div dir="rtl" className="flex h-10 items-center gap-2 rounded-md border border-border bg-canvas-sunken/40 px-3 text-[13px] font-semibold">
+                <Liters value={qty} />
+                <span dir="ltr" className="tabular">× {price.toFixed(3)} =</span>
+                <Money value={total} className="inline" />
               </div>
             </Field>
 
@@ -269,8 +274,8 @@ export default function SupplyPage() {
               </div>
               {payNow ? (
                 <div className="space-y-3 border-t border-border pt-3">
-                  <Field label="المبلغ (د.ل)" required>
-                    <Input type="number" dir="ltr" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder={String(total || 0)} />
+                  <Field label="المبلغ" required>
+                    <AmountInput value={payAmount} onChange={setPayAmount} placeholder={String(total || 0)} />
                   </Field>
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="طريقة الدفع">
@@ -306,7 +311,7 @@ export default function SupplyPage() {
             </div>
 
             <div className="flex items-center justify-between rounded-xl bg-meadow-50 px-4 py-3 ring-1 ring-meadow-100">
-              <span className="text-[13px] font-medium text-meadow-800">مستحقات الفلاح</span>
+              <span className="text-[13px] font-medium text-meadow-800">دين الفلاح</span>
               <Money value={total} className="text-[17px] font-bold text-meadow-800" />
             </div>
 

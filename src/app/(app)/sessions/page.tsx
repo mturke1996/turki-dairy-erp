@@ -105,7 +105,7 @@ export default function SessionsPage() {
                 <Money value={cycle.stats.grossProfit} decimals={0} className="font-semibold text-meadow-700" />
               </div>
               <div className="rounded-lg bg-canvas-sunken/60 px-2.5 py-2">
-                <p className="text-muted-foreground">مستحقات الفلاحين</p>
+                <p className="text-muted-foreground">ديون الفلاحين</p>
                 <Money value={cycle.stats.payoutsDue} decimals={0} className="font-semibold" />
               </div>
             </div>
@@ -280,11 +280,11 @@ export default function SessionsPage() {
               الحليب المتبقي ({formatNumber(summary.closingStock, 0)} لتر) يبقى في المخزون ويُفتح به الرصيد الافتتاحي للدورة الجديدة.
             </p>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">مستحقات الفلاحين</span>
+              <span className="text-muted-foreground">ديون الفلاحين</span>
               <Money value={d.totals.payables} decimals={0} className="font-semibold" />
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">ذمم العملاء</span>
+              <span className="text-muted-foreground">ديون العملاء</span>
               <Money value={d.totals.receivables} decimals={0} className="font-semibold" />
             </div>
           </div>

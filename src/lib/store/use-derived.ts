@@ -10,9 +10,11 @@ export function useErpData(): ErpData {
   const activeSessionId = useErpStore((s) => s.activeSessionId);
   const farmers = useErpStore((s) => s.farmers);
   const customers = useErpStore((s) => s.customers);
+  const employees = useErpStore((s) => s.employees);
   const supplies = useErpStore((s) => s.supplies);
   const sales = useErpStore((s) => s.sales);
   const payments = useErpStore((s) => s.payments);
+  const debtEntries = useErpStore((s) => s.debtEntries);
   const adjustments = useErpStore((s) => s.adjustments);
   const expenses = useErpStore((s) => s.expenses);
   const payrollBatches = useErpStore((s) => s.payrollBatches);
@@ -27,9 +29,11 @@ export function useErpData(): ErpData {
       activeSessionId,
       farmers,
       customers,
+      employees,
       supplies,
       sales,
       payments,
+      debtEntries,
       adjustments,
       expenses,
       payrollBatches,
@@ -43,7 +47,7 @@ export function useErpData(): ErpData {
       },
     }),
     [
-      sessions, activeSessionId, farmers, customers, supplies, sales, payments, adjustments,
+      sessions, activeSessionId, farmers, customers, employees, supplies, sales, payments, debtEntries, adjustments,
       expenses, payrollBatches, vaults, banks, cashMovements, settings,
     ],
   );

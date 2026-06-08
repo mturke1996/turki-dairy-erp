@@ -12,6 +12,7 @@ import {
   Receipt,
   Users,
   History,
+  Scale,
   type LucideIcon,
 } from 'lucide-react';
 import type { Permission } from '@/lib/domain/constants';
@@ -55,6 +56,13 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Warehouse,
     description: 'دفتر الحركة والرصيد',
     group: 'main',
+  },
+  {
+    href: '/debts',
+    label: 'الديون',
+    icon: Scale,
+    description: 'فلاحون · عملاء · موظفون',
+    group: 'finance',
   },
   {
     href: '/treasury',

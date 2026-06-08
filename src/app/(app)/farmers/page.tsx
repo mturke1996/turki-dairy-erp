@@ -74,7 +74,7 @@ export default function FarmersPage() {
         <StatTile label="إجمالي الفلاحين" value={d.farmers.length} icon={Users} tone="navy" />
         <StatTile label="نشطون" value={activeCount} icon={Tractor} tone="meadow" />
         <StatTile label="إجمالي الاستلام" value={<Liters value={totalSupplied} decimals={0} />} icon={Milk} tone="sun" />
-        <StatTile label="مستحقات الفلاحين" value={<Money value={d.totals.payables} decimals={0} />} icon={Banknote} tone="rose" />
+        <StatTile label="ديون الفلاحين" value={<Money value={d.totals.payables} decimals={0} />} icon={Banknote} tone="rose" />
       </div>
 
       <Card className="overflow-hidden">
@@ -135,7 +135,7 @@ export default function FarmersPage() {
                       <TableHead className="text-center">الحساب البنكي</TableHead>
                       <TableHead className="text-center">الجودة</TableHead>
                       <TableHead className="text-left">إجمالي الاستلام</TableHead>
-                      <TableHead className="text-left">الرصيد المستحق</TableHead>
+                      <TableHead className="text-left">الدين</TableHead>
                       <TableHead className="text-center">الحالة</TableHead>
                     </TableRow>
                   </TableHeader>

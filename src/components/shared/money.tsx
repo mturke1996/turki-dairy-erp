@@ -1,6 +1,4 @@
-import { cn } from '@/lib/utils';
-import { CURRENCY_LABEL } from '@/lib/utils';
-import { formatLiters, formatMoney, formatWithUnit } from '@/lib/format-currency';
+import { cn, formatNumber, CURRENCY_LABEL } from '@/lib/utils';
 
 type UnitValueProps = {
   value: number;
@@ -10,12 +8,33 @@ type UnitValueProps = {
   muted?: boolean;
 };
 
-/** عرض رقم + وحدة — نص واحد معزول bidi (الرقم ثم الوحدة) */
+/**
+ * عرض رقم + وحدة للعربية (RTL):
+ * الرقم على اليمين (يُقرأ أولاً) ← الوحدة على اليسار (تُقرأ ثانياً).
+ */
 export function UnitValue({ value, unit, decimals = 0, className, muted }: UnitValueProps) {
+  const formatted = formatNumber(value, decimals);
+
+  if (!unit) {
+    return (
+      <bdi dir="ltr" className={cn('tabular whitespace-nowrap', className, muted && 'text-muted-foreground opacity-80')}>
+        {formatted}
+      </bdi>
+    );
+  }
+
   return (
-    <bdi className={cn('unit-value', muted && 'text-muted-foreground opacity-80', className)}>
-      {formatWithUnit(value, unit, { decimals })}
-    </bdi>
+    <span
+      dir="rtl"
+      className={cn(
+        'unit-value inline-flex items-baseline gap-1 whitespace-nowrap',
+        muted && 'text-muted-foreground opacity-80',
+        className,
+      )}
+    >
+      <bdi dir="ltr" className="tabular">{formatted}</bdi>
+      <span>{unit}</span>
+    </span>
   );
 }
 
@@ -33,15 +52,12 @@ export function Money({
   className?: string;
   muted?: boolean;
 }) {
-  return (
-    <bdi className={cn('unit-value', muted && 'text-muted-foreground opacity-80', className)}>
-      {formatMoney(value, { decimals, currency })}
-    </bdi>
-  );
+  return <UnitValue value={value} unit={currency} decimals={decimals} className={className} muted={muted} />;
 }
 
 export function moneyText(value: number, decimals = 0, currency = CURRENCY_LABEL): string {
-  return formatMoney(value, { decimals, currency });
+  const formatted = formatNumber(value, decimals);
+  return `\u2066${formatted}\u2069\u00A0${currency}`;
 }
 
 /** لتر: الرقم ثم «لتر» */
@@ -56,16 +72,12 @@ export function Liters({
   className?: string;
   withUnit?: boolean;
 }) {
-  if (!withUnit) {
-    return (
-      <bdi className={cn('unit-value', className)}>
-        {formatWithUnit(value, '', { decimals })}
-      </bdi>
-    );
-  }
   return (
-    <bdi className={cn('unit-value', className)}>
-      {formatLiters(value, decimals)}
-    </bdi>
+    <UnitValue
+      value={value}
+      unit={withUnit ? 'لتر' : ''}
+      decimals={decimals}
+      className={className}
+    />
   );
 }

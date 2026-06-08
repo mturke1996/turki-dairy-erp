@@ -61,7 +61,7 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
         { label: 'الفلاح', value: farmer.fullName },
         { label: 'الكود', value: farmer.code, valueDirection: 'ltr' },
         { label: 'إجمالي اللترات', value: pdfFmtLiters(farmer.totalSupplied, 0) },
-        { label: 'الرصيد المستحق', moneyAmount: farmer.creditBalance },
+        { label: 'الدين', moneyAmount: farmer.creditBalance },
       ]}
     >
       <PdfInfoGrid
@@ -130,7 +130,7 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
 
       {/* الرصيد النهائي */}
       <View style={s.balanceBox}>
-        <Text style={{ fontSize: 9, color: PDF.muted, marginBottom: 4 }}>{ar('الرصيد المستحق للفلاح')}</Text>
+        <Text style={{ fontSize: 9, color: PDF.muted, marginBottom: 4 }}>{ar('الدين للفلاح')}</Text>
         <PdfMoneyText amount={farmer.creditBalance} size="lg" />
         <Text style={{ fontSize: 8, color: PDF.muted, marginTop: 6 }}>
           {ar('إجمالي الاستلام − إجمالي المدفوع')}

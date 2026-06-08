@@ -21,7 +21,7 @@ export function StatTile({
   value: React.ReactNode;
   icon?: LucideIcon;
   tone?: keyof typeof TONE;
-  hint?: string;
+  hint?: React.ReactNode;
   className?: string;
 }) {
   return (
