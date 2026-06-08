@@ -1,7 +1,25 @@
 import { cn } from '@/lib/utils';
-import { CURRENCY_LABEL, formatNumber } from '@/lib/utils';
+import { CURRENCY_LABEL } from '@/lib/utils';
+import { formatLiters, formatMoney, formatWithUnit } from '@/lib/format-currency';
 
-/** يعرض مبلغاً مالياً: الرقم ثم العملة، باتجاه LTR ثابت وأرقام جدولية. */
+type UnitValueProps = {
+  value: number;
+  unit: string;
+  decimals?: number;
+  className?: string;
+  muted?: boolean;
+};
+
+/** عرض رقم + وحدة — نص واحد معزول bidi (الرقم ثم الوحدة) */
+export function UnitValue({ value, unit, decimals = 0, className, muted }: UnitValueProps) {
+  return (
+    <bdi className={cn('unit-value', muted && 'text-muted-foreground opacity-80', className)}>
+      {formatWithUnit(value, unit, { decimals })}
+    </bdi>
+  );
+}
+
+/** مبلغ: الرقم ثم العملة */
 export function Money({
   value,
   decimals = 2,
@@ -16,16 +34,17 @@ export function Money({
   muted?: boolean;
 }) {
   return (
-    <span dir="ltr" className={cn('tabular inline-flex items-baseline gap-1', className)}>
-      <span>{formatNumber(value, decimals)}</span>
-      <span className={cn('text-[0.8em] font-medium', muted ? 'text-muted-foreground' : 'opacity-70')}>
-        {currency}
-      </span>
-    </span>
+    <bdi className={cn('unit-value', muted && 'text-muted-foreground opacity-80', className)}>
+      {formatMoney(value, { decimals, currency })}
+    </bdi>
   );
 }
 
-/** يعرض كمية باللتر بأرقام جدولية. */
+export function moneyText(value: number, decimals = 0, currency = CURRENCY_LABEL): string {
+  return formatMoney(value, { decimals, currency });
+}
+
+/** لتر: الرقم ثم «لتر» */
 export function Liters({
   value,
   decimals = 0,
@@ -37,10 +56,16 @@ export function Liters({
   className?: string;
   withUnit?: boolean;
 }) {
+  if (!withUnit) {
+    return (
+      <bdi className={cn('unit-value', className)}>
+        {formatWithUnit(value, '', { decimals })}
+      </bdi>
+    );
+  }
   return (
-    <span dir="ltr" className={cn('tabular inline-flex items-baseline gap-1', className)}>
-      <span>{formatNumber(value, decimals)}</span>
-      {withUnit ? <span className="text-[0.8em] font-medium opacity-70">لتر</span> : null}
-    </span>
+    <bdi className={cn('unit-value', className)}>
+      {formatLiters(value, decimals)}
+    </bdi>
   );
 }

@@ -7,7 +7,7 @@ import {
   TurkiPdfFooter,
   PdfBrandIdentity,
   PdfFactoryContactBar,
-  pdfFmtNum,
+  pdfFmtMoneyLibyan,
 } from './pdfBrandKit';
 import { usePdfLetterheadDataUri } from './pdf-logo-context';
 import { BRAND } from '@/lib/brand';
@@ -86,7 +86,7 @@ export function ReportShell({
             {subtitle ? <Text style={pdfBase.reportSub}>{ar(subtitle)}</Text> : null}
           </View>
           <View style={pdfBase.brandBoxFixed} wrap={false}>
-            <PdfBrandIdentity logoWidth={172} logoHeight={54} />
+            <PdfBrandIdentity logoWidth={58} logoHeight={58} />
           </View>
         </View>
 
@@ -119,10 +119,9 @@ export function ReportShell({
                 <View key={`luxe-cell-${i}`} style={pdfBase.luxeCell}>
                   <Text style={pdfBase.luxeEyebrow}>{ar(c.label)}</Text>
                   {c.moneyAmount != null && Number.isFinite(c.moneyAmount) ? (
-                    <View wrap={false} style={pdfBase.luxeMoneyRow}>
-                      <Text style={pdfBase.luxeMoneyCurrency}>{ar(c.currency ?? 'د.ل')}</Text>
-                      <Text style={pdfBase.luxeValue}>{pdfFmtNum(c.moneyAmount)}</Text>
-                    </View>
+                    <Text style={pdfBase.luxeValue} dir="ltr">
+                      {pdfFmtMoneyLibyan(c.moneyAmount)}
+                    </Text>
                   ) : (
                     <Text
                       style={[

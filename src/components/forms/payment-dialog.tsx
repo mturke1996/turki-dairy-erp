@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Field } from '@/components/shared/field';
-import { Money } from '@/components/shared/money';
+import { Money, moneyText } from '@/components/shared/money';
+import { AmountInput } from '@/components/shared/amount-input';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import { accountBalance } from '@/lib/domain/treasury';
@@ -77,7 +78,7 @@ export function PaymentDialog({
   function submit() {
     if (val <= 0) return toast.error('أدخل مبلغاً صحيحاً.');
     if (isFarmer && selected && val > sourceBalance + 0.001) {
-      return toast.error(`رصيد «${selected.label}» (${Math.floor(sourceBalance).toLocaleString('en-US')} د.ل) لا يكفي.`);
+      return toast.error(`رصيد «${selected.label}» (${moneyText(sourceBalance, 0)}) لا يكفي.`);
     }
     const base = {
       amount: val,
@@ -94,7 +95,7 @@ export function PaymentDialog({
       : recordCustomerPayment({ customerId: partyId, ...base });
     if (res.ok) {
       toast.success(isFarmer ? 'تم تسجيل دفعة للفلاح' : 'تم تسجيل تحصيل من العميل', {
-        description: `${val.toLocaleString('en-US')} د.ل — ${partyName}`,
+        description: `${moneyText(val, 0)} — ${partyName}`,
       });
       setAmount('');
       setReference('');
@@ -119,8 +120,8 @@ export function PaymentDialog({
         </div>
 
         <div className="space-y-4">
-          <Field label="المبلغ (د.ل)" required>
-            <Input type="number" dir="ltr" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+          <Field label="المبلغ" required>
+            <AmountInput value={amount} onChange={setAmount} placeholder="0" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="طريقة الدفع">

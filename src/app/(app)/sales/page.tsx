@@ -25,6 +25,7 @@ import { useErpStore } from '@/lib/store/use-erp-store';
 import { usePermission } from '@/lib/store/use-permission';
 import { CUSTOMER_TYPE_LABELS } from '@/lib/domain/constants';
 import { formatShortDate, formatNumber } from '@/lib/utils';
+import { formatLiters, formatMoney, formatPricePerLiter } from '@/lib/format-currency';
 
 export default function SalesPage() {
   const data = useErpData();
@@ -83,7 +84,7 @@ export default function SalesPage() {
       notes: notes.trim() || undefined,
     });
     if (res.ok) {
-      toast.success('تم تسجيل البيع', { description: `${qty.toLocaleString('en-US')} لتر — ${selectedCustomer?.entityName}` });
+      toast.success('تم تسجيل البيع', { description: `${formatLiters(qty, 0, false)} — ${selectedCustomer?.entityName}` });
       reset();
     } else {
       toast.error(res.error ?? 'تعذّر التسجيل');
@@ -109,10 +110,10 @@ export default function SalesPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="المخزون المتاح" value={<Liters value={stock} />} icon={Warehouse} tone="meadow" hint={`تكلفة ${formatNumber(wac, 3)} د.ل/لتر`} />
+        <StatTile label="المخزون المتاح" value={<Liters value={stock} />} icon={Warehouse} tone="meadow" hint={`تكلفة ${formatPricePerLiter(wac, 3)}`} />
         <StatTile label="مبيعات الفترة" value={<Money value={sum?.salesRevenue ?? 0} decimals={0} />} icon={Wallet} tone="navy" hint={`${sum?.salesCount ?? 0} عملية`} />
         <StatTile label="ربح الفترة" value={<Money value={sum?.grossProfit ?? 0} decimals={0} />} icon={TrendingUp} tone="sun" hint={`هامش ${formatNumber(sum?.marginPct ?? 0, 1)}%`} />
-        <StatTile label="ذمم العملاء" value={<Money value={d.totals.receivables} decimals={0} />} icon={Receipt} tone="rose" hint={`متأخر ${formatNumber(d.totals.overdue, 0)} د.ل`} />
+        <StatTile label="ذمم العملاء" value={<Money value={d.totals.receivables} decimals={0} />} icon={Receipt} tone="rose" hint={`متأخر ${formatMoney(d.totals.overdue, { decimals: 0, isolate: false })}`} />
       </div>
 
       {sessionLocked ? (

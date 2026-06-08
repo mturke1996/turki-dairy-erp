@@ -11,6 +11,7 @@ import {
   ArrowUpRight,
   AlertTriangle,
   Coins,
+  Settings2,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { AccessGate } from '@/components/shared/access-gate';
@@ -34,6 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { CashStatementPDF } from '@/features/pdf/CashStatementPDF';
+import { OpeningBalanceDialog } from '@/components/treasury/opening-balance-dialog';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { computeTreasury, accountLabel } from '@/lib/domain/treasury';
 import { CASH_MOVEMENT_LABELS } from '@/lib/domain/constants';
@@ -66,6 +68,7 @@ function TreasuryContent() {
   const recordTransfer = useErpStore((s) => s.recordTransfer);
   const addVault = useErpStore((s) => s.addVault);
   const addBank = useErpStore((s) => s.addBank);
+  const setAccountOpeningBalance = useErpStore((s) => s.setAccountOpeningBalance);
 
   const snap = useMemo(() => computeTreasury(vaults, banks, movements), [vaults, banks, movements]);
 
@@ -78,6 +81,7 @@ function TreasuryContent() {
 
   const [transferOpen, setTransferOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [openingOpen, setOpeningOpen] = useState(false);
 
   const belowMin = snap.vaults.filter((v) => v.belowMin);
 
@@ -118,11 +122,15 @@ function TreasuryContent() {
         description="مركز إدارة السيولة — كل حركة مالية موثّقة بمصدرها أو وجهتها."
         actions={
           <>
-            <Button variant="outline" onClick={() => setAccountOpen(true)}>
+            <Button type="button" variant="secondary" onClick={() => setOpeningOpen(true)}>
+              <Settings2 className="h-4 w-4" />
+              ضبط أرصدة البداية
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setAccountOpen(true)}>
               <Plus className="h-4 w-4" />
               حساب جديد
             </Button>
-            <Button onClick={() => setTransferOpen(true)} disabled={snap.accounts.length < 2}>
+            <Button type="button" onClick={() => setTransferOpen(true)} disabled={snap.accounts.length < 2}>
               <ArrowLeftRight className="h-4 w-4" />
               تحويل بين الحسابات
             </Button>
@@ -254,6 +262,26 @@ function TreasuryContent() {
           )}
         </CardContent>
       </Card>
+
+      <OpeningBalanceDialog
+        open={openingOpen}
+        onOpenChange={setOpeningOpen}
+        accounts={snap.accounts.map((a) => ({
+          type: a.type,
+          id: a.id,
+          name: a.name,
+          currentBalance: a.balance,
+          currentOpening: a.opening,
+        }))}
+        onSave={(rows) => {
+          for (const row of rows) {
+            const res = setAccountOpeningBalance(row);
+            if (!res.ok) toast.error(res.error ?? 'تعذّر الحفظ');
+          }
+        }}
+        onAddVault={(input) => addVault({ ...input, isActive: true, responsible: 'أمين الصندوق', location: 'المقر', minThreshold: 0 })}
+        onAddBank={(input) => addBank({ ...input, isActive: true })}
+      />
 
       <TransferDialog
         open={transferOpen}

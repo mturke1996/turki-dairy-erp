@@ -4,7 +4,7 @@ import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
 import { PDF } from './pdfBase';
-import { PdfMoneyText, PdfInfoGrid, pdfFmtNum, pdfFmtDate } from './pdfBrandKit';
+import { PdfMoneyText, PdfInfoGrid, pdfFmtNum, pdfFmtDate, pdfFmtLiters, pdfFmtMoneyLibyan } from './pdfBrandKit';
 import { PdfSectionTitle } from './PdfTable';
 import { MILK_SHIFT_LABELS, QUALITY_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import type { FarmerStats } from '@/lib/domain/calculations';
@@ -60,7 +60,7 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
       metaCells={[
         { label: 'الفلاح', value: farmer.fullName },
         { label: 'الكود', value: farmer.code, valueDirection: 'ltr' },
-        { label: 'إجمالي اللترات', value: `${pdfFmtNum(farmer.totalSupplied, 0)} لتر` },
+        { label: 'إجمالي اللترات', value: pdfFmtLiters(farmer.totalSupplied, 0) },
         { label: 'الرصيد المستحق', moneyAmount: farmer.creditBalance },
       ]}
     >
@@ -71,8 +71,8 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
           { label: 'المصرف', value: farmer.bankName ?? '—' },
           { label: 'رقم الحساب', value: farmer.bankAccount ?? '—', ltr: true },
           { label: 'رقم الآيبان', value: farmer.iban ?? '—', ltr: true },
-          { label: 'متوسط سعر اللتر', value: `${pdfFmtNum(farmer.avgPrice, 3)} د.ل` },
-          { label: 'إجمالي المدفوع', value: `${pdfFmtNum(farmer.paidTotal)} د.ل` },
+          { label: 'متوسط سعر اللتر', value: pdfFmtMoneyLibyan(farmer.avgPrice, 3) },
+          { label: 'إجمالي المدفوع', value: pdfFmtMoneyLibyan(farmer.paidTotal) },
           { label: 'عدد عمليات الاستلام', value: String(farmer.supplyCount) },
         ]}
       />

@@ -10,6 +10,7 @@ export type Brand = {
   fullName: string;
   nameLatin: string;
   tagline: string;
+  taglineShort: string;
   monogram: string;
   currency: string;
   region: string;
@@ -23,7 +24,11 @@ export type Brand = {
   socials: {
     facebook: string;
   };
-  /** الشعار الأفقي الكامل */
+  /** الشعار الأفقي الكامل — الاسم + الشعار (للسايدبار والـ PDF) */
+  logoLockupSrc: string;
+  /** الشعار الرسومي فقط */
+  logoMarkSrc: string;
+  /** @deprecated استخدم logoLockupSrc */
   logoSrc: string;
   /** أيقونات PWA والمتصفح */
   icons: {
@@ -71,10 +76,13 @@ export const BRAND: Brand = {
   fullName: 'مصنع التركي للحليب ومشتقاته',
   nameLatin: 'Al-Turki Dairy',
   tagline: 'لصناعة الألبان ومنتجاتها — تجميع وتخزين وتوزيع الحليب',
+  taglineShort: 'لصناعة الألبان ومنتجاتها',
   monogram: 'ت',
   currency: 'LYD',
   region: 'تاجوراء · طرابلس · ليبيا',
-  logoSrc: '/turki-logo.png',
+  logoLockupSrc: '/turki-logo-lockup.jpg',
+  logoMarkSrc: '/turki-logo.png',
+  logoSrc: '/turki-logo-lockup.jpg',
   icons: {
     favicon: '/icons/favicon-32.png',
     apple: '/icons/apple-touch-icon.png',

@@ -17,9 +17,8 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         <Menu className="h-5 w-5" />
       </Button>
 
-      <Link href="/dashboard" className="flex items-center gap-2.5 lg:hidden" aria-label={BRAND.name}>
-        <BrandLogo variant="mark" />
-        <span className="truncate text-[13px] font-semibold text-foreground">{BRAND.name}</span>
+      <Link href="/dashboard" className="flex min-w-0 shrink items-center lg:hidden" aria-label={BRAND.fullName}>
+        <BrandLogo variant="compact" className="min-w-0" priority />
       </Link>
 
       <div className="hidden flex-1 lg:block" />

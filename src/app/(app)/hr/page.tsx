@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Field } from '@/components/shared/field';
-import { Money } from '@/components/shared/money';
+import { Money, moneyText } from '@/components/shared/money';
 import { StatTile } from '@/components/shared/stat-tile';
 import { EmptyState } from '@/components/shared/empty-state';
 import {
@@ -461,7 +461,7 @@ function PayDialog({
         <DialogHeader>
           <DialogTitle>صرف الرواتب</DialogTitle>
           <DialogDescription>
-            {batch ? `${batch.label} — الإجمالي ${batch.totalAmount.toLocaleString('en-US')} د.ل` : ''}
+            {batch ? `${batch.label} — الإجمالي ${moneyText(batch.totalAmount, 0)}` : ''}
           </DialogDescription>
         </DialogHeader>
         <Field label="مصدر الصرف" required>

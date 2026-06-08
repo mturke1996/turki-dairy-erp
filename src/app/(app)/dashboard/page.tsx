@@ -28,6 +28,7 @@ import { usePermission } from '@/lib/store/use-permission';
 import { computeDailyFlow } from '@/lib/domain/calculations';
 import { COPY } from '@/lib/domain/constants';
 import { formatNumber, formatShortDate } from '@/lib/utils';
+import { formatLiters, formatMoney } from '@/lib/format-currency';
 
 const C = COPY.collection;
 
@@ -101,7 +102,7 @@ export default function DashboardPage() {
           value={<Liters value={d.totals.currentStock} />}
           icon={Warehouse}
           accent="meadow"
-          hint={`قيمة تقديرية: ${formatNumber(d.totals.inventoryValue, 0)} د.ل`}
+          hint={`قيمة تقديرية: ${formatMoney(d.totals.inventoryValue, { decimals: 0, isolate: false })}`}
           href="/inventory"
         />
         <KpiCard
@@ -109,7 +110,7 @@ export default function DashboardPage() {
           value={<Money value={s?.salesRevenue ?? 0} decimals={0} />}
           icon={Wallet}
           accent="navy"
-          hint={`${formatNumber(s?.salesQty ?? 0)} لتر عبر ${s?.salesCount ?? 0} عملية`}
+          hint={`${formatLiters(s?.salesQty ?? 0, 0, false)} عبر ${s?.salesCount ?? 0} عملية`}
         />
         <KpiCard
           label="صافي الربح"
@@ -143,7 +144,7 @@ export default function DashboardPage() {
           value={<Money value={d.totals.receivables} decimals={0} />}
           icon={Building2}
           accent="meadow"
-          hint={`منها متأخر: ${formatNumber(d.totals.overdue, 0)} د.ل`}
+          hint={`منها متأخر: ${formatMoney(d.totals.overdue, { decimals: 0, isolate: false })}`}
           href="/customers"
         />
         <KpiCard

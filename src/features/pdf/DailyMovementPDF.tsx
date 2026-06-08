@@ -4,7 +4,7 @@ import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
 import { PDF } from './pdfBase';
-import { pdfFmtNum, pdfFmtDate } from './pdfBrandKit';
+import { pdfFmtNum, pdfFmtDate, pdfFmtLiters } from './pdfBrandKit';
 import type { InventoryLedgerEntry } from '@/lib/domain/types';
 
 const s = StyleSheet.create({
@@ -44,10 +44,10 @@ export function DailyMovementPDF({ entries, sessionLabel, openingStock, totals }
       subtitle={`الفترة: ${sessionLabel}`}
       summaryPrimaryDateLabel="تاريخ التقرير"
       metaCells={[
-        { label: 'الرصيد الافتتاحي', value: `${pdfFmtNum(openingStock, 0)} لتر` },
-        { label: 'إجمالي الوارد', value: `${pdfFmtNum(totals.inQty, 0)} لتر` },
-        { label: 'إجمالي الصادر', value: `${pdfFmtNum(totals.outQty, 0)} لتر` },
-        { label: 'الرصيد الختامي', value: `${pdfFmtNum(totals.closing, 0)} لتر` },
+        { label: 'الرصيد الافتتاحي', value: pdfFmtLiters(openingStock, 0) },
+        { label: 'إجمالي الوارد', value: pdfFmtLiters(totals.inQty, 0) },
+        { label: 'إجمالي الصادر', value: pdfFmtLiters(totals.outQty, 0) },
+        { label: 'الرصيد الختامي', value: pdfFmtLiters(totals.closing, 0) },
       ]}
     >
       <View style={s.head}>

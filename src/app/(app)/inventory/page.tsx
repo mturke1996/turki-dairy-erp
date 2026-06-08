@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Warehouse, Coins, Gauge, SlidersHorizontal, ArrowDownUp, AlertTriangle } from 'lucide-react';
+import { Warehouse, Coins, Gauge, SlidersHorizontal, ArrowDownUp, AlertTriangle, PackagePlus } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,10 +13,12 @@ import { Money, Liters } from '@/components/shared/money';
 import { EmptyState } from '@/components/shared/empty-state';
 import { FlowChart } from '@/components/dashboard/flow-chart';
 import { AdjustmentDialog } from '@/components/inventory/adjustment-dialog';
+import { OpeningStockDialog } from '@/components/inventory/opening-stock-dialog';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { DailyMovementPDF } from '@/features/pdf/DailyMovementPDF';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
+import { toast } from 'sonner';
 import { usePermission } from '@/lib/store/use-permission';
 import { computeDailyFlow } from '@/lib/domain/calculations';
 import { sessionLedgerEntries } from '@/lib/domain/inventory';
@@ -34,9 +36,11 @@ export default function InventoryPage() {
   const data = useErpData();
   const d = useDerived();
   const minThreshold = useErpStore((s) => s.settings.minStockThreshold);
+  const setSessionOpeningStock = useErpStore((s) => s.setSessionOpeningStock);
   const canAdjust = usePermission('supply.record');
   const [sessionId, setSessionId] = useState(() => d.activeSession?.id ?? 'all');
   const [adjOpen, setAdjOpen] = useState(false);
+  const [openingOpen, setOpeningOpen] = useState(false);
 
   const session = data.sessions.find((s) => s.id === sessionId);
   const entries = useMemo(() => {
@@ -63,12 +67,20 @@ export default function InventoryPage() {
         title="المخزون"
         description="دفتر حركة الحليب المركزي بنظام متوسط التكلفة المرجّح المتحرّك."
         actions={
-          canAdjust ? (
-            <Button variant="outline" onClick={() => setAdjOpen(true)}>
-              <SlidersHorizontal className="h-4 w-4" />
-              تسوية مخزون
-            </Button>
-          ) : null
+          <>
+            {d.activeSession?.status === 'open' ? (
+              <Button type="button" variant="secondary" onClick={() => setOpeningOpen(true)}>
+                <PackagePlus className="h-4 w-4" />
+                ضبط مخزون افتتاحي
+              </Button>
+            ) : null}
+            {canAdjust ? (
+              <Button type="button" variant="outline" onClick={() => setAdjOpen(true)}>
+                <SlidersHorizontal className="h-4 w-4" />
+                تسوية مخزون
+              </Button>
+            ) : null}
+          </>
         }
       />
 
@@ -180,6 +192,22 @@ export default function InventoryPage() {
           )}
         </CardContent>
       </Card>
+
+      <OpeningStockDialog
+        open={openingOpen}
+        onOpenChange={setOpeningOpen}
+        sessionLabel={d.activeSession?.label ?? ''}
+        periodFrom={d.activeSession?.periodFrom ?? ''}
+        currentStock={d.totals.currentStock}
+        currentWac={d.totals.wac}
+        sessionOpening={d.activeSession?.openingStock ?? 0}
+        onSubmit={(input) => {
+          const res = setSessionOpeningStock(input);
+          if (res.ok) toast.success('تم ضبط المخزون الافتتاحي');
+          else toast.error(res.error ?? 'تعذّر الحفظ');
+          return res;
+        }}
+      />
 
       <AdjustmentDialog open={adjOpen} onOpenChange={setAdjOpen} currentStock={d.totals.currentStock} wac={d.totals.wac} />
     </div>

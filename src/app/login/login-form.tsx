@@ -54,8 +54,8 @@ export function LoginForm() {
           }}
         />
         <div className="relative z-10">
-          <div className="inline-flex rounded-2xl bg-white px-6 py-5 shadow-lift">
-            <BrandLogo variant="hero" className="w-64" priority />
+          <div className="inline-flex rounded-2xl bg-white px-5 py-4 shadow-lift">
+            <BrandLogo variant="hero" priority />
           </div>
         </div>
         <div className="relative z-10 max-w-md space-y-8">
@@ -91,7 +91,7 @@ export function LoginForm() {
         <div className="w-full max-w-[400px]">
           <div className="mb-8 flex flex-col items-center gap-4 lg:items-start">
             <div className="lg:hidden">
-              <BrandLogo variant="hero" className="h-20 w-56" priority />
+              <BrandLogo variant="hero" priority />
             </div>
             <div className="space-y-1.5 text-center lg:text-right">
               <h1 className="text-[1.65rem] font-bold tracking-tight text-foreground">تسجيل الدخول</h1>

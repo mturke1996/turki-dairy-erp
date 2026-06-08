@@ -6,23 +6,42 @@ import { ThemeProvider } from 'next-themes';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { bootstrapAuthSession } from '@/lib/supabase/auth';
-import { isAuthRequired } from '@/lib/supabase/config';
+import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { initCloudSync } from '@/lib/supabase/sync';
+import { DatabaseSetupRequired } from '@/components/layout/database-setup-required';
+import { AppSplash } from '@/components/layout/app-splash';
+
+function purgeLegacyStorage() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('turki-dairy-erp');
+  localStorage.removeItem('turki-cloud-sync-enabled');
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const [ready, setReady] = useState(false);
+  const configured = isSupabaseConfigured();
+
   useEffect(() => {
-    void useErpStore.persist.rehydrate();
+    purgeLegacyStorage();
+
     void (async () => {
-      if (isAuthRequired()) {
-        try {
-          await bootstrapAuthSession();
-        } catch {
-          useErpStore.getState().logout();
-        }
+      if (!configured) {
+        useErpStore.getState().setHydrated(true);
+        setReady(true);
+        return;
       }
-      initCloudSync();
+
+      try {
+        const authed = await bootstrapAuthSession();
+        if (authed) await initCloudSync();
+      } catch {
+        useErpStore.getState().logout();
+      } finally {
+        useErpStore.getState().setHydrated(true);
+        setReady(true);
+      }
     })();
-  }, []);
+  }, [configured]);
 
   const [client] = useState(
     () =>
@@ -40,10 +59,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
 
+  if (!ready) return <AppSplash />;
+
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange={false}>
       <QueryClientProvider client={client}>
-        <TooltipProvider delayDuration={80}>{children}</TooltipProvider>
+        <TooltipProvider delayDuration={80}>
+          {!configured ? <DatabaseSetupRequired /> : children}
+        </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

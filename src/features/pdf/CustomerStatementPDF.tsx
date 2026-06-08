@@ -4,7 +4,7 @@ import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
 import { PDF } from './pdfBase';
-import { PdfMoneyText, PdfInfoGrid, pdfFmtNum, pdfFmtDate } from './pdfBrandKit';
+import { PdfMoneyText, PdfInfoGrid, pdfFmtNum, pdfFmtDate, pdfFmtLiters, pdfFmtMoneyLibyan } from './pdfBrandKit';
 import { PdfSectionTitle } from './PdfTable';
 import { CUSTOMER_TYPE_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import type { AgingBuckets, CustomerStats } from '@/lib/domain/calculations';
@@ -66,7 +66,7 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
       metaCells={[
         { label: 'العميل', value: customer.entityName },
         { label: 'الكود', value: customer.code, valueDirection: 'ltr' },
-        { label: 'إجمالي المشتريات', value: `${pdfFmtNum(customer.totalPurchased, 0)} لتر` },
+        { label: 'إجمالي المشتريات', value: pdfFmtLiters(customer.totalPurchased, 0) },
         { label: 'الرصيد المستحق', moneyAmount: customer.outstanding },
       ]}
     >
@@ -74,9 +74,9 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
         items={[
           { label: 'النوع', value: CUSTOMER_TYPE_LABELS[customer.entityType] },
           { label: 'الهاتف', value: customer.phone, ltr: true },
-          { label: 'حد الائتمان', value: `${pdfFmtNum(customer.creditLimit, 0)} د.ل` },
+          { label: 'حد الائتمان', value: pdfFmtMoneyLibyan(customer.creditLimit, 0) },
           { label: 'مدة السداد', value: `${customer.paymentTerms} يوم` },
-          { label: 'إجمالي المحصّل', value: `${pdfFmtNum(customer.receivedTotal)} د.ل` },
+          { label: 'إجمالي المحصّل', value: pdfFmtMoneyLibyan(customer.receivedTotal) },
           { label: 'نسبة استخدام الائتمان', value: `${pdfFmtNum(customer.creditUtilization, 1)}%` },
         ]}
       />

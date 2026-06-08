@@ -1,7 +1,6 @@
 'use client';
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import { buildInventoryLedger, round } from '@/lib/domain/inventory';
 import { computeSessionSummary, computeFarmerStats, computeCustomerStats, computeFarmerSessionStats } from '@/lib/domain/calculations';
 import { accountBalance } from '@/lib/domain/treasury';
@@ -30,6 +29,7 @@ import type {
   SupplyTransaction,
 } from '@/lib/domain/types';
 import { uid } from '@/lib/utils';
+import { formatLiters, formatMoney, formatPricePerLiter } from '@/lib/format-currency';
 import { generateSeed } from './seed';
 import { generateSeedV3, DEFAULT_EXPENSE_CATEGORIES, emptyV3 } from './seed-v3';
 
@@ -54,6 +54,7 @@ export interface MutationResult {
 
 interface ErpState {
   hydrated: boolean;
+  setHydrated: (v: boolean) => void;
   auth: AuthUser | null;
 
   sessions: Session[];
@@ -148,6 +149,21 @@ interface ErpState {
   updateVault: (id: string, patch: Partial<CashVault>) => void;
   addBank: (input: Omit<BankAccount, 'id' | 'code' | 'createdAt'>) => MutationResult;
   updateBank: (id: string, patch: Partial<BankAccount>) => void;
+  /** ينشئ خزنة رئيسية إذا لم يوجد أي حساب — لتفعيل المصاريف والمدفوعات */
+  setupMainVault: (input: { openingBalance: number; name?: string }) => MutationResult;
+  /** ضبط الرصيد الافتتاحي لخزنة أو بنك (لبدء التشغيل من رصيد قائم) */
+  setAccountOpeningBalance: (input: {
+    type: AccountSourceType;
+    id: string;
+    openingBalance: number;
+    note?: string;
+  }) => MutationResult;
+  /** ضبط رصيد الحليب الافتتاحي للدورة النشطة (مثلاً متبقي 30/5) */
+  setSessionOpeningStock: (input: {
+    quantity: number;
+    unitCost: number;
+    note?: string;
+  }) => MutationResult;
   recordTransfer: (input: {
     fromType: AccountSourceType;
     fromId: string;
@@ -281,10 +297,9 @@ function makeAudit(
 
 const INITIAL_SESSION = freshSession();
 
-export const useErpStore = create<ErpState>()(
-  persist(
-    (set, get) => ({
+export const useErpStore = create<ErpState>()((set, get) => ({
       hydrated: false,
+      setHydrated: (v) => set({ hydrated: v }),
       auth: null,
 
       // النظام يبدأ فارغاً تماماً — لا بيانات تجريبية افتراضية
@@ -401,7 +416,7 @@ export const useErpStore = create<ErpState>()(
           'session',
           active.id,
           'close',
-          `إغلاق الدورة «${active.label}» — مبيعات ${round(summary.salesRevenue)} د.ل، ربح ${round(summary.grossProfit)} د.ل، مخزون مرحّل ${carriedStock} لتر`,
+          `إغلاق الدورة «${active.label}» — مبيعات ${formatMoney(round(summary.salesRevenue), { decimals: 0 })}، ربح ${formatMoney(round(summary.grossProfit), { decimals: 0 })}، مخزون مرحّل ${formatLiters(carriedStock, 0, false)}`,
         );
 
         const archivedSessions = state.sessions.map((s) => (s.id === active.id ? archived : s));
@@ -451,7 +466,7 @@ export const useErpStore = create<ErpState>()(
           if (ip.amount <= 0) return { ok: false, error: 'مبلغ الدفع الفوري غير صالح.' };
           const bal = accountBalance(ip.sourceType, ip.sourceId, state.vaults, state.banks, state.cashMovements);
           if (ip.amount > bal + 0.001)
-            return { ok: false, error: `رصيد الحساب (${Math.floor(bal).toLocaleString('en-US')} د.ل) لا يكفي للدفع الفوري.` };
+            return { ok: false, error: `رصيد الحساب (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي للدفع الفوري.` };
         }
 
         const shift = input.milkShift ?? 'morning';
@@ -542,7 +557,7 @@ export const useErpStore = create<ErpState>()(
         if (input.quantity > stock + 0.001) {
           return {
             ok: false,
-            error: `الكمية المطلوبة (${input.quantity.toLocaleString('en-US')} لتر) تتجاوز المخزون المتاح (${Math.floor(stock).toLocaleString('en-US')} لتر).`,
+            error: `الكمية المطلوبة (${formatLiters(input.quantity, 0, false)}) تتجاوز المخزون المتاح (${formatLiters(Math.floor(stock), 0, false)}).`,
           };
         }
         const date = input.date ?? new Date().toISOString();
@@ -581,7 +596,7 @@ export const useErpStore = create<ErpState>()(
         if (useSource) {
           const bal = accountBalance(input.sourceType!, input.sourceId!, state.vaults, state.banks, state.cashMovements);
           if (amount > bal + 0.001)
-            return { ok: false, error: `الرصيد المتاح (${Math.floor(bal).toLocaleString('en-US')} د.ل) لا يكفي للدفع.` };
+            return { ok: false, error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي للدفع.` };
         }
 
         const tx: Payment = {
@@ -624,7 +639,7 @@ export const useErpStore = create<ErpState>()(
           payments: [tx, ...state.payments],
           cashMovements: movement ? [movement, ...state.cashMovements] : state.cashMovements,
           auditLogs: [
-            makeAudit(state, 'payment', tx.id, 'pay', `دفعة للفلاح ${farmer?.fullName ?? ''}: ${amount.toLocaleString('en-US')} د.ل`),
+            makeAudit(state, 'payment', tx.id, 'pay', `دفعة للفلاح ${farmer?.fullName ?? ''}: ${formatMoney(amount, { decimals: 0 })}`),
             ...state.auditLogs,
           ],
         });
@@ -681,7 +696,7 @@ export const useErpStore = create<ErpState>()(
           payments: [tx, ...state.payments],
           cashMovements: movement ? [movement, ...state.cashMovements] : state.cashMovements,
           auditLogs: [
-            makeAudit(state, 'payment', tx.id, 'pay', `تحصيل من العميل ${customer?.entityName ?? ''}: ${amount.toLocaleString('en-US')} د.ل`),
+            makeAudit(state, 'payment', tx.id, 'pay', `تحصيل من العميل ${customer?.entityName ?? ''}: ${formatMoney(amount, { decimals: 0 })}`),
             ...state.auditLogs,
           ],
         });
@@ -740,6 +755,144 @@ export const useErpStore = create<ErpState>()(
           auditLogs: [makeAudit(s, 'bank', id, 'update', 'تعديل بيانات بنك'), ...s.auditLogs],
         })),
 
+      setupMainVault: (input) => {
+        const state = get();
+        if (state.vaults.length + state.banks.length > 0) {
+          const existing = state.vaults.find((v) => v.isActive) ?? state.banks.find((b) => b.isActive);
+          if (existing) return { ok: true, id: existing.id };
+        }
+        if (input.openingBalance < 0) return { ok: false, error: 'الرصيد الافتتاحي لا يمكن أن يكون سالباً.' };
+        const code = 'V-01';
+        const vault: CashVault = {
+          id: uid('vault-'),
+          code,
+          name: input.name?.trim() || 'الخزنة الرئيسية',
+          openingBalance: round(input.openingBalance),
+          isActive: true,
+          responsible: state.auth?.name ?? 'أمين الصندوق',
+          location: 'المقر الرئيسي',
+          minThreshold: 0,
+          createdAt: new Date().toISOString(),
+        };
+        set({
+          vaults: [vault, ...state.vaults],
+          auditLogs: [
+            makeAudit(
+              state,
+              'vault',
+              vault.id,
+              'create',
+              `إعداد خزنة: ${vault.name} — رصيد افتتاحي ${formatMoney(vault.openingBalance, { decimals: 0 })}`,
+            ),
+            ...state.auditLogs,
+          ],
+        });
+        return { ok: true, id: vault.id };
+      },
+
+      setAccountOpeningBalance: (input) => {
+        const state = get();
+        if (input.openingBalance < 0) return { ok: false, error: 'الرصيد الافتتاحي لا يمكن أن يكون سالباً.' };
+        const amount = round(input.openingBalance);
+        if (input.type === 'vault') {
+          const vault = state.vaults.find((v) => v.id === input.id);
+          if (!vault) return { ok: false, error: 'الخزنة غير موجودة.' };
+          set({
+            vaults: state.vaults.map((v) => (v.id === input.id ? { ...v, openingBalance: amount } : v)),
+            auditLogs: [
+              makeAudit(
+                state,
+                'vault',
+                input.id,
+                'update',
+                `ضبط رصيد افتتاحي — ${vault.name}: ${formatMoney(amount, { decimals: 0 })}${input.note ? ` (${input.note})` : ''}`,
+              ),
+              ...state.auditLogs,
+            ],
+          });
+          return { ok: true, id: input.id };
+        }
+        const bank = state.banks.find((b) => b.id === input.id);
+        if (!bank) return { ok: false, error: 'الحساب البنكي غير موجود.' };
+        set({
+          banks: state.banks.map((b) => (b.id === input.id ? { ...b, openingBalance: amount } : b)),
+          auditLogs: [
+            makeAudit(
+              state,
+              'bank',
+              input.id,
+              'update',
+              `ضبط رصيد افتتاحي — ${bank.bankName}: ${formatMoney(amount, { decimals: 0 })}${input.note ? ` (${input.note})` : ''}`,
+            ),
+            ...state.auditLogs,
+          ],
+        });
+        return { ok: true, id: input.id };
+      },
+
+      setSessionOpeningStock: (input) => {
+        const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok || !gate.session) return gate;
+        const session = gate.session;
+        if (input.quantity < 0) return { ok: false, error: 'الكمية لا يمكن أن تكون سالبة.' };
+        if (input.unitCost <= 0) return { ok: false, error: 'أدخل تكلفة اللتر أكبر من صفر.' };
+
+        const qty = round(input.quantity);
+        const cost = round(input.unitCost, 3);
+        const sorted = [...state.sessions].sort((a, b) => a.periodFrom.localeCompare(b.periodFrom));
+        const earliest = sorted[0];
+        const hasMovements =
+          state.supplies.length + state.sales.length + state.adjustments.length > 0;
+        const stockBefore = buildInventoryLedger(
+          state.supplies,
+          state.sales,
+          state.adjustments,
+          state.sessions,
+        ).currentStock;
+
+        const sessions = state.sessions.map((s) =>
+          s.id === session.id ? { ...s, openingStock: qty, openingAvgCost: cost } : s,
+        );
+
+        const ledgerOpeningOnly =
+          session.id === earliest?.id && !hasMovements;
+
+        let adjustments = state.adjustments;
+        if (!ledgerOpeningOnly) {
+          const delta = round(qty - stockBefore);
+          if (Math.abs(delta) > 0.001) {
+            const adj: InventoryAdjustment = {
+              id: uid('adj-'),
+              ref: nextRef('ADJ', state.adjustments),
+              sessionId: session.id,
+              date: `${session.periodFrom}T08:00:00.000Z`,
+              quantity: delta,
+              unitCost: cost,
+              reason: input.note?.trim() || 'رصيد افتتاحي للدورة — متبقي من الدورة السابقة',
+              createdAt: new Date().toISOString(),
+            };
+            adjustments = [adj, ...adjustments];
+          }
+        }
+
+        set({
+          sessions,
+          adjustments,
+          auditLogs: [
+            makeAudit(
+              state,
+              'session',
+              session.id,
+              'update',
+              `ضبط مخزون افتتاحي للدورة «${session.label}»: ${formatLiters(qty, 0, false)} بمتوسط ${formatPricePerLiter(cost, 3)}`,
+            ),
+            ...state.auditLogs,
+          ],
+        });
+        return { ok: true, id: session.id };
+      },
+
       recordTransfer: (input) => {
         const state = get();
         const gate = requireOpenSession(state);
@@ -749,7 +902,7 @@ export const useErpStore = create<ErpState>()(
           return { ok: false, error: 'لا يمكن التحويل إلى نفس الحساب.' };
         const bal = accountBalance(input.fromType, input.fromId, state.vaults, state.banks, state.cashMovements);
         if (input.amount > bal + 0.001)
-          return { ok: false, error: `الرصيد المتاح (${Math.floor(bal).toLocaleString('en-US')} د.ل) لا يكفي للتحويل.` };
+          return { ok: false, error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي للتحويل.` };
         const date = input.date ?? new Date().toISOString();
         const id = uid('tr-');
         const amount = round(input.amount);
@@ -800,7 +953,7 @@ export const useErpStore = create<ErpState>()(
         set({
           transfers: [transfer, ...state.transfers],
           cashMovements: [inn, out, ...state.cashMovements],
-          auditLogs: [makeAudit(state, 'transfer', id, 'transfer', `تحويل ${amount.toLocaleString('en-US')} د.ل بين الحسابات`), ...state.auditLogs],
+          auditLogs: [makeAudit(state, 'transfer', id, 'transfer', `تحويل ${formatMoney(amount, { decimals: 0 })} بين الحسابات`), ...state.auditLogs],
         });
         return { ok: true, id };
       },
@@ -815,7 +968,7 @@ export const useErpStore = create<ErpState>()(
         if (!cat) return { ok: false, error: 'التصنيف غير موجود.' };
         const bal = accountBalance(input.paidFromType, input.paidFromId, state.vaults, state.banks, state.cashMovements);
         if (input.amount > bal + 0.001)
-          return { ok: false, error: `الرصيد المتاح (${Math.floor(bal).toLocaleString('en-US')} د.ل) لا يكفي لتسجيل المصروف.` };
+          return { ok: false, error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي لتسجيل المصروف.` };
         const date = input.date ?? new Date().toISOString();
         const id = uid('exp-');
         const amount = round(input.amount);
@@ -852,7 +1005,7 @@ export const useErpStore = create<ErpState>()(
         set({
           expenses: [expense, ...state.expenses],
           cashMovements: [cm, ...state.cashMovements],
-          auditLogs: [makeAudit(state, 'expense', id, 'create', `مصروف ${cat.name}: ${amount.toLocaleString('en-US')} د.ل`), ...state.auditLogs],
+          auditLogs: [makeAudit(state, 'expense', id, 'create', `مصروف ${cat.name}: ${formatMoney(amount, { decimals: 0 })}`), ...state.auditLogs],
         });
         return { ok: true, id };
       },
@@ -925,7 +1078,7 @@ export const useErpStore = create<ErpState>()(
         if (batch.status === 'paid') return { ok: false, error: 'الكشف مصروف بالفعل.' };
         const bal = accountBalance(source.type, source.id, state.vaults, state.banks, state.cashMovements);
         if (batch.totalAmount > bal + 0.001)
-          return { ok: false, error: `الرصيد المتاح (${Math.floor(bal).toLocaleString('en-US')} د.ل) لا يكفي لصرف الرواتب.` };
+          return { ok: false, error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي لصرف الرواتب.` };
         const date = new Date().toISOString();
         const cm: CashMovement = {
           id: uid('cm-'),
@@ -947,7 +1100,7 @@ export const useErpStore = create<ErpState>()(
             b.id === batchId ? { ...b, status: 'paid', paidFromType: source.type, paidFromId: source.id, paidAt: date } : b,
           ),
           cashMovements: [cm, ...state.cashMovements],
-          auditLogs: [makeAudit(state, 'payroll', batchId, 'pay', `صرف رواتب ${batch.totalAmount.toLocaleString('en-US')} د.ل`), ...state.auditLogs],
+          auditLogs: [makeAudit(state, 'payroll', batchId, 'pay', `صرف رواتب ${formatMoney(batch.totalAmount, { decimals: 0 })}`), ...state.auditLogs],
         });
         return { ok: true, id: batchId };
       },
@@ -1013,38 +1166,9 @@ export const useErpStore = create<ErpState>()(
             if (v !== undefined && k !== 'settings') next[k] = v;
           }
           if (data.settings) next.settings = { ...s.settings, ...data.settings };
+          if (!Array.isArray(next.expenseCategories) || !(next.expenseCategories as ExpenseCategory[]).length) {
+            next.expenseCategories = DEFAULT_EXPENSE_CATEGORIES;
+          }
           return next as Partial<ErpState>;
         }),
-    }),
-    {
-      name: 'turki-dairy-erp',
-      version: 3,
-      storage: createJSONStorage(() => localStorage),
-      skipHydration: true,
-      partialize: (s) => ({
-        auth: s.auth,
-        sessions: s.sessions,
-        activeSessionId: s.activeSessionId,
-        farmers: s.farmers,
-        customers: s.customers,
-        supplies: s.supplies,
-        sales: s.sales,
-        payments: s.payments,
-        adjustments: s.adjustments,
-        settings: s.settings,
-        vaults: s.vaults,
-        banks: s.banks,
-        cashMovements: s.cashMovements,
-        transfers: s.transfers,
-        expenseCategories: s.expenseCategories,
-        expenses: s.expenses,
-        employees: s.employees,
-        payrollBatches: s.payrollBatches,
-        auditLogs: s.auditLogs,
-      }),
-      onRehydrateStorage: () => () => {
-        useErpStore.setState({ hydrated: true });
-      },
-    },
-  ),
-);
+}));

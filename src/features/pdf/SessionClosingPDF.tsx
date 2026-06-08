@@ -4,7 +4,7 @@ import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
 import { PDF } from './pdfBase';
-import { pdfFmtNum } from './pdfBrandKit';
+import { pdfFmtNum, pdfFmtLiters, pdfFmtMoneyLibyan } from './pdfBrandKit';
 import type { SessionSummary } from '@/lib/domain/calculations';
 
 const s = StyleSheet.create({
@@ -72,24 +72,24 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
         { label: 'إجمالي المبيعات', moneyAmount: summary.salesRevenue },
         { label: 'صافي الربح', moneyAmount: summary.grossProfit },
         { label: 'هامش الربح', value: `${pdfFmtNum(summary.marginPct, 1)}%` },
-        { label: 'الرصيد الختامي', value: `${pdfFmtNum(summary.closingStock, 0)} لتر` },
+        { label: 'الرصيد الختامي', value: pdfFmtLiters(summary.closingStock, 0) },
       ]}
     >
       <Text style={s.section}>{ar('الملخص التشغيلي')}</Text>
       <View style={s.grid}>
-        <Stat title="عدد عمليات الاستلام" value={pdfFmtNum(summary.supplyCount, 0)} sub={`${pdfFmtNum(summary.supplyQty, 0)} لتر`} color={PDF.logoGreen} />
-        <Stat title="تكلفة الاستلام" value={`${pdfFmtNum(summary.supplyCost, 0)} د.ل`} sub="إجمالي المشتريات" />
-        <Stat title="عدد عمليات البيع" value={pdfFmtNum(summary.salesCount, 0)} sub={`${pdfFmtNum(summary.salesQty, 0)} لتر`} />
-        <Stat title="تكلفة البضاعة المباعة" value={`${pdfFmtNum(summary.cogs, 0)} د.ل`} sub="COGS" />
-        <Stat title="الربح الإجمالي" value={`${pdfFmtNum(summary.grossProfit, 0)} د.ل`} sub={`هامش ${pdfFmtNum(summary.marginPct, 1)}%`} color={PDF.logoGreen} />
+        <Stat title="عدد عمليات الاستلام" value={pdfFmtNum(summary.supplyCount, 0)} sub={pdfFmtLiters(summary.supplyQty, 0)} color={PDF.logoGreen} />
+        <Stat title="تكلفة الاستلام" value={pdfFmtMoneyLibyan(summary.supplyCost, 0)} sub="إجمالي المشتريات" />
+        <Stat title="عدد عمليات البيع" value={pdfFmtNum(summary.salesCount, 0)} sub={pdfFmtLiters(summary.salesQty, 0)} />
+        <Stat title="تكلفة البضاعة المباعة" value={pdfFmtMoneyLibyan(summary.cogs, 0)} sub="COGS" />
+        <Stat title="الربح الإجمالي" value={pdfFmtMoneyLibyan(summary.grossProfit, 0)} sub={`هامش ${pdfFmtNum(summary.marginPct, 1)}%`} color={PDF.logoGreen} />
         <Stat title="حركة المخزون" value={`${pdfFmtNum(summary.openingStock, 0)} ← ${pdfFmtNum(summary.closingStock, 0)}`} sub="افتتاحي ← ختامي" />
       </View>
 
       <Text style={s.section}>{ar('الحركة النقدية')}</Text>
       <View style={s.grid}>
-        <Stat title="مدفوعات للفلاحين" value={`${pdfFmtNum(summary.farmerPayments, 0)} د.ل`} />
-        <Stat title="تحصيلات من العملاء" value={`${pdfFmtNum(summary.customerReceipts, 0)} د.ل`} color={PDF.logoGreen} />
-        <Stat title="صافي التدفق" value={`${pdfFmtNum(summary.customerReceipts - summary.farmerPayments, 0)} د.ل`} color={summary.customerReceipts - summary.farmerPayments >= 0 ? PDF.logoGreen : PDF.danger} />
+        <Stat title="مدفوعات للفلاحين" value={pdfFmtMoneyLibyan(summary.farmerPayments, 0)} />
+        <Stat title="تحصيلات من العملاء" value={pdfFmtMoneyLibyan(summary.customerReceipts, 0)} color={PDF.logoGreen} />
+        <Stat title="صافي التدفق" value={pdfFmtMoneyLibyan(summary.customerReceipts - summary.farmerPayments, 0)} color={summary.customerReceipts - summary.farmerPayments >= 0 ? PDF.logoGreen : PDF.danger} />
       </View>
 
       {/* أرصدة مُرحّلة */}
@@ -129,15 +129,15 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       <View style={s.carry} wrap={false}>
         <View style={s.carryCell}>
           <Text style={s.carryLabel}>{ar('مخزون مُرحّل')}</Text>
-          <Text style={s.carryValue}>{ar(`${pdfFmtNum(carryForward.openingStock, 0)} لتر`)}</Text>
+          <Text style={s.carryValue} dir="ltr">{ar(pdfFmtLiters(carryForward.openingStock, 0))}</Text>
         </View>
         <View style={s.carryCell}>
           <Text style={s.carryLabel}>{ar('مستحقات الفلاحين')}</Text>
-          <Text style={s.carryValue}>{ar(`${pdfFmtNum(carryForward.payables, 0)} د.ل`)}</Text>
+          <Text style={s.carryValue} dir="ltr">{ar(pdfFmtMoneyLibyan(carryForward.payables, 0))}</Text>
         </View>
         <View style={s.carryCell}>
           <Text style={s.carryLabel}>{ar('ذمم العملاء')}</Text>
-          <Text style={s.carryValue}>{ar(`${pdfFmtNum(carryForward.receivables, 0)} د.ل`)}</Text>
+          <Text style={s.carryValue} dir="ltr">{ar(pdfFmtMoneyLibyan(carryForward.receivables, 0))}</Text>
         </View>
       </View>
     </ReportShell>

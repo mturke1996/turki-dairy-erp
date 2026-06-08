@@ -213,6 +213,20 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /** رقم + وحدة/عملة — الرقم ثم الوحدة في RTL */
+  .unit-value {
+    direction: ltr;
+    unicode-bidi: isolate;
+    display: inline-block;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+  }
+
   .eyebrow {
     display: inline-flex;
     align-items: center;

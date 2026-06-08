@@ -10,7 +10,7 @@ export function DatabaseSetupRequired() {
       style={{ backgroundColor: BRAND.colors.navy }}
     >
       <div className="w-full max-w-md space-y-6 text-center text-white">
-        <div className="mx-auto w-48 rounded-2xl bg-white px-4 py-3">
+        <div className="mx-auto w-full max-w-[260px] rounded-2xl bg-white px-4 py-4 shadow-whisper">
           <BrandLogo variant="full" priority />
         </div>
         <div className="space-y-2">

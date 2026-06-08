@@ -35,39 +35,14 @@ export const pdfBrandStyles = StyleSheet.create({
 
   brandBlock: {
     direction: 'rtl',
-    alignItems: 'flex-end',
-    maxWidth: 250,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    maxWidth: 260,
   },
-  brandNameAr: {
-    fontSize: 11.5,
-    fontWeight: 'bold',
-    color: P.primary,
-    textAlign: 'right',
-    lineHeight: 1.25,
-    marginTop: 6,
-  },
-  brandNameEn: {
-    fontSize: 7.5,
-    color: P.muted,
-    textAlign: 'right',
-    marginTop: 2,
-    letterSpacing: 0.3,
-  },
-  brandTagline: {
-    fontSize: 6.8,
-    color: P.logoGreen,
-    textAlign: 'right',
-    marginTop: 4,
-    lineHeight: 1.35,
-    maxWidth: 230,
-  },
-  brandContact: {
-    fontSize: 6.5,
-    color: P.muted,
-    textAlign: 'right',
-    marginTop: 5,
-    lineHeight: 1.4,
-    maxWidth: 230,
+  brandLockupImage: {
+    objectFit: 'contain',
+    objectPosition: 'right center',
   },
 
   contactBar: {
@@ -236,13 +211,13 @@ export const pdfBrandStyles = StyleSheet.create({
   docRef: { fontSize: 8, color: P.muted, marginTop: 4, textAlign: 'left' },
 });
 
-/** شعار المصنع — عرض احترافي بدون قصّ مفرط. */
-export const PdfLogoMark = ({ width = 168, height = 52 }: { width?: number; height?: number }) => {
+/** شعار المصنع — الشعار الرسومي */
+export const PdfLogoMark = ({ width = 56, height = 56 }: { width?: number; height?: number }) => {
   const injected = usePdfLogoDataUri();
   if (injected) {
     return (
-      <View style={[pdfBrandStyles.logoShell, { width, height }]}>
-        <Image src={injected} style={[pdfBrandStyles.logoImage, { width: width - 10, height: height - 10 }]} />
+      <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>
+        <Image src={injected} style={{ width, height, objectFit: 'contain' }} />
       </View>
     );
   }
@@ -253,18 +228,29 @@ export const PdfLogoMark = ({ width = 168, height = 52 }: { width?: number; heig
   );
 };
 
-/** هوية المصنع: شعار + اسم + شعار نصي + تواصل. */
-export const PdfBrandIdentity = ({ logoWidth = 168, logoHeight = 52 }: { logoWidth?: number; logoHeight?: number }) => (
-  <View style={pdfBrandStyles.brandBlock}>
-    <PdfLogoMark width={logoWidth} height={logoHeight} />
-    <Text style={pdfBrandStyles.brandNameAr}>{ar(BRAND.fullName)}</Text>
-    <Text style={pdfBrandStyles.brandNameEn}>{ar(BRAND.nameLatin)}</Text>
-    <Text style={pdfBrandStyles.brandTagline}>{ar(BRAND.tagline)}</Text>
-    <Text style={pdfBrandStyles.brandContact}>
-      {ar(`${BRAND.contact.address}  ·  ${BRAND.contact.phone}`)}
-    </Text>
-  </View>
-);
+/** هوية المصنع — الشعار الأفقي الكامل كما في الهوية الرسمية */
+export const PdfBrandIdentity = ({ logoWidth = 200, logoHeight = 64 }: { logoWidth?: number; logoHeight?: number }) => {
+  const injected = usePdfLogoDataUri();
+  if (injected) {
+    return (
+      <View style={pdfBrandStyles.brandBlock} wrap={false}>
+        <Image
+          src={injected}
+          style={[pdfBrandStyles.brandLockupImage, { width: logoWidth, height: logoHeight }]}
+        />
+      </View>
+    );
+  }
+  return (
+    <View style={pdfBrandStyles.brandBlock} wrap={false}>
+      <PdfLogoMark width={48} height={48} />
+      <View style={{ alignItems: 'flex-end', maxWidth: 160 }}>
+        <Text style={{ fontSize: 12, fontWeight: 'bold', color: P.primary, textAlign: 'right' }}>{ar(BRAND.fullName)}</Text>
+        <Text style={{ fontSize: 8, color: P.muted, textAlign: 'right', marginTop: 2 }}>{ar(BRAND.taglineShort)}</Text>
+      </View>
+    </View>
+  );
+};
 
 /** شريط بيانات المصنع تحت الترويسة. */
 export const PdfFactoryContactBar = () => (
@@ -311,8 +297,16 @@ export function pdfFmtDate(date: Date | string): string {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
+export function pdfFmtUnit(n: number, unit: string, decimals = 0): string {
+  return `${pdfFmtNum(n, decimals)} ${unit}`;
+}
+
 export function pdfFmtMoneyLibyan(n: number, decimals = 2): string {
-  return `${pdfFmtNum(n, decimals)} ${LIBYAN_CURRENCY_LABEL}`;
+  return pdfFmtUnit(n, LIBYAN_CURRENCY_LABEL, decimals);
+}
+
+export function pdfFmtLiters(n: number, decimals = 0): string {
+  return pdfFmtUnit(n, 'لتر', decimals);
 }
 
 const MONEY_SIZE = { sm: 10, md: 13, lg: 18 };
@@ -328,12 +322,9 @@ export const PdfMoneyText = ({
   decimals?: number;
   color?: string;
 }) => (
-  <View style={pdfBrandStyles.moneyRow}>
-    <Text style={{ fontSize: MONEY_SIZE[size] * 0.72, fontWeight: 'bold', color }}>
-      {LIBYAN_CURRENCY_LABEL}
-    </Text>
-    <Text style={{ fontSize: MONEY_SIZE[size], fontWeight: 'bold', color }}>{pdfFmtNum(amount, decimals)}</Text>
-  </View>
+  <Text style={{ fontSize: MONEY_SIZE[size], fontWeight: 'bold', color, direction: 'ltr', textAlign: 'right' }}>
+    {pdfFmtMoneyLibyan(amount, decimals)}
+  </Text>
 );
 
 /** تذييل رسمي ببيانات المصنع الكاملة. */
@@ -381,7 +372,7 @@ export const TurkiPdfHeader = ({
         {subtitleAr ? <Text style={pdfBrandStyles.docRef}>{ar(subtitleAr)}</Text> : null}
         {refLine ? <Text style={pdfBrandStyles.docRef} dir="ltr">{refLine}</Text> : null}
       </View>
-      <PdfBrandIdentity logoWidth={150} logoHeight={46} />
+      <PdfBrandIdentity logoWidth={210} logoHeight={68} />
     </View>
     <PdfFactoryContactBar />
   </View>

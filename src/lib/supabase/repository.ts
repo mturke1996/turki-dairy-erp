@@ -74,8 +74,8 @@ const SYNC_TABLES = [
   { table: 'audit_logs', key: 'auditLogs' as const },
 ] as const;
 
-const SYNC_VERSION_KEY = 'turki-sync-remote-version';
-const DEVICE_ID_KEY = 'turki-sync-device-id';
+let memorySyncVersion = 0;
+let memoryDeviceId: string | null = null;
 
 export function isSupabaseConfigured(): boolean {
   return isCloudSyncAvailable();
@@ -83,22 +83,16 @@ export function isSupabaseConfigured(): boolean {
 
 function getDeviceId(): string {
   if (typeof window === 'undefined') return 'server';
-  let id = window.localStorage.getItem(DEVICE_ID_KEY);
-  if (!id) {
-    id = crypto.randomUUID();
-    window.localStorage.setItem(DEVICE_ID_KEY, id);
-  }
-  return id;
+  if (!memoryDeviceId) memoryDeviceId = crypto.randomUUID();
+  return memoryDeviceId;
 }
 
 export function getLocalSyncVersion(): number {
-  if (typeof window === 'undefined') return 0;
-  return Number(window.localStorage.getItem(SYNC_VERSION_KEY) ?? 0);
+  return memorySyncVersion;
 }
 
 export function setLocalSyncVersion(v: number): void {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(SYNC_VERSION_KEY, String(v));
+  memorySyncVersion = v;
 }
 
 export async function testConnection(): Promise<{ ok: boolean; error?: string }> {
@@ -188,6 +182,11 @@ export async function pullAll(): Promise<PullResult> {
 
   if (!activeSessionId && sessions.length) {
     activeSessionId = (sessions.find((x) => x.status === 'open') ?? sessions[0]).id;
+  } else if (sessions.length && activeSessionId) {
+    const active = sessions.find((s) => s.id === activeSessionId);
+    if (!active || active.status === 'archived') {
+      activeSessionId = (sessions.find((x) => x.status === 'open') ?? sessions[sessions.length - 1]).id;
+    }
   }
 
   setLocalSyncVersion(syncVersion);

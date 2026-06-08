@@ -2,6 +2,7 @@
 
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { SessionSummary } from '@/lib/domain/calculations';
+import { Money } from '@/components/shared/money';
 import { formatNumber } from '@/lib/utils';
 
 function ProfitTooltip({ active, payload }: any) {
@@ -13,11 +14,11 @@ function ProfitTooltip({ active, payload }: any) {
       <div className="space-y-0.5 tabular" dir="ltr">
         <p className="flex items-center justify-between gap-4">
           <span className="text-navy-600">الإيراد</span>
-          <span>{formatNumber(p.revenue)} د.ل</span>
+          <Money value={p.revenue} decimals={0} />
         </p>
         <p className="flex items-center justify-between gap-4">
           <span className="text-meadow-600">الربح</span>
-          <span>{formatNumber(p.profit)} د.ل</span>
+          <Money value={p.profit} decimals={0} />
         </p>
         <p className="flex items-center justify-between gap-4 border-t border-border pt-0.5">
           <span className="text-sun-600">الهامش</span>

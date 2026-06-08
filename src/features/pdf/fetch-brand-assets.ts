@@ -26,7 +26,7 @@ export type BrandPdfAssets = {
 /** يحمّل الشعار والورقة الرسمية كـ data URI لاستخدامهما في react-pdf. */
 export async function fetchBrandPdfAssets(): Promise<BrandPdfAssets> {
   const [logoDataUri, letterheadDataUri] = await Promise.all([
-    fetchAsDataUri(BRAND.logoSrc),
+    fetchAsDataUri(BRAND.logoLockupSrc),
     fetchAsDataUri(BRAND.letterheadSrc),
   ]);
   return { logoDataUri, letterheadDataUri };

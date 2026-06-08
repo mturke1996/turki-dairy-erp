@@ -16,11 +16,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col bg-card">
       {/* الشعار */}
-      <div className="border-b border-border px-4 py-5">
+      <div className="border-b border-border px-3 py-4 sm:px-4">
         <Link href="/dashboard" onClick={onNavigate} className="block transition-opacity hover:opacity-90">
-          <BrandLogo variant="lockup" className="w-full" />
+          <BrandLogo variant="lockup" className="mx-auto w-full" priority />
         </Link>
-        <p className="mt-2 truncate text-center text-[10.5px] font-medium text-muted-foreground">{BRAND.tagline}</p>
       </div>
 
       {/* التنقّل */}
