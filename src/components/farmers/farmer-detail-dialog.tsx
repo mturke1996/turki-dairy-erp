@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Banknote, MapPin, Phone, Pencil } from 'lucide-react';
+import { Banknote, HandCoins, MapPin, Phone, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { Money, Liters } from '@/components/shared/money';
 import { CopyableValue } from '@/components/shared/copyable-value';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PaymentDialog } from '@/components/forms/payment-dialog';
+import { DebtSettleDialog } from '@/components/debts/debt-settle-dialog';
 import { FarmerFormDialog } from './farmer-form-dialog';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { FarmerStatementPDF } from '@/features/pdf/FarmerStatementPDF';
@@ -25,6 +26,7 @@ import {
   PAYMENT_METHOD_LABELS,
 } from '@/lib/domain/constants';
 import type { FarmerStats } from '@/lib/domain/calculations';
+import { isDebtFullySettled, resolveDebtDirection } from '@/lib/domain/debt';
 import { formatShortDate } from '@/lib/utils';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
 import { PartyDeleteButton } from '@/components/shared/party-delete-button';
@@ -47,6 +49,7 @@ export function FarmerDetailDialog({
   const deletePayment = useErpStore((s) => s.deletePayment);
   const deleteFarmer = useErpStore((s) => s.deleteFarmer);
   const [payOpen, setPayOpen] = useState(false);
+  const [settleOpen, setSettleOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
   const farmer = d.farmers.find((f) => f.id === farmerId) as FarmerStats | undefined;
@@ -63,6 +66,20 @@ export function FarmerDetailDialog({
         .sort((a, b) => b.date.localeCompare(a.date)),
     [data.payments, farmerId],
   );
+
+  const receivableDebt = useMemo(
+    () =>
+      data.debtEntries.find(
+        (entry) =>
+          entry.partyKind === 'farmer' &&
+          entry.partyId === farmerId &&
+          !isDebtFullySettled(entry) &&
+          resolveDebtDirection(entry) === 'receivable',
+      ) ?? null,
+    [data.debtEntries, farmerId],
+  );
+
+  const payableBalance = Math.max(0, farmer?.creditBalance ?? 0);
 
   if (!farmer) {
     return (
@@ -106,14 +123,24 @@ export function FarmerDetailDialog({
             <SummaryCell label="إجمالي الاستلام" value={<Liters value={farmer.totalSupplied} />} />
             <SummaryCell label="قيمة الاستلام" value={<Money value={farmer.totalSupplyValue} decimals={0} />} />
             <SummaryCell label="المدفوع" value={<Money value={farmer.paidTotal} decimals={0} />} />
-            <SummaryCell label="الدين" value={<Money value={farmer.creditBalance} decimals={0} />} highlight />
+            <SummaryCell
+              label={farmer.creditBalance < -0.01 ? 'عليه (لنا)' : 'الدين (له)'}
+              value={<Money value={Math.abs(farmer.creditBalance)} decimals={0} />}
+              highlight
+            />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {canPay ? (
+            {canPay && payableBalance > 0.01 ? (
               <Button size="sm" onClick={() => setPayOpen(true)}>
                 <Banknote className="h-4 w-4" />
                 تسجيل دفعة
+              </Button>
+            ) : null}
+            {canPay && receivableDebt ? (
+              <Button size="sm" variant="meadow" onClick={() => setSettleOpen(true)}>
+                <HandCoins className="h-4 w-4" />
+                تحصيل دين (عليه)
               </Button>
             ) : null}
             <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
@@ -255,8 +282,10 @@ export function FarmerDetailDialog({
         kind="farmer"
         partyId={farmer.id}
         partyName={farmer.fullName}
-        outstanding={farmer.creditBalance}
+        outstanding={payableBalance}
+        settlementDefault={payableBalance > 0.01}
       />
+      <DebtSettleDialog open={settleOpen} onOpenChange={setSettleOpen} entry={receivableDebt} />
       <FarmerFormDialog open={editOpen} onOpenChange={setEditOpen} farmer={rawFarmer} />
     </>
   );

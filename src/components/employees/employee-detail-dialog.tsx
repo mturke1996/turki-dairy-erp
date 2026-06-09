@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
-import { Banknote, Briefcase, Calendar, Pencil, Phone, User } from 'lucide-react';
+import { Banknote, Briefcase, Calendar, HandCoins, Pencil, Phone, User } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,7 @@ import { Money } from '@/components/shared/money';
 import { EmptyState } from '@/components/shared/empty-state';
 import { EmployeeFormDialog } from './employee-form-dialog';
 import { EmployeeAdvanceDialog } from './employee-advance-dialog';
+import { DebtSettleDialog } from '@/components/debts/debt-settle-dialog';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { usePermission } from '@/lib/store/use-permission';
@@ -22,6 +23,7 @@ import {
   PAYROLL_STATUS_LABELS,
 } from '@/lib/domain/constants';
 import type { EmployeeStats } from '@/lib/domain/calculations';
+import { isDebtFullySettled, resolveDebtDirection } from '@/lib/domain/debt';
 import { formatShortDate } from '@/lib/utils';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
 import { PartyDeleteButton } from '@/components/shared/party-delete-button';
@@ -59,6 +61,7 @@ export function EmployeeDetailDialog({
 
   const [editOpen, setEditOpen] = useState(false);
   const [advanceOpen, setAdvanceOpen] = useState(false);
+  const [settleOpen, setSettleOpen] = useState(false);
 
   const employee = d.employees.find((e) => e.id === employeeId) as EmployeeStats | undefined;
   const raw = data.employees.find((e) => e.id === employeeId) ?? null;
@@ -81,6 +84,18 @@ export function EmployeeDetailDialog({
       )
       .sort((a, b) => (b.batch.paidAt ?? b.batch.createdAt).localeCompare(a.batch.paidAt ?? a.batch.createdAt));
   }, [data.payrollBatches, employeeId]);
+
+  const registeredDebt = useMemo(
+    () =>
+      data.debtEntries.find(
+        (entry) =>
+          entry.partyKind === 'employee' &&
+          entry.partyId === employeeId &&
+          !isDebtFullySettled(entry) &&
+          resolveDebtDirection(entry) === 'receivable',
+      ) ?? null,
+    [data.debtEntries, employeeId],
+  );
 
   if (!employee || !raw) {
     return (
@@ -150,7 +165,13 @@ export function EmployeeDetailDialog({
             {canPay && employee.status === 'active' ? (
               <Button size="sm" onClick={() => setAdvanceOpen(true)}>
                 <Banknote className="h-4 w-4" />
-                دين
+                سلفة
+              </Button>
+            ) : null}
+            {canPay && registeredDebt ? (
+              <Button size="sm" variant="meadow" onClick={() => setSettleOpen(true)}>
+                <HandCoins className="h-4 w-4" />
+                تسوية دين
               </Button>
             ) : null}
           </div>
@@ -276,12 +297,13 @@ export function EmployeeDetailDialog({
           void (async () => {
             const res = await recordEmployeeAdvance(input);
             if (res.ok) {
-              toast.success('تم تسجيل الدين');
+              toast.success('تم تسجيل السلفة');
               setAdvanceOpen(false);
             } else toast.error(res.error ?? 'تعذّر التسجيل');
           })();
         }}
       />
+      <DebtSettleDialog open={settleOpen} onOpenChange={setSettleOpen} entry={registeredDebt} />
     </>
   );
 }

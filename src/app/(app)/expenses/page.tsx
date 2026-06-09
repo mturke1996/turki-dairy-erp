@@ -29,8 +29,9 @@ import { useErpStore } from '@/lib/store/use-erp-store';
 import { usePermission } from '@/lib/store/use-permission';
 import { computeExpenseTotals, accountLabel, accountBalance } from '@/lib/domain/treasury';
 import { EXPENSE_GROUP_LABELS, EXPENSE_STATUS_LABELS } from '@/lib/domain/constants';
+import { sessionDisplayLabel } from '@/lib/domain/cycle';
 import { DEFAULT_EXPENSE_CATEGORIES } from '@/lib/store/seed-v3';
-import type { AccountSourceType, BankAccount, CashMovement, CashVault, Expense, ExpenseStatus } from '@/lib/domain/types';
+import type { AccountSourceType, BankAccount, CashMovement, CashVault, Expense, ExpenseStatus, Session } from '@/lib/domain/types';
 import { cn, formatShortDate } from '@/lib/utils';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
 import { ExpenseCategoriesDialog } from '@/components/expenses/expense-categories-dialog';
@@ -66,21 +67,39 @@ function ExpensesContent() {
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const sessionOpen = activeSession?.status === 'open';
+  const openSessions = useMemo(
+    () => sessions.filter((s) => s.status === 'open').sort((a, b) => b.periodFrom.localeCompare(a.periodFrom)),
+    [sessions],
+  );
+
+  const [sessionFilterId, setSessionFilterId] = useState(() => activeSessionId);
+  useEffect(() => {
+    if (sessionFilterId === 'all') return;
+    if (!sessions.some((s) => s.id === sessionFilterId)) {
+      setSessionFilterId(activeSessionId);
+    }
+  }, [activeSessionId, sessionFilterId, sessions]);
+
+  const filteredExpenses = useMemo(() => {
+    if (sessionFilterId === 'all') return expenses;
+    return expenses.filter((e) => e.sessionId === sessionFilterId);
+  }, [expenses, sessionFilterId]);
 
   const categories = categoriesRaw.length ? categoriesRaw : DEFAULT_EXPENSE_CATEGORIES;
   const hasAccounts = vaults.length + banks.length > 0;
-  const totals = useMemo(() => computeExpenseTotals(expenses, categories), [expenses, categories]);
-  const revenue = useMemo(
-    () => sales.filter((s) => s.sessionId === activeSessionId).reduce((acc, s) => acc + s.total, 0),
-    [sales, activeSessionId],
-  );
+  const totals = useMemo(() => computeExpenseTotals(filteredExpenses, categories), [filteredExpenses, categories]);
+  const revenue = useMemo(() => {
+    const sid = sessionFilterId === 'all' ? activeSessionId : sessionFilterId;
+    return sales.filter((s) => s.sessionId === sid).reduce((acc, s) => acc + s.total, 0);
+  }, [sales, sessionFilterId, activeSessionId]);
   const ratio = revenue > 0 ? (totals.total / revenue) * 100 : 0;
-  const pendingCount = expenses.filter((e) => e.status === 'pending').length;
+  const pendingCount = filteredExpenses.filter((e) => e.status === 'pending').length;
   const top = totals.byCategory[0];
+  const filterSession = sessionFilterId === 'all' ? null : sessions.find((s) => s.id === sessionFilterId);
 
   const sortedExpenses = useMemo(
-    () => [...expenses].sort((a, b) => +new Date(b.date) - +new Date(a.date)),
-    [expenses],
+    () => [...filteredExpenses].sort((a, b) => +new Date(b.date) - +new Date(a.date)),
+    [filteredExpenses],
   );
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -94,12 +113,12 @@ function ExpensesContent() {
         title="المصاريف"
         description="تسجيل وتصنيف المصاريف التشغيلية — كل مصروف يُخصم فوراً من خزنة أو بنك."
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => setCategoriesOpen(true)}>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setCategoriesOpen(true)}>
               <Tags className="h-4 w-4" />
               التصنيفات
             </Button>
-            <Button type="button" onClick={() => setDialogOpen(true)}>
+            <Button type="button" className="w-full sm:w-auto" onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4" />
               تسجيل مصروف
             </Button>
@@ -121,6 +140,20 @@ function ExpensesContent() {
                   : 'يجب وجود دورة مفتوحة لتسجيل المصاريف. اختر دورة من شريط الأعلى.'}
               </p>
             </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {openSessions.length > 1 ? (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="flex gap-3 p-4">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+              <AlertCircle className="h-4 w-4" />
+            </span>
+            <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+              <span className="font-semibold text-foreground">يوجد أكثر من دورة مفتوحة.</span>{' '}
+              عند تسجيل أي مصروف اختر الدورة التي ينتمي إليها — وإلا قد يُحسب في الدورة الخاطئة.
+            </p>
           </CardContent>
         </Card>
       ) : null}
@@ -152,8 +185,8 @@ function ExpensesContent() {
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <StatTile label="إجمالي المصاريف" value={<Money value={totals.total} decimals={0} />} icon={Receipt} tone="rose" hint={`${expenses.length} مصروف`} />
-        <StatTile label="نسبة من الإيرادات" value={`${ratio.toFixed(1)}%`} icon={TrendingDown} tone="sun" hint="مصاريف ÷ إيرادات الدورة" />
+        <StatTile label="إجمالي المصاريف" value={<Money value={totals.total} decimals={0} />} icon={Receipt} tone="rose" hint={`${filteredExpenses.length} مصروف${filterSession ? ` · ${sessionDisplayLabel(filterSession, 'compact')}` : ''}`} />
+        <StatTile label="نسبة من الإيرادات" value={`${ratio.toFixed(1)}%`} icon={TrendingDown} tone="sun" hint={filterSession ? `مصاريف ÷ إيرادات ${sessionDisplayLabel(filterSession, 'compact')}` : 'مصاريف ÷ إيرادات الدورة'} />
         <StatTile label="أعلى تصنيف" value={top ? top.name : '—'} icon={PieChart} tone="navy" hint={top ? moneyText(top.amount, 0) : 'لا يوجد'} />
         <StatTile label="قيد المراجعة" value={pendingCount} icon={Layers} tone={pendingCount ? 'sun' : 'neutral'} hint="مصاريف معلّقة" />
       </div>
@@ -198,18 +231,87 @@ function ExpensesContent() {
         </Card>
 
         <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>سجل المصاريف</CardTitle>
-            <CardDescription>كل المصاريف المسجّلة مرتّبة بالأحدث</CardDescription>
+          <CardHeader className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>سجل المصاريف</CardTitle>
+              <CardDescription>
+                {sessionFilterId === 'all' ? 'كل الدورات' : filterSession ? sessionDisplayLabel(filterSession, 'full') : '—'} · {sortedExpenses.length} مصروف
+              </CardDescription>
+            </div>
+            <Select value={sessionFilterId} onValueChange={setSessionFilterId}>
+              <SelectTrigger className="sm:w-52">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل الدورات</SelectItem>
+                {sessions
+                  .slice()
+                  .sort((a, b) => b.periodFrom.localeCompare(a.periodFrom))
+                  .map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {sessionDisplayLabel(s, 'compact')}
+                      {s.status === 'archived' ? ' (مؤرشفة)' : ''}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
           </CardHeader>
           <CardContent>
             {sortedExpenses.length === 0 ? (
               <EmptyState icon={Receipt} title="لا توجد مصاريف" description="ابدأ بتسجيل أول مصروف." />
             ) : (
+              <>
+                <div className="space-y-2.5 md:hidden">
+                  {sortedExpenses.map((e) => {
+                    const cat = categories.find((c) => c.id === e.categoryId);
+                    const expenseSession = sessions.find((s) => s.id === e.sessionId);
+                    return (
+                      <article key={e.id} className="rounded-xl border border-border bg-card p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[14px] font-semibold">{cat?.name ?? 'مصروف'}</p>
+                            {expenseSession ? (
+                              <p className="mt-0.5 text-[11px] text-meadow-700">{sessionDisplayLabel(expenseSession, 'compact')}</p>
+                            ) : null}
+                            {e.description ? (
+                              <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">{e.description}</p>
+                            ) : null}
+                            <p className="mt-1.5 text-[11px] text-muted-foreground">
+                              {accountLabel(e.paidFromType, e.paidFromId, vaults, banks)}
+                            </p>
+                          </div>
+                          <Money value={e.amount} decimals={0} className="shrink-0 text-[15px] font-bold text-rose-600" />
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={STATUS_VARIANT[e.status]}>{EXPENSE_STATUS_LABELS[e.status]}</Badge>
+                            <span className="text-[11px] text-muted-foreground" dir="ltr">{formatShortDate(e.date)}</span>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button type="button" size="icon" variant="ghost" className="h-9 w-9" onClick={() => setEditExpense(e)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <RowDeleteButton
+                              label={e.ref}
+                              onConfirm={async () => {
+                                const res = await deleteExpense(e.id);
+                                if (res.ok) toast.success('تم حذف المصروف');
+                                else toast.error(res.error ?? 'تعذّر الحذف');
+                                return res;
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+                <div className="hidden md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>البيان</TableHead>
+                    <TableHead>الدورة</TableHead>
                     <TableHead>المصدر</TableHead>
                     <TableHead className="text-left">المبلغ</TableHead>
                     <TableHead>الحالة</TableHead>
@@ -220,11 +322,15 @@ function ExpensesContent() {
                 <TableBody>
                   {sortedExpenses.map((e) => {
                     const cat = categories.find((c) => c.id === e.categoryId);
+                    const expenseSession = sessions.find((s) => s.id === e.sessionId);
                     return (
                       <TableRow key={e.id}>
                         <TableCell>
                           <p className="text-[12.5px] font-medium">{cat?.name ?? 'مصروف'}</p>
                           <p className="max-w-[200px] truncate text-[11px] text-muted-foreground">{e.description}</p>
+                        </TableCell>
+                        <TableCell className="text-[11.5px] text-muted-foreground">
+                          {expenseSession ? sessionDisplayLabel(expenseSession, 'compact') : '—'}
                         </TableCell>
                         <TableCell className="text-[12px] text-muted-foreground">{accountLabel(e.paidFromType, e.paidFromId, vaults, banks)}</TableCell>
                         <TableCell className="text-left"><Money value={e.amount} decimals={0} className="font-semibold text-rose-600" /></TableCell>
@@ -251,6 +357,8 @@ function ExpensesContent() {
                   })}
                 </TableBody>
               </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -260,7 +368,8 @@ function ExpensesContent() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         hasAccounts={hasAccounts}
-        sessionOpen={sessionOpen}
+        openSessions={openSessions}
+        activeSessionId={activeSessionId}
         categories={categories}
         vaults={vaults}
         banks={banks}
@@ -268,8 +377,14 @@ function ExpensesContent() {
         setupMainVault={setupMainVault}
         recordExpense={recordExpense}
       />
+      <ExpenseEditDialog
+        open={!!editExpense}
+        onOpenChange={(o) => !o && setEditExpense(null)}
+        expense={editExpense}
+        categories={categories}
+        openSessions={openSessions}
+      />
       <ExpenseCategoriesDialog open={categoriesOpen} onOpenChange={setCategoriesOpen} />
-      <ExpenseEditDialog open={!!editExpense} onOpenChange={(o) => !o && setEditExpense(null)} expense={editExpense} categories={categories} />
     </div>
   );
 }
@@ -279,7 +394,8 @@ function ExpenseRecordDialog({
   open,
   onOpenChange,
   hasAccounts,
-  sessionOpen,
+  openSessions,
+  activeSessionId,
   categories,
   vaults,
   banks,
@@ -290,7 +406,8 @@ function ExpenseRecordDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   hasAccounts: boolean;
-  sessionOpen: boolean;
+  openSessions: Session[];
+  activeSessionId: string;
   categories: { id: string; name: string }[];
   vaults: CashVault[];
   banks: BankAccount[];
@@ -303,12 +420,14 @@ function ExpenseRecordDialog({
     paidFromType: AccountSourceType;
     paidFromId: string;
     invoiceRef?: string;
+    sessionId?: string;
   }) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [step, setStep] = useState<'setup' | 'expense'>(hasAccounts ? 'expense' : 'setup');
   const [vaultName, setVaultName] = useState('الخزنة الرئيسية');
   const [opening, setOpening] = useState('10000');
   const [categoryId, setCategoryId] = useState('');
+  const [sessionId, setSessionId] = useState(activeSessionId);
   const [amount, setAmount] = useState('');
   const [desc, setDesc] = useState('');
   const [account, setAccount] = useState('');
@@ -328,7 +447,12 @@ function ExpenseRecordDialog({
     setStep(hasAccounts ? 'expense' : 'setup');
     if (categories[0]) setCategoryId(categories[0].id);
     if (accountOptions[0]) setAccount(accountOptions[0].value);
-  }, [open, hasAccounts, categories, accountOptions]);
+    const defaultSession =
+      openSessions.find((s) => s.id === activeSessionId)?.id ?? openSessions[0]?.id ?? activeSessionId;
+    setSessionId(defaultSession);
+  }, [open, hasAccounts, categories, accountOptions, openSessions, activeSessionId]);
+
+  const selectedSession = openSessions.find((s) => s.id === sessionId);
 
   const selected = accountOptions.find((o) => o.value === account);
   const balance = selected
@@ -361,7 +485,8 @@ function ExpenseRecordDialog({
   }
 
   async function handleExpense() {
-    if (!sessionOpen) return toast.error('لا توجد دورة نشطة — اختر دورة مفتوحة من شريط الأعلى.');
+    if (!openSessions.length) return toast.error('لا توجد دورة مفتوحة — أنشئ أو اختر دورة نشطة.');
+    if (!sessionId) return toast.error('اختر الدورة التي ينتمي إليها المصروف.');
     if (!categoryId) return toast.error('اختر التصنيف');
     if (!account) return toast.error('اختر مصدر الصرف');
     if (!desc.trim()) return toast.error('أدخل بيان المصروف');
@@ -379,6 +504,7 @@ function ExpenseRecordDialog({
         paidFromType,
         paidFromId,
         invoiceRef: invoice.trim() || undefined,
+        sessionId,
       });
       if (res.ok) {
         toast.success('تم تسجيل المصروف', { description: moneyText(amountNum, 0) });
@@ -421,6 +547,23 @@ function ExpenseRecordDialog({
               <DialogDescription>يُخصم المبلغ فوراً من الحساب المختار.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
+              <Field label="الدورة / الفترة" required hint="الدورة التي يُحسب فيها هذا المصروف">
+                <Select value={sessionId} onValueChange={setSessionId}>
+                  <SelectTrigger><SelectValue placeholder="اختر الدورة" /></SelectTrigger>
+                  <SelectContent>
+                    {openSessions.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {sessionDisplayLabel(s, 'full')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedSession ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    من {selectedSession.periodFrom} إلى {selectedSession.periodTo}
+                  </p>
+                ) : null}
+              </Field>
               <Field label="التصنيف" required>
                 <Select value={categoryId} onValueChange={setCategoryId}>
                   <SelectTrigger><SelectValue placeholder="اختر التصنيف" /></SelectTrigger>
@@ -459,7 +602,7 @@ function ExpenseRecordDialog({
               </Field>
             </div>
             <DialogFooter>
-              <Button type="button" variant="meadow" disabled={busy || !sessionOpen || !accountOptions.length} onClick={handleExpense}>
+              <Button type="button" variant="meadow" disabled={busy || !openSessions.length || !sessionId || !accountOptions.length} onClick={handleExpense}>
                 <Wallet className="h-4 w-4" />
                 {busy ? 'جارٍ الحفظ…' : 'تسجيل المصروف'}
               </Button>

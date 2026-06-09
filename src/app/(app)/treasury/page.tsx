@@ -123,16 +123,18 @@ function TreasuryContent() {
         title="الخزن والبنوك"
         description="مركز إدارة السيولة — كل حركة مالية موثّقة بمصدرها أو وجهتها."
         actions={
-          <>
-            <Button type="button" variant="outline" asChild>
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+            <Button type="button" variant="outline" asChild className="col-span-2 sm:col-span-1">
               <Link href="/income">
                 <TrendingUp className="h-4 w-4" />
-                مدخول خارج الخدمة
+                <span className="sm:hidden">مدخول</span>
+                <span className="hidden sm:inline">مدخول خارج الخدمة</span>
               </Link>
             </Button>
-            <Button type="button" variant="secondary" onClick={() => setOpeningOpen(true)}>
+            <Button type="button" variant="secondary" className="text-[12.5px]" onClick={() => setOpeningOpen(true)}>
               <Settings2 className="h-4 w-4" />
-              ضبط أرصدة البداية
+              <span className="hidden sm:inline">ضبط أرصدة البداية</span>
+              <span className="sm:hidden">أرصدة البداية</span>
             </Button>
             <Button type="button" variant="outline" onClick={() => setAccountOpen(true)}>
               <Plus className="h-4 w-4" />
@@ -140,9 +142,10 @@ function TreasuryContent() {
             </Button>
             <Button type="button" onClick={() => setTransferOpen(true)} disabled={snap.accounts.length < 2}>
               <ArrowLeftRight className="h-4 w-4" />
-              تحويل بين الحسابات
+              <span className="hidden sm:inline">تحويل بين الحسابات</span>
+              <span className="sm:hidden">تحويل</span>
             </Button>
-          </>
+          </div>
         }
       />
 
@@ -154,9 +157,9 @@ function TreasuryContent() {
       </div>
 
       {/* بطاقات الحسابات */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 snap-x snap-mandatory no-scrollbar md:mx-0 md:grid md:grid-cols-2 md:overflow-visible md:pb-0 xl:grid-cols-3">
         {snap.accounts.map((acc) => (
-          <Card key={acc.id} className={cn(acc.belowMin && 'border-rose-200/70')}>
+          <Card key={acc.id} className={cn('min-w-[min(100%,280px)] shrink-0 snap-start md:min-w-0 md:shrink', acc.belowMin && 'border-rose-200/70')}>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
@@ -203,12 +206,12 @@ function TreasuryContent() {
 
       {/* الحركات النقدية */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>الحركات النقدية</CardTitle>
             <CardDescription>أحدث الحركات على الخزن والبنوك</CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             {filter !== 'all' ? (
               <TurkiPdfToolbar
                 fileName={`كشف-حساب-${snap.accounts.find((a) => a.id === filter)?.name ?? ''}`}
@@ -219,7 +222,7 @@ function TreasuryContent() {
               />
             ) : null}
             <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -235,6 +238,30 @@ function TreasuryContent() {
           {filteredMovements.length === 0 ? (
             <EmptyState icon={Coins} title="لا توجد حركات" description="ستظهر الحركات هنا فور تسجيلها." />
           ) : (
+            <>
+              <div className="space-y-2.5 md:hidden">
+                {filteredMovements.map((m) => (
+                  <article key={m.id} className="rounded-xl border border-border bg-card p-3.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <Badge variant={MOVEMENT_VARIANT[m.movementType]}>{CASH_MOVEMENT_LABELS[m.movementType]}</Badge>
+                      <Money
+                        value={m.amount}
+                        decimals={0}
+                        className={cn('text-[15px] font-bold', m.direction === 'in' ? 'text-meadow-700' : 'text-rose-600')}
+                      />
+                    </div>
+                    <p className="mt-2 text-[13px] font-medium">{accountLabel(m.sourceType, m.sourceId, vaults, banks)}</p>
+                    {m.description ? (
+                      <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">{m.description}</p>
+                    ) : null}
+                    <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span className="font-mono" dir="ltr">{m.ref}</span>
+                      <span dir="ltr">{formatShortDate(m.date)}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -267,6 +294,8 @@ function TreasuryContent() {
                 ))}
               </TableBody>
             </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

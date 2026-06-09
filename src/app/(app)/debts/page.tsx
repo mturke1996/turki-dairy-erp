@@ -53,37 +53,43 @@ function BalanceOverview({
 
   return (
     <Card className="overflow-hidden border-meadow-200/60 bg-gradient-to-br from-card via-card to-meadow-50/30">
-      <CardContent className="p-5 sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <CardContent className="p-4 sm:p-6">
+        <div className="flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-meadow-700">ملخص الديون</p>
-            <p className="mt-2 text-[13px] text-muted-foreground">مجمّع من الاستلام، المبيعات، المدفوعات، والديون المسجّلة</p>
-            <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-2">
-              <div>
-                <p className="text-[11px] text-muted-foreground">صافي المركز</p>
-                <Money
-                  value={Math.abs(net)}
-                  decimals={0}
-                  className={cn('text-2xl font-bold', net >= 0 ? 'text-meadow-800' : 'text-rose-700')}
-                />
-                <p className="mt-0.5 text-[12px] font-medium text-muted-foreground">{net >= 0 ? 'لنا صافي' : 'علينا صافي'}</p>
-              </div>
+            <p className="mt-1 hidden text-[13px] text-muted-foreground sm:block">
+              مجمّع من الاستلام، المبيعات، المدفوعات، والديون المسجّلة
+            </p>
+            <div className="mt-3 sm:mt-4">
+              <p className="text-[11px] text-muted-foreground">صافي المركز</p>
+              <Money
+                value={Math.abs(net)}
+                decimals={0}
+                className={cn('text-xl font-bold sm:text-2xl', net >= 0 ? 'text-meadow-800' : 'text-rose-700')}
+              />
+              <p className="mt-0.5 text-[12px] font-medium text-muted-foreground">{net >= 0 ? 'لنا صافي' : 'علينا صافي'}</p>
             </div>
           </div>
-          <div className="w-full max-w-md space-y-2">
-            <div className="flex h-3 overflow-hidden rounded-full bg-muted">
+          <div className="w-full space-y-2 lg:max-w-md">
+            <div className="flex h-2.5 overflow-hidden rounded-full bg-muted sm:h-3">
               <div className="bg-meadow-500 transition-all" style={{ width: `${recvPct}%` }} />
               <div className="bg-rose-400 transition-all" style={{ width: `${100 - recvPct}%` }} />
             </div>
-            <div className="flex justify-between text-[11.5px]">
-              <span className="flex items-center gap-1 text-meadow-800">
-                <ArrowDownLeft className="h-3.5 w-3.5" />
-                لنا <Money value={receivables} decimals={0} className="inline font-semibold" />
-              </span>
-              <span className="flex items-center gap-1 text-rose-700">
-                علينا <Money value={payables} decimals={0} className="inline font-semibold" />
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </span>
+            <div className="grid grid-cols-2 gap-2 text-[11.5px]">
+              <div className="rounded-lg bg-meadow-50/80 px-2.5 py-2">
+                <span className="flex items-center gap-1 text-meadow-800">
+                  <ArrowDownLeft className="h-3.5 w-3.5 shrink-0" />
+                  لنا
+                </span>
+                <Money value={receivables} decimals={0} className="mt-0.5 block font-semibold" />
+              </div>
+              <div className="rounded-lg bg-rose-50/80 px-2.5 py-2 text-left">
+                <span className="flex items-center justify-end gap-1 text-rose-700">
+                  علينا
+                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+                </span>
+                <Money value={payables} decimals={0} className="mt-0.5 block font-semibold" />
+              </div>
             </div>
           </div>
         </div>
@@ -129,7 +135,7 @@ function DebtSection({
           <p className="py-6 text-center text-[13px] text-muted-foreground">{emptyTitle}</p>
         ) : (
           <div className="space-y-2">
-            {rows.slice(0, 8).map((row) => {
+            {rows.slice(0, 12).map((row) => {
               const KindIcon = KIND_ICON[row.kind];
               return (
                 <button
@@ -155,8 +161,8 @@ function DebtSection({
                 </button>
               );
             })}
-            {rows.length > 8 ? (
-              <p className="pt-1 text-center text-[11px] text-muted-foreground">+ {rows.length - 8} آخرين — استخدم البحث أدناه</p>
+            {rows.length > 12 ? (
+              <p className="pt-1 text-center text-[11px] text-muted-foreground">+ {rows.length - 12} آخرين — استخدم البحث أدناه</p>
             ) : null}
           </div>
         )}
@@ -252,13 +258,14 @@ export default function DebtsPage() {
       <PageHeader
         eyebrow="المالية"
         title="الديون"
-        description="مركز موحّد لكل الديون — سجّل ديناً جديداً، أو «تسوية» لدين قائم من الجدول، أو اضغط أي طرف للتفاصيل."
+        description="سجّل ديناً، سوِّ قائماً، أو اضغط أي طرف للتفاصيل."
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <TurkiPdfToolbar
               fileName="سجل-الديون"
               label="PDF"
               variant="secondary"
+              className="w-full sm:w-auto"
               disabled={debtPdfRows.length === 0}
               render={async () => (
                 <DebtsRegisterPDF
@@ -412,7 +419,7 @@ export default function DebtsPage() {
             <CardTitle className="text-[15px]">سجل الديون المسجّلة</CardTitle>
             <CardDescription>تعديل، تسوية، أو حذف أي دين يدوي — زر «تسوية» يسدّد الدين ويربط الخزينة</CardDescription>
           </CardHeader>
-          <CardContent className="overflow-x-auto">
+          <CardContent className="space-y-4">
             <DebtEntriesTable entries={d.debts.entries} />
           </CardContent>
         </Card>

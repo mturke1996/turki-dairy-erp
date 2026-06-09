@@ -5,7 +5,7 @@ import { buildInventoryLedger, round } from '@/lib/domain/inventory';
 import { computeSessionSummary, computeCustomerStats, computeFarmerSessionStats, computeEmployeeAdvanceBalance, buildSessionCarryForwardSnapshot, type ErpData } from '@/lib/domain/calculations';
 import { accountBalance } from '@/lib/domain/treasury';
 import { cycleForDate, cycleOfMonth } from '@/lib/domain/cycle';
-import { defaultDebtDirection, debtRemainingAmount, debtSettlementIsCashOut, isDebtFullySettled } from '@/lib/domain/debt';
+import { allocatePaymentToPartyDebts, applySettlementToEntry, defaultDebtDirection, debtRemainingAmount, debtSettlementIsCashOut, isDebtFullySettled } from '@/lib/domain/debt';
 import type {
   AccountSourceType,
   AppSettings,
@@ -238,6 +238,7 @@ interface ErpState {
     unitCost: number;
     note?: string;
   }) => Promise<MutationResult>;
+  clearSessionOpeningStock: () => Promise<MutationResult>;
   recordTransfer: (input: {
     fromType: AccountSourceType;
     fromId: string;
@@ -258,8 +259,12 @@ interface ErpState {
     paidFromId: string;
     date?: string;
     invoiceRef?: string;
+    sessionId?: string;
   }) => Promise<MutationResult>;
-  updateExpense: (id: string, patch: Partial<Pick<Expense, 'categoryId' | 'amount' | 'description' | 'date' | 'invoiceRef'>>) => Promise<MutationResult>;
+  updateExpense: (
+    id: string,
+    patch: Partial<Pick<Expense, 'categoryId' | 'amount' | 'description' | 'date' | 'invoiceRef' | 'sessionId'>>,
+  ) => Promise<MutationResult>;
   deleteExpense: (id: string) => Promise<MutationResult>;
   addExpenseCategory: (input: { name: string; group: ExpenseGroup; budgetMonthly?: number; isRecurring?: boolean }) => Promise<MutationResult>;
   updateExpenseCategory: (id: string, patch: Partial<ExpenseCategory>) => Promise<MutationResult>;
@@ -397,6 +402,19 @@ function requireOpenSession(state: ErpState): MutationResult & { session?: Sessi
   const session = state.sessions.find((s) => s.id === state.activeSessionId);
   if (!session) return { ok: false, error: 'لا توجد دورة نشطة.' };
   if (session.status === 'archived') return { ok: false, error: 'الدورة مؤرشفة — لا يمكن تسجيل عمليات جديدة.' };
+  return { ok: true, session };
+}
+
+function resolveOpenSession(
+  state: ErpState,
+  sessionId?: string,
+): MutationResult & { session?: Session } {
+  const id = sessionId ?? state.activeSessionId;
+  const session = state.sessions.find((s) => s.id === id);
+  if (!session) return { ok: false, error: 'الدورة غير موجودة.' };
+  if (session.status === 'archived') {
+    return { ok: false, error: 'لا يمكن تسجيل عمليات على دورة مؤرشفة.' };
+  }
   return { ok: true, session };
 }
 
@@ -1015,8 +1033,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           : null;
 
         const audit = makeAudit(state, 'payment', tx.id, 'pay', `دفعة للفلاح ${farmer?.fullName ?? ''}: ${formatMoney(amount, { decimals: 0 })}`);
+        const debtAlloc = allocatePaymentToPartyDebts(state.debtEntries, 'farmer', input.farmerId, amount, ['payable']);
         const dbOps: { table: string; rows: Record<string, unknown>[] }[] = [
           { table: 'payments', rows: [tx as unknown as Record<string, unknown>] },
+          ...debtAlloc.updates.map((row) => ({ table: 'debt_entries', rows: [row as unknown as Record<string, unknown>] })),
         ];
         if (movement) dbOps.push({ table: 'cash_movements', rows: [movement as unknown as Record<string, unknown>] });
 
@@ -1024,6 +1044,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           () =>
             set((s) => ({
               payments: [tx, ...s.payments],
+              debtEntries: debtAlloc.entries,
               cashMovements: movement ? [movement, ...s.cashMovements] : s.cashMovements,
               auditLogs: [audit, ...s.auditLogs],
             })),
@@ -1079,8 +1100,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           : null;
 
         const audit = makeAudit(state, 'payment', tx.id, 'pay', `تحصيل من العميل ${customer?.entityName ?? ''}: ${formatMoney(amount, { decimals: 0 })}`);
+        const debtAlloc = allocatePaymentToPartyDebts(state.debtEntries, 'customer', input.customerId, amount, ['receivable']);
         const dbOps: { table: string; rows: Record<string, unknown>[] }[] = [
           { table: 'payments', rows: [tx as unknown as Record<string, unknown>] },
+          ...debtAlloc.updates.map((row) => ({ table: 'debt_entries', rows: [row as unknown as Record<string, unknown>] })),
         ];
         if (movement) dbOps.push({ table: 'cash_movements', rows: [movement as unknown as Record<string, unknown>] });
 
@@ -1088,6 +1111,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           () =>
             set((s) => ({
               payments: [tx, ...s.payments],
+              debtEntries: debtAlloc.entries,
               cashMovements: movement ? [movement, ...s.cashMovements] : s.cashMovements,
               auditLogs: [audit, ...s.auditLogs],
             })),
@@ -1293,15 +1317,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
                 ? state.customers.find((c) => c.id === entry.partyId)?.entityName ?? 'عميل'
                 : state.employees.find((e) => e.id === entry.partyId)?.fullName ?? 'موظف';
 
-        const newSettled = round((entry.settledAmount ?? 0) + amount);
-        const newAmount = round(Math.max(0, entry.amount - amount));
-        const fullySettled = newAmount <= 0.01;
-        const updatedEntry: DebtEntry = {
-          ...entry,
-          amount: newAmount,
-          settledAmount: newSettled,
-          settledAt: fullySettled ? new Date().toISOString() : entry.settledAt,
-        };
+        const updatedEntry = applySettlementToEntry(entry, amount);
 
         const noteSuffix = input.notes?.trim() ? ` — ${input.notes.trim()}` : '';
         const settlementNote = `تسوية دين ${entry.ref}${noteSuffix}`;
@@ -1842,6 +1858,49 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         return res.ok ? { ok: true, id: session.id } : res;
       },
 
+      clearSessionOpeningStock: async () => {
+        const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok || !gate.session) return gate;
+        const session = gate.session;
+        if (session.openingStock <= 0) {
+          return { ok: false, error: 'لا يوجد رصيد افتتاحي مسجّل لهذه الدورة.' };
+        }
+
+        const openingAdjIds = state.adjustments
+          .filter(
+            (a) =>
+              a.sessionId === session.id &&
+              (a.reason.includes('رصيد افتتاحي') || a.reason.includes('متبقي من الدورة')),
+          )
+          .map((a) => a.id);
+        const updatedSession = { ...session, openingStock: 0, openingAvgCost: 0 };
+        const audit = makeAudit(
+          state,
+          'session',
+          session.id,
+          'update',
+          `إلغاء مخزون افتتاحي للدورة «${session.label}» (${formatLiters(session.openingStock, 0, false)})`,
+        );
+        const dbOps: { table: string; rows?: Record<string, unknown>[]; deletes?: string[] }[] = [
+          { table: 'sessions', rows: [updatedSession as unknown as Record<string, unknown>] },
+        ];
+        if (openingAdjIds.length) {
+          dbOps.push({ table: 'inventory_adjustments', deletes: openingAdjIds });
+        }
+
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              sessions: s.sessions.map((x) => (x.id === session.id ? updatedSession : x)),
+              adjustments: s.adjustments.filter((a) => !openingAdjIds.includes(a.id)),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          dbOps,
+        );
+        return res.ok ? { ok: true, id: session.id } : res;
+      },
+
       recordTransfer: async (input) => {
         const state = get();
         const gate = requireOpenSession(state);
@@ -1918,8 +1977,8 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       // ── v3.0: المصاريف ───────────────────────────────────
       recordExpense: async (input) => {
         const state = get();
-        const gate = requireOpenSession(state);
-        if (!gate.ok) return gate;
+        const gate = resolveOpenSession(state, input.sessionId);
+        if (!gate.ok || !gate.session) return gate;
         if (input.amount <= 0) return { ok: false, error: 'المبلغ يجب أن يكون أكبر من صفر.' };
         const cat = state.expenseCategories.find((c) => c.id === input.categoryId);
         if (!cat) return { ok: false, error: 'التصنيف غير موجود.' };
@@ -1929,6 +1988,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         const date = input.date ?? new Date().toISOString();
         const id = uid('exp-');
         const amount = round(input.amount);
+        const sessionId = gate.session.id;
         const expense: Expense = {
           id,
           ref: nextRef('EXP', state.expenses),
@@ -1939,7 +1999,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           paidFromType: input.paidFromType,
           paidFromId: input.paidFromId,
           invoiceRef: input.invoiceRef,
-          sessionId: state.activeSessionId,
+          sessionId,
           status: 'approved',
           recordedBy: state.auth?.name,
           createdAt: new Date().toISOString(),
@@ -1955,7 +2015,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           referenceType: 'expense',
           referenceId: id,
           description: input.description,
-          sessionId: state.activeSessionId,
+          sessionId,
           date,
           createdAt: new Date().toISOString(),
         };
@@ -1979,15 +2039,22 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         const state = get();
         const existing = state.expenses.find((e) => e.id === id);
         if (!existing) return { ok: false, error: 'المصروف غير موجود.' };
+        let sessionId = existing.sessionId;
+        if (patch.sessionId != null && patch.sessionId !== existing.sessionId) {
+          const gate = resolveOpenSession(state, patch.sessionId);
+          if (!gate.ok || !gate.session) return gate;
+          sessionId = gate.session.id;
+        }
         const updated: Expense = {
           ...existing,
           ...patch,
+          sessionId,
           amount: patch.amount != null ? round(patch.amount) : existing.amount,
         };
         if (updated.amount <= 0) return { ok: false, error: 'المبلغ غير صالح.' };
         const cm = state.cashMovements.find((m) => m.referenceId === id && m.referenceType === 'expense');
         const updatedCm = cm
-          ? { ...cm, amount: updated.amount, description: updated.description, date: updated.date }
+          ? { ...cm, amount: updated.amount, description: updated.description, date: updated.date, sessionId }
           : null;
         const audit = makeAudit(state, 'expense', id, 'update', `تعديل مصروف ${existing.ref}`);
         const res = await mutateWithDb(

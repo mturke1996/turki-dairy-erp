@@ -8,11 +8,17 @@ import { usePermission } from '@/lib/store/use-permission';
 export function RowDeleteButton({
   label,
   onConfirm,
+  allowed,
+  showLabel,
 }: {
   label: string;
   onConfirm: () => Promise<{ ok: boolean; error?: string }>;
+  /** تجاوز صلاحية الحذف الافتراضية (مثلاً supply.record في المخزون) */
+  allowed?: boolean;
+  showLabel?: boolean;
 }) {
-  const canDelete = usePermission('transactions.delete');
+  const canDeleteAdmin = usePermission('transactions.delete');
+  const canDelete = allowed ?? canDeleteAdmin;
   const [busy, setBusy] = useState(false);
   if (!canDelete) return null;
 
@@ -24,6 +30,23 @@ export function RowDeleteButton({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (showLabel) {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-8 gap-1 text-[11px] text-rose-600 hover:text-rose-700"
+        disabled={busy}
+        onClick={click}
+        aria-label={`حذف ${label}`}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        حذف
+      </Button>
+    );
   }
 
   return (

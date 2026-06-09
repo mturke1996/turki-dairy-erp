@@ -56,13 +56,14 @@ export function PaymentDialog({
 
   useEffect(() => {
     if (open) {
-      setAmount(defaultAmount ? String(defaultAmount) : '');
+      const initial = defaultAmount ?? (outstanding > 0 ? Math.round(outstanding) : '');
+      setAmount(initial ? String(initial) : '');
       setSettlementComplete(settlementDefault ?? false);
       setSource('none');
       setReference('');
       setNotes('');
     }
-  }, [open, defaultAmount, settlementDefault]);
+  }, [open, defaultAmount, settlementDefault, outstanding]);
 
   const accounts = useMemo(
     () => [
@@ -115,9 +116,14 @@ export function PaymentDialog({
         </DialogHeader>
 
         <div className="flex items-center justify-between rounded-xl bg-canvas-sunken px-4 py-3 text-[13px]">
-          <span className="text-muted-foreground">{isFarmer ? 'الدين' : 'الديون القائمة'}</span>
-          <Money value={outstanding} className="font-bold" />
+          <span className="text-muted-foreground">{isFarmer ? 'الدين (له)' : 'الديون القائمة'}</span>
+          <Money value={Math.max(0, outstanding)} className="font-bold" />
         </div>
+        {isFarmer && outstanding > 0 ? (
+          <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+            يُخصَّم المبلغ أولاً من الديون المسجّلة، ثم من مستحقات الاستلام.
+          </p>
+        ) : null}
 
         <div className="space-y-4">
           <Field label="المبلغ" required>

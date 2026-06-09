@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Warehouse, Coins, Gauge, SlidersHorizontal, ArrowDownUp, PackagePlus, Pencil } from 'lucide-react';
+import { Warehouse, Coins, Gauge, SlidersHorizontal, ArrowDownUp, PackagePlus, Pencil, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,11 +41,13 @@ export default function InventoryPage() {
   const data = useErpData();
   const d = useDerived();
   const setSessionOpeningStock = useErpStore((s) => s.setSessionOpeningStock);
+  const clearSessionOpeningStock = useErpStore((s) => s.clearSessionOpeningStock);
   const deleteAdjustment = useErpStore((s) => s.deleteAdjustment);
   const deleteSupply = useErpStore((s) => s.deleteSupply);
   const deleteSale = useErpStore((s) => s.deleteSale);
   const canAdjust = usePermission('supply.record');
   const canSell = usePermission('sales.record');
+  const canDeleteAdmin = usePermission('transactions.delete');
   const [sessionId, setSessionId] = useState(() => d.activeSession?.id ?? 'all');
   const [adjOpen, setAdjOpen] = useState(false);
   const [openingOpen, setOpeningOpen] = useState(false);
@@ -61,6 +63,14 @@ export default function InventoryPage() {
 
   function canModifyEntry(entry: InventoryLedgerEntry) {
     return openSessionIds.has(entry.sessionId);
+  }
+
+  function canDeleteEntry(entry: InventoryLedgerEntry) {
+    if (canDeleteAdmin) return true;
+    if (entry.sourceKind === 'supply' && canAdjust) return true;
+    if (entry.sourceKind === 'adjustment' && canAdjust) return true;
+    if (entry.sourceKind === 'sale' && canSell) return true;
+    return false;
   }
 
   function stockBaseForAdjustment(adjId: string) {
@@ -121,6 +131,43 @@ export default function InventoryPage() {
         <StatTile label="قيمة المخزون" value={<Money value={d.totals.inventoryValue} decimals={0} />} icon={Coins} tone="navy" />
         <StatTile label="متوسط التكلفة" value={<Money value={d.totals.wac} decimals={3} />} icon={Gauge} tone="sun" hint="للّتر الواحد" />
       </div>
+
+      {d.activeSession?.status === 'open' && d.activeSession.openingStock > 0 && canAdjust ? (
+        <Card className="border-amber-200 bg-amber-50/40">
+          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-[13px]">
+              <p className="font-medium text-amber-950">رصيد افتتاحي مسجّل للدورة الحالية</p>
+              <p className="mt-1 text-muted-foreground">
+                <Liters value={d.activeSession.openingStock} className="font-semibold text-foreground" />
+                {' · '}
+                <Money value={d.activeSession.openingAvgCost} decimals={3} className="font-semibold" />
+                {' / لتر'}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1 text-rose-600 hover:text-rose-700"
+              onClick={async () => {
+                if (
+                  !confirm(
+                    `حذف الرصيد الافتتاحي (${Math.round(d.activeSession!.openingStock).toLocaleString('ar-LY')} لتر)؟ سيعود المخزون كما كان قبل هذا الإدخال.`,
+                  )
+                ) {
+                  return;
+                }
+                const res = await clearSessionOpeningStock();
+                if (res.ok) toast.success('تم حذف الرصيد الافتتاحي');
+                else toast.error(res.error ?? 'تعذّر الحذف');
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              حذف الرصيد الافتتاحي
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -205,7 +252,7 @@ export default function InventoryPage() {
                     ((e.sourceKind === 'supply' && canAdjust) ||
                       (e.sourceKind === 'sale' && canSell) ||
                       (e.sourceKind === 'adjustment' && canAdjust));
-                  const showActions = modifiable && (canEdit || e.sourceKind !== 'opening');
+                  const showActions = modifiable && (canEdit || (e.sourceKind !== 'opening' && canDeleteEntry(e)));
 
                   function openEdit() {
                     if (e.sourceKind === 'supply') {
@@ -259,8 +306,8 @@ export default function InventoryPage() {
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
                             ) : null}
-                            {e.sourceKind !== 'opening' ? (
-                              <RowDeleteButton label={e.ref} onConfirm={confirmDelete} />
+                            {e.sourceKind !== 'opening' && canDeleteEntry(e) ? (
+                              <RowDeleteButton label={e.ref} allowed onConfirm={confirmDelete} />
                             ) : null}
                           </div>
                         ) : null}
@@ -305,7 +352,7 @@ export default function InventoryPage() {
                     <TableCell>
                       {modifiable ? (
                         <div className="flex justify-end gap-1">
-                          {canAdjust ? (
+                          {(canAdjust || canDeleteAdmin) ? (
                             <Button
                               type="button"
                               size="icon"
@@ -317,15 +364,19 @@ export default function InventoryPage() {
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
                           ) : null}
-                          <RowDeleteButton
-                            label={a.ref}
-                            onConfirm={async () => {
-                              const res = await deleteAdjustment(a.id);
-                              if (res.ok) toast.success('تم حذف التسوية');
-                              else toast.error(res.error ?? 'تعذّر الحذف');
-                              return res;
-                            }}
-                          />
+                          {(canAdjust || canDeleteAdmin) ? (
+                            <RowDeleteButton
+                              label={a.ref}
+                              allowed
+                              showLabel
+                              onConfirm={async () => {
+                                const res = await deleteAdjustment(a.id);
+                                if (res.ok) toast.success('تم حذف التسوية');
+                                else toast.error(res.error ?? 'تعذّر الحذف');
+                                return res;
+                              }}
+                            />
+                          ) : null}
                         </div>
                       ) : null}
                     </TableCell>
