@@ -198,6 +198,10 @@ interface ErpState {
     sourceId?: string;
   }) => Promise<MutationResult>;
   addAdjustment: (input: { quantity: number; unitCost: number; reason: string; date?: string }) => Promise<MutationResult>;
+  updateAdjustment: (
+    id: string,
+    patch: Partial<Pick<InventoryAdjustment, 'quantity' | 'unitCost' | 'reason' | 'date'>>,
+  ) => Promise<MutationResult>;
   updateSupply: (
     id: string,
     patch: Partial<
@@ -1397,6 +1401,54 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           [{ table: 'inventory_adjustments', rows: [tx as unknown as Record<string, unknown>] }],
         );
         return res.ok ? { ok: true, id: tx.id } : res;
+      },
+
+      updateAdjustment: async (id, patch) => {
+        const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
+        const existing = state.adjustments.find((a) => a.id === id);
+        if (!existing) return { ok: false, error: 'التسوية غير موجودة.' };
+        if (existing.sessionId !== state.activeSessionId) {
+          return { ok: false, error: 'يمكن تعديل تسويات الدورة المفتوحة الحالية فقط.' };
+        }
+
+        const quantity = round(patch.quantity ?? existing.quantity);
+        const unitCost = round(patch.unitCost ?? existing.unitCost, 3);
+        const reason = (patch.reason ?? existing.reason).trim();
+        if (quantity === 0) return { ok: false, error: 'حدّد كمية التسوية.' };
+        if (!reason) return { ok: false, error: 'أدخل سبب التسوية.' };
+
+        const baseStock = buildInventoryLedger(
+          state.supplies,
+          state.sales,
+          state.adjustments.filter((a) => a.id !== id),
+          state.sessions,
+        ).currentStock;
+        if (baseStock + quantity < -0.001) {
+          return {
+            ok: false,
+            error: `كمية النقص تتجاوز المخزون المتاح (${formatLiters(Math.floor(baseStock), 0, false)}).`,
+          };
+        }
+
+        const updated: InventoryAdjustment = {
+          ...existing,
+          quantity,
+          unitCost,
+          reason,
+          date: patch.date ?? existing.date,
+        };
+        const audit = makeAudit(state, 'adjustment', id, 'update', `تعديل تسوية ${existing.ref}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              adjustments: s.adjustments.map((a) => (a.id === id ? updated : a)),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'inventory_adjustments', rows: [updated as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id } : res;
       },
 
       deleteSupply: async (id) => {
