@@ -7,11 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Money, Liters } from '@/components/shared/money';
 import { useErpStore } from '@/lib/store/use-erp-store';
+import { useDerived } from '@/lib/store/use-derived';
 import { useCycle } from '@/lib/store/use-cycle';
 import { computeTreasury, computeExpenseTotals } from '@/lib/domain/treasury';
 import { cn } from '@/lib/utils';
 
 export function DashboardV3Panels() {
+  const d = useDerived();
   const vaults = useErpStore((s) => s.vaults);
   const banks = useErpStore((s) => s.banks);
   const movements = useErpStore((s) => s.cashMovements);
@@ -37,11 +39,14 @@ export function DashboardV3Panels() {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
       {/* الخزن والبنوك */}
-      <PanelCard href="/treasury" icon={Wallet} title="الخزن والبنوك" subtitle="المركز النقدي اللحظي">
+      <PanelCard href="/treasury" icon={Wallet} title="الخزائن والبنوك" subtitle="المركز النقدي اللحظي">
         <div className="mb-3">
-          <p className="text-[11px] text-muted-foreground">المجموع الكلي</p>
+          <p className="text-[11px] text-muted-foreground">بعد التسويات</p>
           <p className="text-[22px] font-bold tracking-tight text-foreground">
-            <Money value={treasury.total} decimals={0} />
+            <Money value={d.totals.finalNetPosition} decimals={0} />
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            نقد: <Money value={treasury.total} decimals={0} className="inline text-[11px] font-semibold" />
           </p>
         </div>
         <div className="space-y-1.5">

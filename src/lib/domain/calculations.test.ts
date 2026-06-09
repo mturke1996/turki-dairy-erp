@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeFarmerSessionStats, buildSessionCarryForwardSnapshot } from '@/lib/domain/calculations';
+import { computeFarmerSessionStats, buildSessionCarryForwardSnapshot, computeDerived } from '@/lib/domain/calculations';
 import type { Farmer, Payment, Session, SupplyTransaction } from '@/lib/domain/types';
 
 const farmer: Farmer = {
@@ -127,5 +127,48 @@ describe('buildSessionCarryForwardSnapshot', () => {
     expect(snap.farmers[0].balance).toBe(200);
     expect(snap.totals.openingStock).toBe(50);
     expect(snap.totals.payables).toBe(200);
+  });
+});
+
+describe('computeDerived adjustedNetPosition', () => {
+  it('chains treasury cash with debts and inventory sequentially', () => {
+    const derived = computeDerived({
+      sessions: [{
+        id: 's1', label: 'يونيو', periodFrom: '2026-06-01', periodTo: '2026-06-30',
+        status: 'open', openingStock: 0, openingAvgCost: 2, openingPayables: 0, openingReceivables: 0,
+        createdAt: '2026-06-01',
+      }],
+      activeSessionId: 's1',
+      farmers: [farmer],
+      customers: [],
+      employees: [],
+      supplies: [{
+        id: 'sup1', ref: 'SUP-1', farmerId: 'f1', sessionId: 's1', date: '2026-06-01',
+        quantity: 100, unitPrice: 2, total: 200, qualityTier: 'A', createdAt: '2026-06-01',
+      }],
+      sales: [],
+      payments: [],
+      debtEntries: [],
+      adjustments: [],
+      expenses: [],
+      payrollBatches: [],
+      vaults: [{
+        id: 'v1', code: 'V-01', name: 'الرئيسية', openingBalance: 50_000, isActive: true,
+        location: 'المقر', responsible: 'أمين', minThreshold: 0, createdAt: '2026-01-01',
+      }],
+      banks: [],
+      cashMovements: [],
+      externalIncomes: [],
+      settings: { minStockThreshold: 0, defaultBuyPrice: 2, defaultSellPrice: 2.5 },
+    });
+
+    expect(derived.totals.netCash).toBe(50_000);
+    expect(derived.totals.payables).toBe(200);
+    expect(derived.totals.inventoryValue).toBeGreaterThan(0);
+    expect(derived.adjustedNetPosition.cash).toBe(derived.totals.netCash);
+    expect(derived.totals.finalNetPosition).toBe(derived.adjustedNetPosition.finalBalance);
+    expect(derived.adjustedNetPosition.finalBalance).toBe(
+      derived.totals.netCash + derived.totals.receivables + derived.totals.inventoryValue - derived.totals.payables,
+    );
   });
 });

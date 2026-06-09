@@ -17,8 +17,8 @@ import {
   journalForSupply,
 } from './accounting';
 import { buildInventoryLedger, round, type InventoryResult } from './inventory';
-import { computeTreasury } from './treasury';
-import { debtBalanceContribution, resolveDebtDirection } from './debt';
+import { computeTreasury, computeAdjustedNetPosition, type AdjustedNetPosition } from './treasury';
+import { debtBalanceContribution, paymentNetOfDebtSettlement, resolveDebtDirection } from './debt';
 import type {
   BankAccount,
   CashMovement,
@@ -150,16 +150,16 @@ export function computeFarmerStats(
   );
   const totalSupplyValue = sum(fs.map((s) => s.total));
   const totalSupplied = sum(fs.map((s) => s.quantity));
-  const paidTotal = sum(ps.map((p) => p.amount));
+  const paidToSupply = sum(ps.map((p) => paymentNetOfDebtSettlement(p)));
   const lastSupplyDate = fs.length
     ? fs.reduce((m, s) => (s.date > m ? s.date : m), fs[0].date)
     : undefined;
   return {
     ...farmer,
-    creditBalance: round(totalSupplyValue - paidTotal + manualDebt),
+    creditBalance: round(totalSupplyValue - paidToSupply + manualDebt),
     totalSupplied: round(totalSupplied),
     totalSupplyValue: round(totalSupplyValue),
-    paidTotal: round(paidTotal),
+    paidTotal: round(sum(ps.map((p) => p.amount))),
     avgPrice: totalSupplied > 0 ? round(totalSupplyValue / totalSupplied, 3) : farmer.defaultBuyPrice,
     supplyCount: fs.length,
     lastSupplyDate,
@@ -226,13 +226,13 @@ export function computeFarmerSessionStats(
   const sampleQty = sum(fs.map((s) => s.sampleQty ?? 0));
   const billableQty = round(suppliedQty - sampleQty);
   const suppliedValue = sum(fs.map((s) => s.total));
-  const paidAmount = sum(ps.map((p) => p.amount));
+  const paidAmount = sum(ps.map((p) => paymentNetOfDebtSettlement(p)));
   const balance = round(Math.max(0, carried + suppliedValue - paidAmount + manualDebt));
 
   let status: FarmerSessionStats['status'] = 'none';
   if (suppliedValue > 0.01 || carried > 0.01) {
     if (balance <= 0.01 || ps.some((p) => p.settlementComplete)) status = 'paid';
-    else if (paidAmount > 0.01) status = 'partial';
+    else if (sum(ps.map((p) => p.amount)) > 0.01) status = 'partial';
     else status = 'pending';
   }
 
@@ -246,7 +246,7 @@ export function computeFarmerSessionStats(
     sampleQty: round(sampleQty),
     billableQty,
     suppliedValue: round(suppliedValue),
-    paidAmount: round(paidAmount),
+    paidAmount: round(sum(ps.map((p) => p.amount))),
     balance,
     status,
     supplyCount: fs.length,
@@ -299,13 +299,13 @@ export function computeCustomerSessionStats(
   );
   const soldQty = sum(ss.map((s) => s.quantity));
   const soldValue = sum(ss.map((s) => s.total));
-  const receivedAmount = sum(ps.map((p) => p.amount));
-  const balance = round(Math.max(0, carried + soldValue - receivedAmount + manualDebt));
+  const receivedToSales = sum(ps.map((p) => paymentNetOfDebtSettlement(p)));
+  const balance = round(Math.max(0, carried + soldValue - receivedToSales + manualDebt));
 
   let status: CustomerSessionStats['status'] = 'none';
   if (soldValue > 0.01 || carried > 0.01) {
     if (balance <= 0.01) status = 'paid';
-    else if (receivedAmount > 0.01) status = 'partial';
+    else if (sum(ps.map((p) => p.amount)) > 0.01) status = 'partial';
     else status = 'pending';
   }
 
@@ -317,7 +317,7 @@ export function computeCustomerSessionStats(
     carriedForward: carried,
     soldQty: round(soldQty),
     soldValue: round(soldValue),
-    receivedAmount: round(receivedAmount),
+    receivedAmount: round(sum(ps.map((p) => p.amount))),
     balance,
     status,
     saleCount: ss.length,
@@ -448,9 +448,9 @@ export function computeCustomerStats(
   );
   const totalRevenue = sum(cs.map((s) => s.total));
   const totalPurchased = sum(cs.map((s) => s.quantity));
-  const receivedTotal = sum(ps.map((p) => p.amount));
-  const outstanding = round(totalRevenue - receivedTotal + manualDebt);
-  const aging = computeAging(cs, receivedTotal);
+  const receivedToSales = sum(ps.map((p) => paymentNetOfDebtSettlement(p)));
+  const outstanding = round(totalRevenue - receivedToSales + manualDebt);
+  const aging = computeAging(cs, receivedToSales);
   const overdueAmount = round(aging.d1_30 + aging.d31_60 + aging.d61_90 + aging.d90_plus);
   const lastSaleDate = cs.length
     ? cs.reduce((m, s) => (s.date > m ? s.date : m), cs[0].date)
@@ -460,7 +460,7 @@ export function computeCustomerStats(
     outstanding,
     totalPurchased: round(totalPurchased),
     totalRevenue: round(totalRevenue),
-    receivedTotal: round(receivedTotal),
+    receivedTotal: round(sum(ps.map((p) => p.amount))),
     avgPrice: totalPurchased > 0 ? round(totalRevenue / totalPurchased, 3) : customer.defaultSellPrice,
     saleCount: cs.length,
     overdueAmount,
@@ -789,7 +789,10 @@ export interface DerivedData {
     employeeAdvances: number;
     overdue: number;
     netCash: number;
+    finalNetPosition: number;
   };
+  /** الرصيد النهائي = نقد + لنا + مخزون − علينا (حساب متسلسل) */
+  adjustedNetPosition: AdjustedNetPosition;
   alerts: SystemAlert[];
 }
 
@@ -811,6 +814,12 @@ export function computeDerived(data: ErpData): DerivedData {
   const receivables = debts.totalReceivables;
   const overdue = round(sum(customers.map((c) => c.overdueAmount)));
   const treasury = computeTreasury(data.vaults, data.banks, data.cashMovements);
+  const adjustedNetPosition = computeAdjustedNetPosition({
+    cash: treasury.total,
+    receivables,
+    inventoryValue: inv.currentValue,
+    payables,
+  });
 
   const alerts = buildAlerts({ inv, customers, farmers, data });
 
@@ -834,7 +843,9 @@ export function computeDerived(data: ErpData): DerivedData {
       employeeAdvances: debts.employeeAdvances,
       overdue,
       netCash: treasury.total,
+      finalNetPosition: adjustedNetPosition.finalBalance,
     },
+    adjustedNetPosition,
     alerts,
   };
 }

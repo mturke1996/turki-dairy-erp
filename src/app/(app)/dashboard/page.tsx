@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { KpiCard } from '@/components/dashboard/kpi-card';
 import { FlowChart } from '@/components/dashboard/flow-chart';
 import { ProfitBars } from '@/components/dashboard/profit-bars';
+import { NetPositionCard } from '@/components/dashboard/net-position-card';
 import { DashboardV3Panels } from '@/components/dashboard/v3-panels';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -137,6 +138,9 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* المركز المالي بعد التسويات — نفس منطق صفحة الخزائن */}
+      <NetPositionCard position={d.adjustedNetPosition} />
+
       {/* مؤشرات ثانوية */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
@@ -167,11 +171,12 @@ export default function DashboardPage() {
           hint="المتوسط المرجّح المتحرّك"
         />
         <KpiCard
-          label="صافي المركز النقدي"
+          label="النقد المتاح"
           value={<Money value={d.totals.netCash} decimals={0} />}
           icon={Coins}
           accent={d.totals.netCash >= 0 ? 'meadow' : 'rose'}
-          hint="المحصّل − المدفوع"
+          hint="خزائن + بنوك (قبل التسويات)"
+          href="/treasury"
         />
       </div>
 

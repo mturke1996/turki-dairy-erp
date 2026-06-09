@@ -2,29 +2,37 @@
  * منطق الديون — اتجاه (له/عليه) وتأثير على الأرصدة.
  */
 
-import type { DebtEntry, DebtPartyKind } from './types';
+import type { DebtEntry, DebtPartyKind, Payment } from "./types";
 
-export type DebtDirection = 'payable' | 'receivable';
+export type DebtDirection = "payable" | "receivable";
 
 /** الاتجاه الافتراضي حسب نوع الطرف (للسجلات القديمة بدون direction). */
-export function resolveDebtDirection(entry: Pick<DebtEntry, 'partyKind' | 'direction'>): DebtDirection {
+export function resolveDebtDirection(
+  entry: Pick<DebtEntry, "partyKind" | "direction">,
+): DebtDirection {
   if (entry.direction) return entry.direction;
-  if (entry.partyKind === 'farmer') return 'payable';
-  if (entry.partyKind === 'customer' || entry.partyKind === 'employee') return 'receivable';
-  return 'payable';
+  if (entry.partyKind === "farmer") return "payable";
+  if (entry.partyKind === "customer" || entry.partyKind === "employee")
+    return "receivable";
+  return "payable";
 }
 
 /** المبلغ المتبقي على دين مسجّل (amount يُخفَّض عند كل تسوية). */
-export function debtRemainingAmount(entry: Pick<DebtEntry, 'amount'>): number {
+export function debtRemainingAmount(entry: Pick<DebtEntry, "amount">): number {
   return Math.max(0, entry.amount);
 }
 
-export function isDebtFullySettled(entry: Pick<DebtEntry, 'amount' | 'settledAt'>): boolean {
+export function isDebtFullySettled(
+  entry: Pick<DebtEntry, "amount" | "settledAt">,
+): boolean {
   return entry.amount <= 0.01 || Boolean(entry.settledAt);
 }
 
 /** تطبيق مبلغ تسوية على سجل دين واحد. */
-export function applySettlementToEntry(entry: DebtEntry, amount: number): DebtEntry {
+export function applySettlementToEntry(
+  entry: DebtEntry,
+  amount: number,
+): DebtEntry {
   const apply = Math.max(0, amount);
   const remaining = debtRemainingAmount(entry);
   const settled = Math.min(apply, remaining);
@@ -64,7 +72,10 @@ export function allocatePaymentToPartyDebts(
         !isDebtFullySettled(e) &&
         directions.includes(resolveDebtDirection(e)),
     )
-    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+    .sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt),
+    );
 
   for (const entry of candidates) {
     if (remaining <= 0.001) break;
@@ -81,38 +92,89 @@ export function allocatePaymentToPartyDebts(
   return { entries: next, updates, applied: paymentAmount - remaining };
 }
 
+/** يسترجع جزء الدفعة المُطبَّق سابقاً على الديون (عند التعديل أو الحذف). */
+export function reversePaymentDebtAllocation(
+  entries: DebtEntry[],
+  partyKind: DebtPartyKind,
+  partyId: string,
+  payment: Pick<Payment, "debtSettledAmount">,
+): DebtEntry[] {
+  let toRestore = payment.debtSettledAmount ?? 0;
+  if (toRestore <= 0.001) return entries;
+
+  const next = entries.map((e) => ({ ...e }));
+  const candidates = next
+    .filter(
+      (e) =>
+        e.partyKind === partyKind &&
+        e.partyId === partyId &&
+        (e.settledAmount ?? 0) > 0.001,
+    )
+    .sort(
+      (a, b) =>
+        b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
+    );
+
+  for (const entry of candidates) {
+    if (toRestore <= 0.001) break;
+    const idx = next.findIndex((e) => e.id === entry.id);
+    if (idx < 0) continue;
+    const restore = Math.min(toRestore, entry.settledAmount ?? 0);
+    if (restore <= 0.001) continue;
+    const newAmount = entry.amount + restore;
+    const newSettled = Math.max(0, (entry.settledAmount ?? 0) - restore);
+    next[idx] = {
+      ...next[idx],
+      amount: newAmount,
+      settledAmount: newSettled > 0.001 ? newSettled : undefined,
+      settledAt: newAmount > 0.01 ? undefined : next[idx].settledAt,
+    };
+    toRestore -= restore;
+  }
+  return next;
+}
+
+/** جزء الدفعة المُطبَّق على الاستلام/البيع (بعد خصم الديون المسجّلة). */
+export function paymentNetOfDebtSettlement(
+  p: Pick<Payment, "amount" | "debtSettledAmount">,
+): number {
+  return Math.max(0, p.amount - (p.debtSettledAmount ?? 0));
+}
+
 /** مساهمة الدين في رصيد الطرف (+ يزيد الالتزام/الذمة حسب النوع). */
 export function debtBalanceContribution(entry: DebtEntry): number {
   const remaining = debtRemainingAmount(entry);
   if (remaining <= 0.01) return 0;
   const dir = resolveDebtDirection(entry);
   switch (entry.partyKind) {
-    case 'farmer':
-      return dir === 'payable' ? remaining : -remaining;
-    case 'customer':
-      return dir === 'receivable' ? remaining : -remaining;
-    case 'employee':
-      return dir === 'receivable' ? remaining : -remaining;
-    case 'external':
-      return dir === 'receivable' ? remaining : -remaining;
+    case "farmer":
+      return dir === "payable" ? remaining : -remaining;
+    case "customer":
+      return dir === "receivable" ? remaining : -remaining;
+    case "employee":
+      return dir === "receivable" ? remaining : -remaining;
+    case "external":
+      return dir === "receivable" ? remaining : -remaining;
     default:
       return remaining;
   }
 }
 
 /** true = صرف نقدي (علينا)، false = تحصيل (لنا) */
-export function debtSettlementIsCashOut(entry: Pick<DebtEntry, 'partyKind' | 'direction'>): boolean {
-  return resolveDebtDirection(entry) === 'payable';
+export function debtSettlementIsCashOut(
+  entry: Pick<DebtEntry, "partyKind" | "direction">,
+): boolean {
+  return resolveDebtDirection(entry) === "payable";
 }
 
 export const DEBT_DIRECTION_LABELS: Record<DebtDirection, string> = {
-  payable: 'له (علينا)',
-  receivable: 'عليه (لنا)',
+  payable: "له (علينا)",
+  receivable: "عليه (لنا)",
 };
 
 /** الاتجاه الافتراضي المقترح عند اختيار نوع طرف. */
 export function defaultDebtDirection(partyKind: DebtPartyKind): DebtDirection {
-  if (partyKind === 'farmer') return 'payable';
-  if (partyKind === 'customer' || partyKind === 'employee') return 'receivable';
-  return 'payable';
+  if (partyKind === "farmer") return "payable";
+  if (partyKind === "customer" || partyKind === "employee") return "receivable";
+  return "payable";
 }

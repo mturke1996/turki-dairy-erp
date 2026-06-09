@@ -146,6 +146,8 @@ export interface Payment {
   notes?: string;
   /** تسوية دورة — الدفع يغطي كامل مستحقات الفلاح في هذه الدورة */
   settlementComplete?: boolean;
+  /** جزء الدفعة المُطبَّق على ديون مسجّلة (يُخصَم من الرصيد التشغيلي لا من الاستلام/البيع) */
+  debtSettledAmount?: number;
   createdAt: string;
   createdBy?: string;
 }

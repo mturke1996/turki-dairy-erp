@@ -12,6 +12,7 @@ import { Money, Liters } from '@/components/shared/money';
 import { CopyableValue } from '@/components/shared/copyable-value';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PaymentDialog } from '@/components/forms/payment-dialog';
+import { FarmerPaymentEditDialog } from '@/components/forms/payment-edit-dialog';
 import { DebtSettleDialog } from '@/components/debts/debt-settle-dialog';
 import { FarmerFormDialog } from './farmer-form-dialog';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
@@ -26,6 +27,7 @@ import {
   PAYMENT_METHOD_LABELS,
 } from '@/lib/domain/constants';
 import type { FarmerStats } from '@/lib/domain/calculations';
+import type { Payment } from '@/lib/domain/types';
 import { isDebtFullySettled, resolveDebtDirection } from '@/lib/domain/debt';
 import { formatShortDate } from '@/lib/utils';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
@@ -51,6 +53,7 @@ export function FarmerDetailDialog({
   const [payOpen, setPayOpen] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [editPayment, setEditPayment] = useState<Payment | null>(null);
 
   const farmer = d.farmers.find((f) => f.id === farmerId) as FarmerStats | undefined;
   const rawFarmer = data.farmers.find((f) => f.id === farmerId) ?? null;
@@ -246,25 +249,44 @@ export function FarmerDetailDialog({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {payments.map((p) => (
+                      {payments.map((p) => {
+                        const paySession = data.sessions.find((s) => s.id === p.sessionId);
+                        const modifiable = canPay && paySession?.status === 'open';
+                        return (
                         <TableRow key={p.id}>
                           <TableCell className="text-[12.5px]">{formatShortDate(p.date)}</TableCell>
                           <TableCell className="font-mono text-[11.5px] text-muted-foreground" dir="ltr">{p.ref}</TableCell>
                           <TableCell className="text-center text-[12px]">{PAYMENT_METHOD_LABELS[p.method]}</TableCell>
                           <TableCell className="text-left"><Money value={p.amount} className="text-[12.5px] font-semibold text-meadow-700" /></TableCell>
                           <TableCell>
-                            <RowDeleteButton
-                              label={p.ref}
-                              onConfirm={async () => {
-                                const res = await deletePayment(p.id);
-                                if (res.ok) toast.success('تم حذف الدفعة');
-                                else toast.error(res.error ?? 'تعذّر الحذف');
-                                return res;
-                              }}
-                            />
+                            {modifiable ? (
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8"
+                                  onClick={() => setEditPayment(p)}
+                                  aria-label="تعديل الدفعة"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <RowDeleteButton
+                                  label={p.ref}
+                                  allowed={canPay}
+                                  onConfirm={async () => {
+                                    const res = await deletePayment(p.id);
+                                    if (res.ok) toast.success('تم حذف الدفعة');
+                                    else toast.error(res.error ?? 'تعذّر الحذف');
+                                    return res;
+                                  }}
+                                />
+                              </div>
+                            ) : null}
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 ) : (
@@ -284,6 +306,12 @@ export function FarmerDetailDialog({
         partyName={farmer.fullName}
         outstanding={payableBalance}
         settlementDefault={payableBalance > 0.01}
+      />
+      <FarmerPaymentEditDialog
+        open={!!editPayment}
+        onOpenChange={(o) => !o && setEditPayment(null)}
+        payment={editPayment}
+        partyName={farmer.fullName}
       />
       <DebtSettleDialog open={settleOpen} onOpenChange={setSettleOpen} entry={receivableDebt} />
       <FarmerFormDialog open={editOpen} onOpenChange={setEditOpen} farmer={rawFarmer} />

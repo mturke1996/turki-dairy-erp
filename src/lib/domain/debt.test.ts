@@ -5,6 +5,7 @@ import {
   debtBalanceContribution,
   debtRemainingAmount,
   isDebtFullySettled,
+  paymentNetOfDebtSettlement,
 } from '@/lib/domain/debt';
 import type { DebtEntry } from '@/lib/domain/types';
 
@@ -53,5 +54,10 @@ describe('debt settlement', () => {
     expect(updates).toHaveLength(1);
     expect(entries[0].amount).toBe(600);
     expect(debtBalanceContribution(entries[0])).toBe(600);
+  });
+
+  it('paymentNetOfDebtSettlement avoids double-counting debt payments', () => {
+    expect(paymentNetOfDebtSettlement({ amount: 500, debtSettledAmount: 500 })).toBe(0);
+    expect(paymentNetOfDebtSettlement({ amount: 800, debtSettledAmount: 300 })).toBe(500);
   });
 });

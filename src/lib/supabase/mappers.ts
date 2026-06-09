@@ -50,6 +50,7 @@ const NUMERIC = new Set([
   'syncVersion',
   'sampleQty',
   'settledAmount',
+  'debtSettledAmount',
 ]);
 export function toRow<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
   const out: Record<string, unknown> = {};

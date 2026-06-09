@@ -67,7 +67,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     href: '/treasury',
-    label: 'الخزن والبنوك',
+    label: 'الخزائن والبنوك',
     icon: Wallet,
     description: 'الأرصدة والحركات والتحويلات',
     group: 'finance',

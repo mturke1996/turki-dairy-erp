@@ -123,6 +123,10 @@ export function PaymentDialog({
           <p className="text-[11.5px] leading-relaxed text-muted-foreground">
             يُخصَّم المبلغ أولاً من الديون المسجّلة، ثم من مستحقات الاستلام.
           </p>
+        ) : !isFarmer && outstanding > 0 ? (
+          <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+            يُخصَّم المبلغ أولاً من الديون المسجّلة، ثم من مستحقات المبيعات.
+          </p>
         ) : null}
 
         <div className="space-y-4">

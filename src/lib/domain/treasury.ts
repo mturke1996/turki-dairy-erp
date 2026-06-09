@@ -101,6 +101,84 @@ export function computeTreasury(
   };
 }
 
+export interface AdjustedNetPositionStep {
+  label: string;
+  detail?: string;
+  amount: number;
+  /** + إضافة، − خصم، = أساس */
+  op: 'base' | 'add' | 'subtract';
+  runningTotal: number;
+}
+
+/** الرصيد النهائي بعد تسوية الديون والمخزون — حساب متسلسل. */
+export interface AdjustedNetPosition {
+  cash: number;
+  receivables: number;
+  inventoryValue: number;
+  payables: number;
+  finalBalance: number;
+  steps: AdjustedNetPositionStep[];
+}
+
+export function computeAdjustedNetPosition(input: {
+  cash: number;
+  receivables: number;
+  inventoryValue: number;
+  payables: number;
+}): AdjustedNetPosition {
+  const cash = round(input.cash);
+  const receivables = round(input.receivables);
+  const inventoryValue = round(input.inventoryValue);
+  const payables = round(input.payables);
+
+  let running = cash;
+  const steps: AdjustedNetPositionStep[] = [
+    {
+      label: 'صافي المركز النقدي',
+      detail: 'مجموع أرصدة الخزائن والحسابات البنكية',
+      amount: cash,
+      op: 'base',
+      runningTotal: running,
+    },
+  ];
+
+  running = round(running + receivables);
+  steps.push({
+    label: 'الديون المستحقة لنا',
+    detail: 'فلاحون، عملاء، موظفون، وأطراف خارجيون',
+    amount: receivables,
+    op: 'add',
+    runningTotal: running,
+  });
+
+  running = round(running + inventoryValue);
+  steps.push({
+    label: 'قيمة مخزون الحليب التقديرية',
+    detail: 'بمتوسط التكلفة المرجّح المتحرّك',
+    amount: inventoryValue,
+    op: 'add',
+    runningTotal: running,
+  });
+
+  running = round(running - payables);
+  steps.push({
+    label: 'الديون المستحقة علينا',
+    detail: 'التزامات مستحقة للفلاحين والغير',
+    amount: payables,
+    op: 'subtract',
+    runningTotal: running,
+  });
+
+  return {
+    cash,
+    receivables,
+    inventoryValue,
+    payables,
+    finalBalance: running,
+    steps,
+  };
+}
+
 export function accountBalance(
   type: AccountSourceType,
   id: string,

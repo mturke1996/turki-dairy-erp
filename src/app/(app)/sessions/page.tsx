@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { CalendarRange, Lock, Archive, CheckCircle2, TrendingUp, Droplets, ShoppingCart, ArrowRight, Repeat2, GitCompareArrows } from 'lucide-react';
+import { CalendarRange, Lock, Archive, CheckCircle2, TrendingUp, Droplets, ShoppingCart, ArrowRight, Repeat2, GitCompareArrows, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,12 +30,15 @@ export default function SessionsPage() {
   const data = useErpData();
   const d = useDerived();
   const closeActiveSession = useErpStore((s) => s.closeActiveSession);
+  const deleteSession = useErpStore((s) => s.deleteSession);
   const setActiveSession = useErpStore((s) => s.setActiveSession);
   const canClose = usePermission('sessions.close');
   const cycle = useCycle();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const active = d.activeSession;
   const summary = d.activeSummary;
@@ -127,6 +130,33 @@ export default function SessionsPage() {
     } finally {
       setClosing(false);
     }
+  }
+
+  async function doDeleteSession() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await deleteSession(deleteTarget.id);
+      if (res.ok) {
+        toast.success('تم حذف الدورة', { description: deleteTarget.label });
+        setDeleteTarget(null);
+      } else {
+        toast.error(res.error ?? 'تعذّر حذف الدورة');
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function sessionMovementCount(sessionId: string) {
+    return (
+      data.supplies.filter((s) => s.sessionId === sessionId).length +
+      data.sales.filter((s) => s.sessionId === sessionId).length +
+      data.payments.filter((p) => p.sessionId === sessionId).length +
+      data.expenses.filter((e) => e.sessionId === sessionId).length +
+      data.adjustments.filter((a) => a.sessionId === sessionId).length +
+      data.debtEntries.filter((d) => d.sessionId === sessionId).length
+    );
   }
 
   return (
@@ -340,6 +370,18 @@ export default function SessionsPage() {
                         render={async () => <SessionClosingPDF {...buildClosingProps(session, sum)} />}
                       />
                     ) : null}
+                    {canClose && data.sessions.length > 1 ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-rose-600 hover:text-rose-700"
+                        onClick={() => setDeleteTarget(session)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        حذف
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -383,6 +425,35 @@ export default function SessionsPage() {
               {closing ? 'جارٍ الإغلاق…' : 'تأكيد الإغلاق'}
             </Button>
             <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
+              إلغاء
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>حذف الدورة</DialogTitle>
+            <DialogDescription>
+              سيتم حذف «{deleteTarget?.label}» وجميع حركاتها (استلام، مبيعات، مدفوعات، مصاريف، ديون…) نهائياً. لا يمكن التراجع.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4 text-[12.5px] text-rose-900">
+              <p>
+                عدد الحركات المرتبطة: <strong>{sessionMovementCount(deleteTarget.id)}</strong>
+              </p>
+              {deleteTarget.id === active?.id ? (
+                <p className="mt-2 text-muted-foreground">هذه الدورة نشطة حالياً — سيتم التبديل إلى دورة أخرى تلقائياً.</p>
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="destructive" disabled={deleting} onClick={doDeleteSession}>
+              <Trash2 className="h-4 w-4" />
+              {deleting ? 'جارٍ الحذف…' : 'تأكيد الحذف'}
+            </Button>
+            <Button type="button" variant="ghost" disabled={deleting} onClick={() => setDeleteTarget(null)}>
               إلغاء
             </Button>
           </DialogFooter>

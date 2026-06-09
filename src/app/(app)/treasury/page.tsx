@@ -8,8 +8,6 @@ import {
   Landmark,
   ArrowLeftRight,
   Plus,
-  ArrowDownLeft,
-  ArrowUpRight,
   AlertTriangle,
   Coins,
   TrendingUp,
@@ -38,7 +36,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { CashStatementPDF } from '@/features/pdf/CashStatementPDF';
 import { OpeningBalanceDialog } from '@/components/treasury/opening-balance-dialog';
+import { SettlementSummaryCard } from '@/components/treasury/settlement-summary-card';
+import { TreasuryAccountCard } from '@/components/treasury/treasury-account-card';
 import { useErpStore } from '@/lib/store/use-erp-store';
+import { useDerived } from '@/lib/store/use-derived';
 import { computeTreasury, accountLabel } from '@/lib/domain/treasury';
 import { CASH_MOVEMENT_LABELS } from '@/lib/domain/constants';
 import type { AccountSourceType, CashMovementType } from '@/lib/domain/types';
@@ -55,6 +56,8 @@ const MOVEMENT_VARIANT: Record<CashMovementType, 'success' | 'danger' | 'info' |
   adjustment: 'neutral',
 };
 
+type MobileSection = 'overview' | 'accounts' | 'movements';
+
 export default function TreasuryPage() {
   return (
     <AccessGate permission="vaults.manage">
@@ -64,6 +67,7 @@ export default function TreasuryPage() {
 }
 
 function TreasuryContent() {
+  const d = useDerived();
   const vaults = useErpStore((s) => s.vaults);
   const banks = useErpStore((s) => s.banks);
   const movements = useErpStore((s) => s.cashMovements);
@@ -73,8 +77,10 @@ function TreasuryContent() {
   const setAccountOpeningBalance = useErpStore((s) => s.setAccountOpeningBalance);
 
   const snap = useMemo(() => computeTreasury(vaults, banks, movements), [vaults, banks, movements]);
+  const adjustedPosition = d.adjustedNetPosition;
 
   const [filter, setFilter] = useState<string>('all');
+  const [mobileSection, setMobileSection] = useState<MobileSection>('overview');
   const filteredMovements = useMemo(() => {
     const sorted = [...movements].sort((a, b) => +new Date(b.date) - +new Date(a.date));
     if (filter === 'all') return sorted.slice(0, 20);
@@ -86,6 +92,11 @@ function TreasuryContent() {
   const [openingOpen, setOpeningOpen] = useState(false);
 
   const belowMin = snap.vaults.filter((v) => v.belowMin);
+
+  function selectAccountForMovements(accountId: string) {
+    setFilter(accountId);
+    setMobileSection('movements');
+  }
 
   function buildStatementProps(accountId: string) {
     const acc = snap.accounts.find((a) => a.id === accountId);
@@ -107,7 +118,7 @@ function TreasuryContent() {
     });
     return {
       accountName: acc?.name ?? '',
-      accountTypeLabel: acc?.type === 'vault' ? 'خزنة' : 'بنك',
+      accountTypeLabel: acc?.type === 'vault' ? 'خزنة نقدية' : 'حساب بنكي',
       opening: acc?.opening ?? 0,
       totalIn: acc?.inflow ?? 0,
       totalOut: acc?.outflow ?? 0,
@@ -116,12 +127,130 @@ function TreasuryContent() {
     };
   }
 
+  const statTiles = (
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <StatTile label="رصيد الخزائن" value={<Money value={snap.totalVaults} decimals={0} />} icon={Wallet} tone="meadow" hint={`${snap.vaults.length} خزنة`} />
+      <StatTile label="رصيد البنوك" value={<Money value={snap.totalBanks} decimals={0} />} icon={Landmark} tone="navy" hint={`${snap.banks.length} حساب`} />
+      <StatTile label="صافي النقد" value={<Money value={snap.total} decimals={0} />} icon={Coins} tone="sun" hint="خزائن + بنوك" />
+      <StatTile label="تنبيهات" value={belowMin.length} icon={AlertTriangle} tone={belowMin.length ? 'rose' : 'neutral'} hint="تحت الحد الأدنى" />
+    </div>
+  );
+
+  const accountsList = (
+    <div className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 xl:grid-cols-3">
+      {snap.accounts.length === 0 ? (
+        <EmptyState icon={Wallet} title="لا توجد حسابات" description="أضف خزنة أو حساب بنكي للبدء." className="md:col-span-2 xl:col-span-3" />
+      ) : (
+        snap.accounts.map((acc) => (
+          <TreasuryAccountCard
+            key={acc.id}
+            account={acc}
+            compact
+            onSelect={() => selectAccountForMovements(acc.id)}
+          />
+        ))
+      )}
+    </div>
+  );
+
+  const movementFilterChips = (
+    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 no-scrollbar md:hidden">
+      <button
+        type="button"
+        onClick={() => setFilter('all')}
+        className={cn(
+          'shrink-0 rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors',
+          filter === 'all' ? 'bg-navy-800 text-white' : 'bg-muted text-muted-foreground',
+        )}
+      >
+        الكل
+      </button>
+      {snap.accounts.map((a) => (
+        <button
+          key={a.id}
+          type="button"
+          onClick={() => setFilter(a.id)}
+          className={cn(
+            'shrink-0 rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors',
+            filter === a.id ? 'bg-navy-800 text-white' : 'bg-muted text-muted-foreground',
+          )}
+        >
+          {a.name}
+        </button>
+      ))}
+    </div>
+  );
+
+  const movementsBody =
+    filteredMovements.length === 0 ? (
+      <EmptyState icon={Coins} title="لا توجد حركات" description="ستظهر الحركات هنا فور تسجيلها." />
+    ) : (
+      <>
+        <div className="space-y-2.5 md:hidden">
+          {filteredMovements.map((m) => (
+            <article key={m.id} className="rounded-xl border border-border bg-card p-3.5">
+              <div className="flex items-start justify-between gap-2">
+                <Badge variant={MOVEMENT_VARIANT[m.movementType]}>{CASH_MOVEMENT_LABELS[m.movementType]}</Badge>
+                <Money
+                  value={m.amount}
+                  decimals={0}
+                  className={cn('text-[15px] font-bold', m.direction === 'in' ? 'text-meadow-700' : 'text-rose-600')}
+                />
+              </div>
+              <p className="mt-2 text-[13px] font-medium">{accountLabel(m.sourceType, m.sourceId, vaults, banks)}</p>
+              {m.description ? (
+                <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">{m.description}</p>
+              ) : null}
+              <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-foreground">
+                <span className="font-mono" dir="ltr">{m.ref}</span>
+                <span dir="ltr">{formatShortDate(m.date)}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>المرجع</TableHead>
+                <TableHead>النوع</TableHead>
+                <TableHead>الحساب</TableHead>
+                <TableHead>البيان</TableHead>
+                <TableHead className="text-left">المبلغ</TableHead>
+                <TableHead className="text-left">التاريخ</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredMovements.map((m) => (
+                <TableRow key={m.id}>
+                  <TableCell className="font-mono text-[11px] text-muted-foreground" dir="ltr">{m.ref}</TableCell>
+                  <TableCell>
+                    <Badge variant={MOVEMENT_VARIANT[m.movementType]}>{CASH_MOVEMENT_LABELS[m.movementType]}</Badge>
+                  </TableCell>
+                  <TableCell className="text-[12.5px]">{accountLabel(m.sourceType, m.sourceId, vaults, banks)}</TableCell>
+                  <TableCell className="max-w-[220px] truncate text-[12.5px] text-muted-foreground">{m.description}</TableCell>
+                  <TableCell className="text-left">
+                    <Money
+                      value={m.amount}
+                      decimals={0}
+                      className={cn('font-semibold', m.direction === 'in' ? 'text-meadow-700' : 'text-rose-600')}
+                    />
+                  </TableCell>
+                  <TableCell className="text-left text-[12px] text-muted-foreground" dir="ltr">{formatShortDate(m.date)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </>
+    );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       <PageHeader
         eyebrow="المالية"
-        title="الخزن والبنوك"
-        description="مركز إدارة السيولة — كل حركة مالية موثّقة بمصدرها أو وجهتها."
+        title="الخزائن والبنوك"
+        description="إدارة النقد والحسابات البنكية — مع الرصيد النهائي بعد تسوية الديون والمخزون."
         actions={
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
             <Button type="button" variant="outline" asChild className="col-span-2 sm:col-span-1">
@@ -149,69 +278,95 @@ function TreasuryContent() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <StatTile label="إجمالي الكاش" value={<Money value={snap.totalVaults} decimals={0} />} icon={Wallet} tone="meadow" hint={`${snap.vaults.length} خزنة`} />
-        <StatTile label="إجمالي البنوك" value={<Money value={snap.totalBanks} decimals={0} />} icon={Landmark} tone="navy" hint={`${snap.banks.length} حساب`} />
-        <StatTile label="المركز النقدي الكلي" value={<Money value={snap.total} decimals={0} />} icon={Coins} tone="sun" hint="خزن + بنوك" />
-        <StatTile label="تنبيهات الرصيد" value={belowMin.length} icon={AlertTriangle} tone={belowMin.length ? 'rose' : 'neutral'} hint="خزن تحت الحد الأدنى" />
+      {/* بطاقة ملخص سريع — جوال فقط */}
+      <div className="rounded-xl border border-meadow-200/60 bg-gradient-to-br from-card to-meadow-50/40 p-4 md:hidden">
+        <p className="text-[11px] font-semibold text-meadow-700">صافي المركز النقدي</p>
+        <Money value={snap.total} decimals={0} className="mt-0.5 text-[22px] font-bold" />
+        <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/60 pt-2 text-[12px]">
+          <span className="text-muted-foreground">بعد التسويات</span>
+          <Money
+            value={adjustedPosition.finalBalance}
+            decimals={0}
+            className={cn('font-bold', adjustedPosition.finalBalance >= 0 ? 'text-meadow-800' : 'text-rose-700')}
+          />
+        </div>
       </div>
 
-      {/* بطاقات الحسابات */}
-      <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 snap-x snap-mandatory no-scrollbar md:mx-0 md:grid md:grid-cols-2 md:overflow-visible md:pb-0 xl:grid-cols-3">
-        {snap.accounts.map((acc) => (
-          <Card key={acc.id} className={cn('min-w-[min(100%,280px)] shrink-0 snap-start md:min-w-0 md:shrink', acc.belowMin && 'border-rose-200/70')}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <span
-                    className={cn(
-                      'flex h-9 w-9 items-center justify-center rounded-lg ring-1',
-                      acc.type === 'vault' ? 'bg-meadow-50 text-meadow-700 ring-meadow-100' : 'bg-navy-50 text-navy-700 ring-navy-100',
-                    )}
-                  >
-                    {acc.type === 'vault' ? <Wallet className="h-4.5 w-4.5" /> : <Landmark className="h-4.5 w-4.5" />}
-                  </span>
-                  <div>
-                    <CardTitle className="text-[14px]">{acc.name}</CardTitle>
-                    <p className="text-[11px] text-muted-foreground" dir="ltr">{acc.code}</p>
-                  </div>
-                </div>
-                {acc.belowMin ? <Badge variant="danger">تحت الحد</Badge> : <Badge variant="neutral">{acc.type === 'vault' ? 'خزنة' : 'بنك'}</Badge>}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <p className="text-[11px] text-muted-foreground">الرصيد الحالي</p>
-                <p className="text-[22px] font-bold tracking-tight text-foreground">
-                  <Money value={acc.balance} decimals={0} />
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[12px]">
-                <div className="rounded-lg bg-meadow-50/60 px-2.5 py-1.5">
-                  <span className="flex items-center gap-1 text-meadow-700"><ArrowDownLeft className="h-3 w-3" /> وارد</span>
-                  <Money value={acc.inflow} decimals={0} className="font-semibold" muted />
-                </div>
-                <div className="rounded-lg bg-rose-50/50 px-2.5 py-1.5">
-                  <span className="flex items-center gap-1 text-rose-600"><ArrowUpRight className="h-3 w-3" /> صادر</span>
-                  <Money value={acc.outflow} decimals={0} className="font-semibold" muted />
-                </div>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                الرصيد الافتتاحي: <Money value={acc.opening} decimals={0} className="text-foreground" />
-              </p>
-            </CardContent>
-          </Card>
+      {/* تبويبات جوال */}
+      <div className="flex gap-1.5 rounded-xl border border-border bg-canvas-sunken/40 p-1 md:hidden">
+        {(
+          [
+            { key: 'overview' as const, label: 'ملخص', count: null },
+            { key: 'accounts' as const, label: 'حسابات', count: snap.accounts.length },
+            { key: 'movements' as const, label: 'حركات', count: filteredMovements.length },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setMobileSection(tab.key)}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-1 rounded-lg py-2.5 text-[12.5px] font-semibold transition-colors',
+              mobileSection === tab.key
+                ? 'bg-card text-foreground shadow-whisper ring-1 ring-border'
+                : 'text-muted-foreground',
+            )}
+          >
+            {tab.label}
+            {tab.count !== null ? (
+              <span
+                className={cn(
+                  'rounded-full px-1.5 py-0.5 text-[10px] tabular-nums',
+                  mobileSection === tab.key ? 'bg-navy-50 text-navy-700' : 'bg-transparent',
+                )}
+              >
+                {tab.count}
+              </span>
+            ) : null}
+          </button>
         ))}
       </div>
 
-      {/* الحركات النقدية */}
-      <Card>
+      {/* ملخص — إحصائيات + تسوية */}
+      <div className={cn('space-y-5', mobileSection !== 'overview' && 'hidden md:block')}>
+        <div className="hidden md:block">{statTiles}</div>
+        {mobileSection === 'overview' ? (
+          <div className="space-y-3 md:hidden">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-meadow-50/70 px-3 py-2.5">
+                <p className="text-[10.5px] text-muted-foreground">خزائن</p>
+                <Money value={snap.totalVaults} decimals={0} className="text-[15px] font-bold" />
+              </div>
+              <div className="rounded-lg bg-navy-50/70 px-3 py-2.5">
+                <p className="text-[10.5px] text-muted-foreground">بنوك</p>
+                <Money value={snap.totalBanks} decimals={0} className="text-[15px] font-bold" />
+              </div>
+            </div>
+            {belowMin.length > 0 ? (
+              <p className="flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                {belowMin.length} خزنة تحت الحد الأدنى
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        <SettlementSummaryCard position={adjustedPosition} />
+      </div>
+
+      {/* الحسابات */}
+      <div className={cn(mobileSection !== 'accounts' && 'hidden md:block')}>
+        <h2 className="mb-3 text-[13px] font-semibold text-foreground md:mb-3">حسابات الخزائن والبنوك</h2>
+        {accountsList}
+      </div>
+
+      {/* الحركات */}
+      <Card className={cn(mobileSection !== 'movements' && 'hidden md:block')}>
         <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>الحركات النقدية</CardTitle>
-            <CardDescription>أحدث الحركات على الخزن والبنوك</CardDescription>
+            <CardDescription className="hidden sm:block">آخر الحركات على الخزائن والحسابات البنكية</CardDescription>
           </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <div className="hidden w-full flex-col gap-2 sm:flex sm:w-auto sm:flex-row sm:items-center md:flex">
             {filter !== 'all' ? (
               <TurkiPdfToolbar
                 fileName={`كشف-حساب-${snap.accounts.find((a) => a.id === filter)?.name ?? ''}`}
@@ -234,69 +389,20 @@ function TreasuryContent() {
             </Select>
           </div>
         </CardHeader>
-        <CardContent>
-          {filteredMovements.length === 0 ? (
-            <EmptyState icon={Coins} title="لا توجد حركات" description="ستظهر الحركات هنا فور تسجيلها." />
-          ) : (
-            <>
-              <div className="space-y-2.5 md:hidden">
-                {filteredMovements.map((m) => (
-                  <article key={m.id} className="rounded-xl border border-border bg-card p-3.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <Badge variant={MOVEMENT_VARIANT[m.movementType]}>{CASH_MOVEMENT_LABELS[m.movementType]}</Badge>
-                      <Money
-                        value={m.amount}
-                        decimals={0}
-                        className={cn('text-[15px] font-bold', m.direction === 'in' ? 'text-meadow-700' : 'text-rose-600')}
-                      />
-                    </div>
-                    <p className="mt-2 text-[13px] font-medium">{accountLabel(m.sourceType, m.sourceId, vaults, banks)}</p>
-                    {m.description ? (
-                      <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">{m.description}</p>
-                    ) : null}
-                    <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span className="font-mono" dir="ltr">{m.ref}</span>
-                      <span dir="ltr">{formatShortDate(m.date)}</span>
-                    </div>
-                  </article>
-                ))}
-              </div>
-              <div className="hidden md:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>المرجع</TableHead>
-                  <TableHead>النوع</TableHead>
-                  <TableHead>الحساب</TableHead>
-                  <TableHead>البيان</TableHead>
-                  <TableHead className="text-left">المبلغ</TableHead>
-                  <TableHead className="text-left">التاريخ</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMovements.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell className="font-mono text-[11px] text-muted-foreground" dir="ltr">{m.ref}</TableCell>
-                    <TableCell>
-                      <Badge variant={MOVEMENT_VARIANT[m.movementType]}>{CASH_MOVEMENT_LABELS[m.movementType]}</Badge>
-                    </TableCell>
-                    <TableCell className="text-[12.5px]">{accountLabel(m.sourceType, m.sourceId, vaults, banks)}</TableCell>
-                    <TableCell className="max-w-[220px] truncate text-[12.5px] text-muted-foreground">{m.description}</TableCell>
-                    <TableCell className="text-left">
-                      <Money
-                        value={m.amount}
-                        decimals={0}
-                        className={cn('font-semibold', m.direction === 'in' ? 'text-meadow-700' : 'text-rose-600')}
-                      />
-                    </TableCell>
-                    <TableCell className="text-left text-[12px] text-muted-foreground" dir="ltr">{formatShortDate(m.date)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-              </div>
-            </>
-          )}
+        <CardContent className="space-y-3">
+          {movementFilterChips}
+          {filter !== 'all' ? (
+            <div className="flex justify-end md:hidden">
+              <TurkiPdfToolbar
+                fileName={`كشف-حساب-${snap.accounts.find((a) => a.id === filter)?.name ?? ''}`}
+                label="كشف حساب PDF"
+                variant="outline"
+                showDownload={false}
+                render={async () => <CashStatementPDF {...buildStatementProps(filter)} />}
+              />
+            </div>
+          ) : null}
+          {movementsBody}
         </CardContent>
       </Card>
 
@@ -403,7 +509,7 @@ function TransferDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>تحويل بين الحسابات</DialogTitle>
+          <DialogTitle>تحويل بين الخزائن والبنوك</DialogTitle>
           <DialogDescription>ينشئ حركتين متوازيتين: صادر من المصدر ووارد للوجهة.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -451,9 +557,9 @@ function AccountDialog({
   const [type, setType] = useState<AccountSourceType>('vault');
   const [name, setName] = useState('');
   const [opening, setOpening] = useState('');
-  const [extra1, setExtra1] = useState(''); // location / accountNumber
-  const [extra2, setExtra2] = useState(''); // minThreshold / accountHolder
-  const [extra3, setExtra3] = useState(''); // responsible / branchName
+  const [extra1, setExtra1] = useState('');
+  const [extra2, setExtra2] = useState('');
+  const [extra3, setExtra3] = useState('');
 
   function reset() { setName(''); setOpening(''); setExtra1(''); setExtra2(''); setExtra3(''); }
 
@@ -472,8 +578,8 @@ function AccountDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>إضافة حساب جديد</DialogTitle>
-          <DialogDescription>خزنة نقدية فيزيائية أو حساب بنكي.</DialogDescription>
+          <DialogTitle>إضافة خزنة أو حساب بنكي</DialogTitle>
+          <DialogDescription>خزنة نقدية في المقر، أو حساب لدى مصرف.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <Field label="نوع الحساب" required>
