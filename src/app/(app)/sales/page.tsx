@@ -69,7 +69,8 @@ export default function SalesPage() {
   function onCustomerChange(id: string) {
     setCustomerId(id);
     const c = sellableCustomers.find((x) => x.id === id);
-    if (c && !unitPrice) setUnitPrice(String(c.defaultSellPrice));
+    // السعر يُجلب تلقائياً من بروفايل العميل — ويبقى قابلاً للتعديل يدوياً.
+    if (c) setUnitPrice(String(c.defaultSellPrice));
   }
 
   function reset() {
@@ -169,7 +170,11 @@ export default function SalesPage() {
                   className={exceedsStock ? 'border-rose-300 focus-within:ring-rose-200' : undefined}
                 />
               </Field>
-              <Field label="سعر اللتر" required>
+              <Field
+                label="سعر اللتر"
+                required
+                hint={selectedCustomer ? 'تلقائي من بروفايل العميل — يمكن تغييره' : 'يُجلب تلقائياً عند اختيار العميل'}
+              >
                 <AmountInput
                   value={unitPrice}
                   onChange={setUnitPrice}

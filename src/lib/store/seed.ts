@@ -351,7 +351,7 @@ export function generateSeed(): SeedResult {
     vaults: [],
     banks: [],
     cashMovements: [],
-    settings: { minStockThreshold: 0, defaultBuyPrice: 1.85, defaultSellPrice: 2.55 },
+    settings: { minStockThreshold: 0, defaultBuyPrice: 2.85, defaultSellPrice: 2.55 },
   };
   const fullInv = buildInventoryLedger(supplies, sales, [], [may, june]);
   const maySummary = computeSessionSummary(may, data, fullInv);

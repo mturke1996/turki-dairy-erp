@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowDownToLine, Droplets, Lock, Banknote, Tractor, Receipt, Wallet, Sun, Moon, Pencil } from 'lucide-react';
+import { ArrowDownToLine, Droplets, Lock, Banknote, Tractor, Receipt, Wallet, Sun, Moon, Pencil, CalendarDays, CalendarRange } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,12 +61,15 @@ export default function SupplyPage() {
   );
 
   const [farmerId, setFarmerId] = useState('');
+  const [recordMode, setRecordMode] = useState<'single' | 'period'>('single');
   const [milkShift, setMilkShift] = useState<MilkShift>('morning');
   const [quantity, setQuantity] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
   const [quality, setQuality] = useState<QualityTier>('A');
   const [fatPct, setFatPct] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [periodFrom, setPeriodFrom] = useState('');
+  const [periodTo, setPeriodTo] = useState('');
   const [notes, setNotes] = useState('');
   const [payNow, setPayNow] = useState(false);
   const [payAmount, setPayAmount] = useState('');
@@ -89,7 +92,23 @@ export default function SupplyPage() {
     const f = activeFarmers.find((x) => x.id === id);
     if (f) {
       setQuality(f.qualityTier);
-      if (!unitPrice) setUnitPrice(String(f.defaultBuyPrice));
+      // السعر يُجلب تلقائياً من بروفايل الفلاح — ويبقى قابلاً للتعديل يدوياً.
+      setUnitPrice(String(f.defaultBuyPrice));
+    }
+  }
+
+  const periodDays =
+    periodFrom && periodTo && periodFrom <= periodTo
+      ? Math.round((new Date(periodTo).getTime() - new Date(periodFrom).getTime()) / 86_400_000) + 1
+      : 0;
+
+  function onModeChange(mode: 'single' | 'period') {
+    setRecordMode(mode);
+    if (mode === 'period' && !periodFrom) {
+      const to = new Date();
+      const from = new Date(to.getTime() - 14 * 86_400_000);
+      setPeriodFrom(from.toISOString().slice(0, 10));
+      setPeriodTo(to.toISOString().slice(0, 10));
     }
   }
 
@@ -111,6 +130,12 @@ export default function SupplyPage() {
     if (qty <= 0) return toast.error('أدخل كمية صحيحة باللتر.');
     if (price <= 0) return toast.error('أدخل سعر شراء اللتر.');
 
+    const isPeriod = recordMode === 'period';
+    if (isPeriod) {
+      if (!periodFrom || !periodTo) return toast.error('حدّد بداية ونهاية فترة التجميع.');
+      if (periodFrom > periodTo) return toast.error('بداية الفترة يجب أن تسبق نهايتها.');
+    }
+
     if (payNow) {
       if (payVal <= 0) return toast.error('أدخل مبلغ الدفع الفوري.');
       if (!payAccount) return toast.error('اختر حساب الخزينة/البنك للصرف.');
@@ -119,14 +144,19 @@ export default function SupplyPage() {
 
     void (async () => {
       const hour = milkShift === 'evening' ? 17 : 6;
+      const txDate = isPeriod
+        ? new Date(`${periodTo}T12:00:00`).toISOString()
+        : new Date(`${date}T${String(hour).padStart(2, '0')}:00:00`).toISOString();
       const res = await recordSupply({
       farmerId,
       quantity: qty,
       unitPrice: price,
       qualityTier: quality,
-      milkShift,
+      milkShift: isPeriod ? undefined : milkShift,
+      periodFrom: isPeriod ? periodFrom : undefined,
+      periodTo: isPeriod ? periodTo : undefined,
       fatPct: fatPct ? Number(fatPct) : undefined,
-      date: new Date(`${date}T${String(hour).padStart(2, '0')}:00:00`).toISOString(),
+      date: txDate,
       notes: notes.trim() || undefined,
       immediatePayment: payNow && payAccount
         ? {
@@ -139,10 +169,11 @@ export default function SupplyPage() {
         : undefined,
       });
       if (res.ok) {
+        const modeLabel = isPeriod ? `فترة ${periodDays} يوم` : MILK_SHIFT_LABELS[milkShift];
         toast.success(C.success, {
           description: payNow
-            ? `${MILK_SHIFT_LABELS[milkShift]} · ${formatLiters(qty, 0, false)} + دفع فوري ${formatMoney(payVal, { decimals: 0 })}`
-            : `${MILK_SHIFT_LABELS[milkShift]} · ${formatLiters(qty, 0, false)} — ${selectedFarmer?.fullName}`,
+            ? `${modeLabel} · ${formatLiters(qty, 0, false)} + دفع فوري ${formatMoney(payVal, { decimals: 0 })}`
+            : `${modeLabel} · ${formatLiters(qty, 0, false)} — ${selectedFarmer?.fullName}`,
         });
         reset();
       } else {
@@ -205,36 +236,84 @@ export default function SupplyPage() {
               </Select>
             </Field>
 
-            <Field label="وجبة الاستلام" required>
+            <Field label="طريقة التسجيل" required>
               <div className="grid grid-cols-2 gap-2">
-                {(['morning', 'evening'] as MilkShift[]).map((shift) => {
-                  const active = milkShift === shift;
-                  const Icon = shift === 'morning' ? Sun : Moon;
+                {([
+                  { mode: 'single' as const, label: 'وجبة يومية', Icon: CalendarDays },
+                  { mode: 'period' as const, label: 'فترة مجمّعة', Icon: CalendarRange },
+                ]).map(({ mode, label, Icon }) => {
+                  const active = recordMode === mode;
                   return (
                     <button
-                      key={shift}
+                      key={mode}
                       type="button"
                       disabled={!canSupply || sessionLocked}
-                      onClick={() => setMilkShift(shift)}
+                      onClick={() => onModeChange(mode)}
                       className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-[13px] font-semibold transition-colors ${
                         active
-                          ? 'border-meadow-400 bg-meadow-50 text-meadow-800 ring-1 ring-meadow-200'
+                          ? 'border-navy-400 bg-navy-50 text-navy-800 ring-1 ring-navy-200'
                           : 'border-border bg-canvas-sunken/40 text-muted-foreground hover:bg-canvas-sunken'
                       }`}
                     >
                       <Icon className="h-4 w-4" />
-                      {MILK_SHIFT_LABELS[shift]}
+                      {label}
                     </button>
                   );
                 })}
               </div>
             </Field>
 
+            {recordMode === 'single' ? (
+              <Field label="وجبة الاستلام" required>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['morning', 'evening'] as MilkShift[]).map((shift) => {
+                    const active = milkShift === shift;
+                    const Icon = shift === 'morning' ? Sun : Moon;
+                    return (
+                      <button
+                        key={shift}
+                        type="button"
+                        disabled={!canSupply || sessionLocked}
+                        onClick={() => setMilkShift(shift)}
+                        className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-[13px] font-semibold transition-colors ${
+                          active
+                            ? 'border-meadow-400 bg-meadow-50 text-meadow-800 ring-1 ring-meadow-200'
+                            : 'border-border bg-canvas-sunken/40 text-muted-foreground hover:bg-canvas-sunken'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {MILK_SHIFT_LABELS[shift]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+            ) : (
+              <div className="space-y-2 rounded-xl border border-navy-200/70 bg-navy-50/40 p-3">
+                <p className="text-[12px] font-semibold text-navy-800">فترة التجميع — إجمالي الكمية لكامل الفترة</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="من تاريخ" required>
+                    <Input type="date" dir="ltr" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} disabled={!canSupply || sessionLocked} />
+                  </Field>
+                  <Field label="إلى تاريخ" required>
+                    <Input type="date" dir="ltr" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} disabled={!canSupply || sessionLocked} />
+                  </Field>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {periodDays > 0 ? `مدة الفترة: ${periodDays} يوم — تبقى محفوظة لتسجيل بقية الفلاحين لنفس الفترة.` : 'حدّد بداية ونهاية الفترة.'}
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <Field label="الكمية" required>
                 <VolumeInput value={quantity} onChange={setQuantity} disabled={!canSupply || sessionLocked} />
               </Field>
-              <Field label="سعر اللتر" required hint="يدعم الكسور — مثال: 1.250">
+              <Field
+                label="سعر اللتر"
+                required
+                hint={selectedFarmer ? `تلقائي من بروفايل ${selectedFarmer.fullName.split(' ')[0]} — يمكن تغييره` : 'يُجلب تلقائياً عند اختيار الفلاح'}
+              >
                 <AmountInput value={unitPrice} onChange={setUnitPrice} placeholder="0.000" disabled={!canSupply || sessionLocked} />
               </Field>
             </div>
@@ -263,9 +342,11 @@ export default function SupplyPage() {
               </Field>
             </div>
 
-            <Field label="التاريخ">
-              <Input type="date" dir="ltr" value={date} onChange={(e) => setDate(e.target.value)} disabled={!canSupply || sessionLocked} />
-            </Field>
+            {recordMode === 'single' ? (
+              <Field label="التاريخ">
+                <Input type="date" dir="ltr" value={date} onChange={(e) => setDate(e.target.value)} disabled={!canSupply || sessionLocked} />
+              </Field>
+            ) : null}
 
             <Field label="ملاحظات" hint="اختياري">
               <Input placeholder="ملاحظة قصيرة" value={notes} onChange={(e) => setNotes(e.target.value)} disabled={!canSupply || sessionLocked} />
@@ -361,17 +442,24 @@ export default function SupplyPage() {
                   {sessionSupplies.slice(0, 40).map((s) => {
                     const farmer = data.farmers.find((f) => f.id === s.farmerId);
                     const shift = s.milkShift ?? 'morning';
+                    const isPeriod = !!(s.periodFrom && s.periodTo);
                     return (
                       <TableRow key={s.id}>
                         <TableCell className="font-mono text-[11.5px] text-muted-foreground" dir="ltr">
                           {s.ref}
-                          <span className="block text-[10.5px]">{formatShortDate(s.date)}</span>
+                          <span className="block text-[10.5px]">
+                            {isPeriod ? `${formatShortDate(s.periodFrom!)} → ${formatShortDate(s.periodTo!)}` : formatShortDate(s.date)}
+                          </span>
                         </TableCell>
                         <TableCell className="text-[13px] font-medium">{farmer?.fullName ?? '—'}</TableCell>
                         <TableCell className="text-center">
-                          <Badge variant={shift === 'morning' ? 'info' : 'neutral'} className="text-[10px]">
-                            {MILK_SHIFT_LABELS[shift]}
-                          </Badge>
+                          {isPeriod ? (
+                            <Badge variant="success" className="text-[10px]">فترة مجمّعة</Badge>
+                          ) : (
+                            <Badge variant={shift === 'morning' ? 'info' : 'neutral'} className="text-[10px]">
+                              {MILK_SHIFT_LABELS[shift]}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge variant={QUALITY_VARIANT[s.qualityTier]}>{s.qualityTier}</Badge>

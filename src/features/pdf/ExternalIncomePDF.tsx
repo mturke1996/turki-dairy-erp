@@ -8,22 +8,22 @@ import { PdfMoneyText, pdfFmtDate, pdfFmtNum } from './pdfBrandKit';
 import { PdfSectionTitle } from './PdfTable';
 
 const s = StyleSheet.create({
-  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.headerBg, paddingVertical: 7, paddingHorizontal: 8 },
-  th: { color: PDF.white, fontSize: 8, fontWeight: 'bold', textAlign: 'center' },
-  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 6, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: PDF.border },
+  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.primary, paddingVertical: 9, paddingHorizontal: 9, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: PDF.accent },
+  th: { color: PDF.white, fontSize: 8, fontWeight: 'bold', textAlign: 'center', lineHeight: 1.4 },
+  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 7.5, paddingHorizontal: 9, borderBottomWidth: 0.5, borderBottomColor: PDF.border, alignItems: 'center' },
   rowAlt: { backgroundColor: PDF.rowAlt },
-  td: { fontSize: 8, color: PDF.text, textAlign: 'center' },
+  td: { fontSize: 8, color: PDF.text, textAlign: 'center', lineHeight: 1.45 },
   totalRow: {
     direction: 'rtl',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: PDF.logoGreenSoft,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     marginTop: 8,
     borderTopWidth: 1.5,
-    borderTopColor: PDF.primary,
+    borderTopColor: PDF.accent,
   },
 });
 
@@ -55,7 +55,7 @@ export function ExternalIncomePDF({ sessionLabel, total, rows }: ExternalIncomeP
       ]}
     >
       <PdfSectionTitle>سجل المدخولات</PdfSectionTitle>
-      <View style={s.head}>
+      <View style={s.head} minPresenceAhead={40}>
         <Text style={[s.th, { flex: 1.1 }]}>{ar('التاريخ')}</Text>
         <Text style={[s.th, { flex: 1.2 }]}>{ar('المرجع')}</Text>
         <Text style={[s.th, { flex: 2.2 }]}>{ar('البيان')}</Text>
@@ -63,7 +63,7 @@ export function ExternalIncomePDF({ sessionLabel, total, rows }: ExternalIncomeP
         <Text style={[s.th, { flex: 1.1 }]}>{ar('المبلغ')}</Text>
       </View>
       {sorted.map((r, i) => (
-        <View key={r.ref} style={[s.row, i % 2 === 1 && s.rowAlt]}>
+        <View key={r.ref} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
           <Text style={[s.td, { flex: 1.1 }]}>{ar(pdfFmtDate(r.date))}</Text>
           <Text style={[s.td, { flex: 1.2, direction: 'ltr' }]}>{ar(r.ref)}</Text>
           <Text style={[s.td, { flex: 2.2, textAlign: 'right' }]}>{ar(r.description)}</Text>
@@ -74,8 +74,8 @@ export function ExternalIncomePDF({ sessionLabel, total, rows }: ExternalIncomeP
       {rows.length === 0 ? (
         <Text style={{ fontSize: 9, color: PDF.muted, textAlign: 'center', paddingVertical: 20 }}>{ar('لا توجد مدخولات')}</Text>
       ) : (
-        <View style={s.totalRow}>
-          <Text style={{ fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen }}>{ar('الإجمالي')}</Text>
+        <View style={s.totalRow} wrap={false}>
+          <Text style={{ fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen, lineHeight: 1.4 }}>{ar('الإجمالي')}</Text>
           <PdfMoneyText amount={total} size="md" />
         </View>
       )}

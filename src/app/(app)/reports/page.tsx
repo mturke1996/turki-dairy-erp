@@ -15,7 +15,6 @@ import { FinancialReportPDF } from '@/features/pdf/FinancialReportPDF';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { usePermission } from '@/lib/store/use-permission';
 import { computeAging } from '@/lib/domain/calculations';
-import { computePnL } from '@/lib/domain/accounting';
 import { ACCOUNT_LABELS } from '@/lib/domain/constants';
 import { formatNumber, formatShortDate } from '@/lib/utils';
 import type { TransactionKind } from '@/lib/domain/types';
@@ -38,11 +37,7 @@ export default function ReportsPage() {
   const d = useDerived();
   const canFinancial = usePermission('reports.financial');
 
-  const pnl = useMemo(() => {
-    const revenue = d.sessionSummaries.reduce((s, x) => s + x.salesRevenue, 0);
-    const cogs = d.sessionSummaries.reduce((s, x) => s + x.cogs, 0);
-    return computePnL(revenue, cogs);
-  }, [d.sessionSummaries]);
+  const pnl = d.incomeStatement;
 
   const aging = useMemo(() => {
     const total = { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 };
@@ -88,8 +83,14 @@ export default function ReportsPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="الإيرادات" value={<Money value={pnl.revenue} decimals={0} />} icon={Wallet} tone="navy" />
-        <StatTile label="تكلفة المبيعات" value={<Money value={pnl.cogs} decimals={0} />} icon={Coins} tone="sun" />
-        <StatTile label="الربح الإجمالي" value={<Money value={pnl.grossProfit} decimals={0} />} icon={TrendingUp} tone="meadow" hint={`هامش ${formatNumber(pnl.marginPct, 1)}%`} />
+        <StatTile label="مجمل الربح" value={<Money value={pnl.grossProfit} decimals={0} />} icon={Coins} tone="sun" hint={`هامش ${formatNumber(pnl.marginPct, 1)}%`} />
+        <StatTile
+          label="صافي الربح بعد المصاريف"
+          value={<Money value={pnl.netProfit} decimals={0} />}
+          icon={TrendingUp}
+          tone={pnl.netProfit >= 0 ? 'meadow' : 'rose'}
+          hint={pnl.wasteLosses > 0 ? `يشمل هدر ${formatNumber(pnl.wasteLosses, 0)}` : `هامش ${formatNumber(pnl.netMarginPct, 1)}%`}
+        />
         <StatTile
           label="توازن القيود"
           value={d.trialBalance.balanced ? 'متوازن' : 'غير متوازن'}
@@ -156,18 +157,40 @@ export default function ReportsPage() {
           <Card>
             <CardHeader>
               <CardTitle>قائمة الدخل</CardTitle>
-              <CardDescription>الإيرادات مقابل تكلفة البضاعة المباعة</CardDescription>
+              <CardDescription>من الإيرادات إلى صافي الربح بعد خصم الهدر وكل المصاريف</CardDescription>
             </CardHeader>
             <CardContent className="space-y-1">
               <PnlRow label="إيرادات المبيعات" value={pnl.revenue} />
               <PnlRow label="تكلفة البضاعة المباعة" value={-pnl.cogs} negative />
-              <div className="mt-2 flex items-center justify-between rounded-xl bg-meadow-50 px-4 py-3 ring-1 ring-meadow-100">
+              <div className="my-2 flex items-center justify-between rounded-xl bg-meadow-50 px-4 py-3 ring-1 ring-meadow-100">
                 <span className="text-[14px] font-bold text-meadow-800">مجمل الربح</span>
                 <div className="text-left">
                   <Money value={pnl.grossProfit} className="text-[17px] font-bold text-meadow-800" />
                   <p className="text-[11px] text-meadow-700">هامش {formatNumber(pnl.marginPct, 1)}%</p>
                 </div>
               </div>
+              <PnlRow label="خسائر الهدر والتلف (غير نقدية)" value={-pnl.wasteLosses} negative />
+              <PnlRow label="المصاريف التشغيلية" value={-pnl.operatingExpenses} negative />
+              <PnlRow label="الرواتب والأجور" value={-pnl.salaries} negative />
+              <div
+                className={`mt-2 flex items-center justify-between rounded-xl px-4 py-3 ring-1 ${
+                  pnl.netProfit >= 0 ? 'bg-meadow-50 ring-meadow-100' : 'bg-rose-50 ring-rose-100'
+                }`}
+              >
+                <span className={`text-[14px] font-bold ${pnl.netProfit >= 0 ? 'text-meadow-800' : 'text-rose-700'}`}>
+                  {pnl.netProfit >= 0 ? 'صافي الربح' : 'صافي الخسارة'}
+                </span>
+                <div className="text-left">
+                  <Money value={pnl.netProfit} className={`text-[17px] font-bold ${pnl.netProfit >= 0 ? 'text-meadow-800' : 'text-rose-700'}`} />
+                  <p className={`text-[11px] ${pnl.netProfit >= 0 ? 'text-meadow-700' : 'text-rose-600'}`}>هامش {formatNumber(pnl.netMarginPct, 1)}%</p>
+                </div>
+              </div>
+              {pnl.wasteLosses > 0 && (
+                <p className="mt-3 rounded-lg bg-sun-50 px-3 py-2 text-[11.5px] leading-relaxed text-sun-800 ring-1 ring-sun-100">
+                  الهدر والتلف خسارة <strong>غير نقدية</strong>: لا يُخصم من الخزينة (ثمن الحليب يُسدَّد للفلاح ضمن الديون)،
+                  بل يُخفّض قيمة المخزون وصافي الربح. لذلك يظهر هنا كخسارة تقلّل الربح دون تكرار خصم النقد.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

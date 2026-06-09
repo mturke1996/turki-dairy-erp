@@ -3,9 +3,19 @@ import {
   computeFarmerSessionStats,
   buildSessionCarryForwardSnapshot,
   computeDerived,
+  computeWasteSummary,
 } from '@/lib/domain/calculations';
 import { resolveAdjustmentReasonKind } from '@/lib/domain/constants';
-import type { Expense, Farmer, InventoryAdjustment, Payment, Session, SupplyTransaction } from '@/lib/domain/types';
+import type {
+  Expense,
+  Farmer,
+  InventoryAdjustment,
+  Payment,
+  PayrollBatch,
+  SaleTransaction,
+  Session,
+  SupplyTransaction,
+} from '@/lib/domain/types';
 
 const farmer: Farmer = {
   id: 'f1',
@@ -237,5 +247,136 @@ describe('inventory waste as non-cash expense', () => {
     const d = build([wasteExpense]);
     expect(d.trialBalance.balanced).toBe(true);
     expect(Math.round(d.trialBalance.totalDebit)).toBe(Math.round(d.trialBalance.totalCredit));
+  });
+
+  it('surfaces waste as a loss that lowers net profit without touching cash', () => {
+    const d = build([wasteExpense]);
+    expect(d.incomeStatement.wasteLosses).toBe(20);
+    expect(d.incomeStatement.netProfit).toBe(-20);
+    expect(d.totals.netCash).toBe(0);
+  });
+});
+
+describe('income statement — net profit after waste, expenses, and salaries', () => {
+  const session: Session = {
+    id: 'si', label: 'يونيو', periodFrom: '2026-06-01', periodTo: '2026-06-30',
+    status: 'open', openingStock: 0, openingAvgCost: 2, openingPayables: 0, openingReceivables: 0,
+    createdAt: '2026-06-01',
+  };
+  const supplies: SupplyTransaction[] = [{
+    id: 'sup1', ref: 'SUP-1', farmerId: 'f1', sessionId: 'si', date: '2026-06-01',
+    quantity: 100, unitPrice: 2, total: 200, qualityTier: 'A', createdAt: '2026-06-01',
+  }];
+  const sales: SaleTransaction[] = [{
+    id: 'sal1', ref: 'SAL-1', customerId: 'c1', sessionId: 'si', date: '2026-06-10',
+    quantity: 50, unitPrice: 3, total: 150, dueDate: '2026-06-20', createdAt: '2026-06-10',
+  }];
+  const cashExpense: Expense = {
+    id: 'exp-c', ref: 'EXP-2', categoryId: 'cat-fuel', amount: 30, description: 'وقود',
+    date: '2026-06-08', sessionId: 'si', status: 'approved', paidFromType: 'vault', paidFromId: 'v1',
+    createdAt: '2026-06-08',
+  };
+  const payroll: PayrollBatch[] = [{
+    id: 'pr1', ref: 'PR-1', label: 'رواتب', payrollType: 'monthly', periodFrom: '2026-06-01',
+    periodTo: '2026-06-30', lines: [], totalAmount: 40, status: 'paid', sessionId: 'si', createdAt: '2026-06-30',
+  }];
+  const wasteAdj: InventoryAdjustment = {
+    id: 'adj-w2', ref: 'ADJ-2', sessionId: 'si', date: '2026-06-05',
+    quantity: -10, unitCost: 2, reason: 'تلف وفساد', reasonKind: 'loss', createdAt: '2026-06-05',
+  };
+  const wasteExpense: Expense = {
+    id: 'exp-w2', ref: 'EXP-3', categoryId: 'cat-waste', amount: 20, description: 'هدر مخزون',
+    date: '2026-06-05', sessionId: 'si', status: 'approved', nonCash: true, sourceAdjustmentId: 'adj-w2',
+    createdAt: '2026-06-05',
+  };
+
+  function build(withWaste: boolean) {
+    return computeDerived({
+      sessions: [session], activeSessionId: 'si',
+      farmers: [farmer], customers: [], employees: [],
+      supplies, sales, payments: [], debtEntries: [],
+      adjustments: withWaste ? [wasteAdj] : [],
+      expenses: withWaste ? [cashExpense, wasteExpense] : [cashExpense],
+      payrollBatches: payroll,
+      vaults: [], banks: [], cashMovements: [], externalIncomes: [],
+      settings: { minStockThreshold: 0, defaultBuyPrice: 2, defaultSellPrice: 3 },
+    });
+  }
+
+  it('subtracts operating expenses and salaries from gross profit', () => {
+    const is = build(false).incomeStatement;
+    expect(is.revenue).toBe(150);
+    expect(is.grossProfit).toBe(50);
+    expect(is.wasteLosses).toBe(0);
+    expect(is.operatingExpenses).toBe(30);
+    expect(is.salaries).toBe(40);
+    expect(is.netProfit).toBe(-20);
+  });
+
+  it('waste lowers net profit by exactly its value', () => {
+    const base = build(false);
+    const withWaste = build(true);
+    expect(withWaste.incomeStatement.wasteLosses).toBe(20);
+    expect(base.incomeStatement.netProfit - withWaste.incomeStatement.netProfit).toBe(20);
+  });
+
+  it('waste is a non-cash loss: cash is identical with or without it', () => {
+    expect(build(true).totals.netCash).toBe(build(false).totals.netCash);
+  });
+});
+
+describe('computeWasteSummary and alerts', () => {
+  const session: Session = {
+    id: 'sw2', label: 'يونيو', periodFrom: '2026-06-01', periodTo: '2026-06-30',
+    status: 'open', openingStock: 0, openingAvgCost: 2, openingPayables: 0, openingReceivables: 0,
+    createdAt: '2026-06-01',
+  };
+  const lossAdj: InventoryAdjustment = {
+    id: 'adj-l', ref: 'ADJ-L', sessionId: 'sw2', date: '2026-06-05',
+    quantity: -15, unitCost: 2, reason: 'تلف وفساد', reasonKind: 'loss', createdAt: '2026-06-05',
+  };
+  const correctionAdj: InventoryAdjustment = {
+    id: 'adj-c', ref: 'ADJ-C', sessionId: 'sw2', date: '2026-06-06',
+    quantity: -5, unitCost: 2, reason: 'تصحيح جرد', reasonKind: 'correction', createdAt: '2026-06-06',
+  };
+
+  it('counts only loss adjustments, not corrections', () => {
+    const w = computeWasteSummary([lossAdj, correctionAdj], 'sw2');
+    expect(w.sessionQty).toBe(15);
+    expect(w.sessionValue).toBe(30);
+    expect(w.byReason).toHaveLength(1);
+    expect(w.byReason[0].reason).toBe('تلف وفساد');
+  });
+
+  it('surfaces milk-waste alert when session has waste', () => {
+    const d = computeDerived({
+      sessions: [session], activeSessionId: 'sw2',
+      farmers: [farmer], customers: [], employees: [],
+      supplies: [], sales: [], payments: [], debtEntries: [],
+      adjustments: [lossAdj], expenses: [], payrollBatches: [],
+      vaults: [], banks: [], cashMovements: [], externalIncomes: [],
+      settings: { minStockThreshold: 0, defaultBuyPrice: 2.85, defaultSellPrice: 2.55 },
+    });
+    expect(d.wasteSummary.sessionQty).toBe(15);
+    expect(d.alerts.some((a) => a.id === 'milk-waste')).toBe(true);
+  });
+
+  it('fires low-stock alert when below threshold', () => {
+    const d = computeDerived({
+      sessions: [session], activeSessionId: 'sw2',
+      farmers: [farmer], customers: [], employees: [],
+      supplies: [{
+        id: 'sup1', ref: 'SUP-1', farmerId: 'f1', sessionId: 'sw2', date: '2026-06-01',
+        quantity: 100, unitPrice: 2, total: 200, qualityTier: 'A', createdAt: '2026-06-01',
+      }],
+      sales: [{
+        id: 'sal1', ref: 'SAL-1', customerId: 'c1', sessionId: 'sw2', date: '2026-06-10',
+        quantity: 95, unitPrice: 3, total: 285, dueDate: '2026-06-20', createdAt: '2026-06-10',
+      }],
+      payments: [], debtEntries: [], adjustments: [], expenses: [], payrollBatches: [],
+      vaults: [], banks: [], cashMovements: [], externalIncomes: [],
+      settings: { minStockThreshold: 10, defaultBuyPrice: 2.85, defaultSellPrice: 2.55 },
+    });
+    expect(d.alerts.some((a) => a.id === 'low-stock')).toBe(true);
   });
 });

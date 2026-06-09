@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
 import { BottomNav } from './bottom-nav';
+import { QuickAddButton } from './quick-add-button';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -53,6 +54,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+
+      {/* زر الإضافة السريع */}
+      <QuickAddButton />
 
       {/* شريط التنقّل السفلي — الهاتف */}
       <BottomNav />

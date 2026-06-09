@@ -7,11 +7,11 @@ import { PDF } from './pdfBase';
 import { pdfFmtNum } from './pdfBrandKit';
 
 const s = StyleSheet.create({
-  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.headerBg, paddingVertical: 7, paddingHorizontal: 8, marginTop: 14 },
-  th: { color: PDF.white, fontSize: 8, fontWeight: 'bold' },
-  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 6, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: PDF.border },
+  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.primary, paddingVertical: 9, paddingHorizontal: 9, marginTop: 4, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: PDF.accent },
+  th: { color: PDF.white, fontSize: 8, fontWeight: 'bold', lineHeight: 1.4 },
+  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 7.5, paddingHorizontal: 9, borderBottomWidth: 0.5, borderBottomColor: PDF.border, alignItems: 'center' },
   rowAlt: { backgroundColor: PDF.rowAlt },
-  td: { fontSize: 8, color: PDF.text },
+  td: { fontSize: 8, color: PDF.text, lineHeight: 1.45 },
 });
 
 export type CashStatementRow = {
@@ -47,7 +47,7 @@ export function CashStatementPDF({ accountName, accountTypeLabel, opening, total
         { label: 'الرصيد الحالي', moneyAmount: closing },
       ]}
     >
-      <View style={s.head}>
+      <View style={s.head} minPresenceAhead={40}>
         <Text style={[s.th, { flex: 1.1, textAlign: 'left' }]}>{ar('التاريخ')}</Text>
         <Text style={[s.th, { flex: 2.6, textAlign: 'right' }]}>{ar('البيان')}</Text>
         <Text style={[s.th, { flex: 1.2, textAlign: 'left' }]}>{ar('وارد')}</Text>
@@ -55,7 +55,7 @@ export function CashStatementPDF({ accountName, accountTypeLabel, opening, total
         <Text style={[s.th, { flex: 1.3, textAlign: 'left' }]}>{ar('الرصيد')}</Text>
       </View>
       {rows.map((r, i) => (
-        <View key={`${r.ref}-${i}`} style={[s.row, i % 2 === 1 && s.rowAlt]}>
+        <View key={`${r.ref}-${i}`} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
           <Text style={[s.td, { flex: 1.1, textAlign: 'left', direction: 'ltr' }]}>{r.date}</Text>
           <View style={{ flex: 2.6 }}>
             <Text style={[s.td, { textAlign: 'right', fontWeight: 'bold' }]}>{ar(r.typeLabel)}</Text>

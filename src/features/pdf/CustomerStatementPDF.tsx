@@ -11,11 +11,11 @@ import type { AgingBuckets, CustomerStats } from '@/lib/domain/calculations';
 import type { Payment, SaleTransaction } from '@/lib/domain/types';
 
 const s = StyleSheet.create({
-  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.headerBg, paddingVertical: 7, paddingHorizontal: 8 },
-  th: { color: PDF.white, fontSize: 8.5, fontWeight: 'bold', textAlign: 'center' },
-  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 6, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: PDF.border },
+  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.primary, paddingVertical: 9, paddingHorizontal: 9, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: PDF.accent },
+  th: { color: PDF.white, fontSize: 8.5, fontWeight: 'bold', textAlign: 'center', lineHeight: 1.4 },
+  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 7.5, paddingHorizontal: 9, borderBottomWidth: 0.5, borderBottomColor: PDF.border, alignItems: 'center' },
   rowAlt: { backgroundColor: PDF.rowAlt },
-  td: { fontSize: 8.5, color: PDF.text, textAlign: 'center' },
+  td: { fontSize: 8.5, color: PDF.text, textAlign: 'center', lineHeight: 1.45 },
 
   totalRow: {
     direction: 'rtl',
@@ -23,25 +23,27 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: PDF.logoGreenSoft,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     borderTopWidth: 1.5,
-    borderTopColor: PDF.primary,
+    borderTopColor: PDF.accent,
   },
-  totalLabel: { fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen },
+  totalLabel: { fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen, lineHeight: 1.4 },
 
-  agingWrap: { direction: 'rtl', flexDirection: 'row', gap: 6, marginTop: 16 },
-  agingCell: { flex: 1, borderWidth: 1, borderColor: PDF.border, borderRadius: 6, padding: 8, alignItems: 'center' },
-  agingLabel: { fontSize: 7, color: PDF.muted, marginBottom: 4, textAlign: 'center' },
-  agingValue: { fontSize: 10, fontWeight: 'bold', color: PDF.text },
+  agingWrap: { direction: 'rtl', flexDirection: 'row', gap: 8, marginTop: 4 },
+  agingCell: { flex: 1, borderWidth: 0.75, borderColor: PDF.border, borderTopWidth: 2, borderTopColor: PDF.accent, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', backgroundColor: PDF.white },
+  agingLabel: { fontSize: 7, color: PDF.muted, marginBottom: 5, textAlign: 'center', lineHeight: 1.3 },
+  agingValue: { fontSize: 10.5, fontWeight: 'bold', color: PDF.text, lineHeight: 1.3 },
 
   balanceBox: {
-    marginTop: 16,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: PDF.primary,
-    borderRadius: 8,
-    backgroundColor: PDF.sunSoft,
+    marginTop: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderWidth: 0.75,
+    borderColor: PDF.border,
+    borderTopWidth: 2.5,
+    borderTopColor: PDF.accent,
+    backgroundColor: PDF.paleGold,
     alignItems: 'center',
   },
 });
@@ -58,10 +60,14 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
   const sortedSales = [...sales].sort((a, b) => a.date.localeCompare(b.date));
   const sortedPayments = [...payments].sort((a, b) => a.date.localeCompare(b.date));
 
+  // الإجماليات من الصفوف المعروضة نفسها — تطابق دائم مع الجدول
+  const salesTotal = sortedSales.reduce((sum, x) => sum + x.total, 0);
+  const receiptsTotal = sortedPayments.reduce((sum, x) => sum + x.amount, 0);
+
   return (
     <ReportShell
       title="كشف حساب عميل"
-      subtitle={sessionLabel ? `الفترة: ${sessionLabel}` : 'كشف الديون'}
+      subtitle={`كشف شامل بجميع الحركات${sessionLabel ? ` — أُصدر خلال ${sessionLabel}` : ''}`}
       summaryPrimaryDateLabel="تاريخ الإصدار"
       metaCells={[
         { label: 'العميل', value: customer.entityName },
@@ -82,7 +88,7 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
       />
 
       <PdfSectionTitle>سجلّ المبيعات</PdfSectionTitle>
-      <View style={s.head}>
+      <View style={s.head} minPresenceAhead={40}>
         <Text style={[s.th, { flex: 1.2 }]}>{ar('التاريخ')}</Text>
         <Text style={[s.th, { flex: 1.4 }]}>{ar('المرجع')}</Text>
         <Text style={[s.th, { flex: 1 }]}>{ar('الكمية (لتر)')}</Text>
@@ -91,7 +97,7 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
         <Text style={[s.th, { flex: 1.2 }]}>{ar('الإجمالي')}</Text>
       </View>
       {sortedSales.map((sale, i) => (
-        <View key={sale.id} style={[s.row, i % 2 === 1 && s.rowAlt]}>
+        <View key={sale.id} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
           <Text style={[s.td, { flex: 1.2 }]}>{ar(pdfFmtDate(sale.date))}</Text>
           <Text style={[s.td, { flex: 1.4, direction: 'ltr' }]}>{ar(sale.ref)}</Text>
           <Text style={[s.td, { flex: 1 }]}>{ar(pdfFmtNum(sale.quantity, 1))}</Text>
@@ -100,38 +106,38 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
           <Text style={[s.td, { flex: 1.2, fontWeight: 'bold' }]}>{ar(pdfFmtNum(sale.total))}</Text>
         </View>
       ))}
-      <View style={s.totalRow}>
-        <Text style={s.totalLabel}>{ar('إجمالي المبيعات')}</Text>
-        <PdfMoneyText amount={customer.totalRevenue} size="md" />
+      <View style={s.totalRow} wrap={false}>
+        <Text style={s.totalLabel}>{ar('إجمالي المبيعات المعروض')}</Text>
+        <PdfMoneyText amount={salesTotal} size="md" />
       </View>
 
       {sortedPayments.length > 0 && (
         <>
           <PdfSectionTitle>التحصيلات</PdfSectionTitle>
-          <View style={s.head}>
+          <View style={s.head} minPresenceAhead={40}>
             <Text style={[s.th, { flex: 1.4 }]}>{ar('التاريخ')}</Text>
             <Text style={[s.th, { flex: 1.6 }]}>{ar('المرجع')}</Text>
             <Text style={[s.th, { flex: 1.2 }]}>{ar('الطريقة')}</Text>
             <Text style={[s.th, { flex: 1.4 }]}>{ar('المبلغ')}</Text>
           </View>
           {sortedPayments.map((p, i) => (
-            <View key={p.id} style={[s.row, i % 2 === 1 && s.rowAlt]}>
+            <View key={p.id} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
               <Text style={[s.td, { flex: 1.4 }]}>{ar(pdfFmtDate(p.date))}</Text>
               <Text style={[s.td, { flex: 1.6, direction: 'ltr' }]}>{ar(p.ref)}</Text>
               <Text style={[s.td, { flex: 1.2 }]}>{ar(PAYMENT_METHOD_LABELS[p.method])}</Text>
               <Text style={[s.td, { flex: 1.4, fontWeight: 'bold' }]}>{ar(pdfFmtNum(p.amount))}</Text>
             </View>
           ))}
-          <View style={s.totalRow}>
-            <Text style={s.totalLabel}>{ar('إجمالي المحصّل')}</Text>
-            <PdfMoneyText amount={customer.receivedTotal} size="md" color={PDF.logoGreen} />
+          <View style={s.totalRow} wrap={false}>
+            <Text style={s.totalLabel}>{ar('إجمالي المحصّل المعروض')}</Text>
+            <PdfMoneyText amount={receiptsTotal} size="md" color={PDF.logoGreen} />
           </View>
         </>
       )}
 
       {/* أعمار الديون */}
       <PdfSectionTitle>أعمار الديون</PdfSectionTitle>
-      <View style={s.agingWrap}>
+      <View style={s.agingWrap} wrap={false}>
         {[
           { l: 'غير مستحق', v: aging.current },
           { l: '1-30 يوم', v: aging.d1_30 },
@@ -146,10 +152,10 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
         ))}
       </View>
 
-      <View style={s.balanceBox}>
-        <Text style={{ fontSize: 9, color: PDF.muted, marginBottom: 4 }}>{ar('الدين على العميل')}</Text>
+      <View style={s.balanceBox} wrap={false}>
+        <Text style={{ fontSize: 9, color: PDF.muted, marginBottom: 4, lineHeight: 1.4 }}>{ar('الرصيد المستحق على العميل')}</Text>
         <PdfMoneyText amount={customer.outstanding} size="lg" />
-        <Text style={{ fontSize: 8, color: PDF.muted, marginTop: 6 }}>{ar('إجمالي المبيعات − إجمالي المحصّل')}</Text>
+        <Text style={{ fontSize: 8, color: PDF.muted, marginTop: 6, lineHeight: 1.4 }}>{ar('وفق سجلات النظام شاملاً الديون المسجّلة والتسويات')}</Text>
       </View>
     </ReportShell>
   );

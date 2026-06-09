@@ -7,13 +7,13 @@ import { PDF } from './pdfBase';
 import { pdfFmtNum } from './pdfBrandKit';
 
 const s = StyleSheet.create({
-  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.headerBg, paddingVertical: 7, paddingHorizontal: 8, marginTop: 14 },
-  th: { color: PDF.white, fontSize: 8.5, fontWeight: 'bold' },
-  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 6, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: PDF.border },
+  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.primary, paddingVertical: 9, paddingHorizontal: 9, marginTop: 4, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: PDF.accent },
+  th: { color: PDF.white, fontSize: 8.5, fontWeight: 'bold', lineHeight: 1.4 },
+  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 7.5, paddingHorizontal: 9, borderBottomWidth: 0.5, borderBottomColor: PDF.border, alignItems: 'center' },
   rowAlt: { backgroundColor: PDF.rowAlt },
-  td: { fontSize: 8.5, color: PDF.text },
-  totalRow: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.logoGreenSoft, paddingVertical: 8, paddingHorizontal: 8, borderTopWidth: 1.5, borderTopColor: PDF.primary },
-  tf: { fontSize: 9, fontWeight: 'bold', color: PDF.primary },
+  td: { fontSize: 8.5, color: PDF.text, lineHeight: 1.45 },
+  totalRow: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.logoGreenSoft, paddingVertical: 9, paddingHorizontal: 9, borderTopWidth: 1.5, borderTopColor: PDF.accent, alignItems: 'center' },
+  tf: { fontSize: 9, fontWeight: 'bold', color: PDF.primary, lineHeight: 1.4 },
 });
 
 export type PayrollLineRow = {
@@ -49,7 +49,7 @@ export function PayrollPDF({ label, periodFrom, periodTo, total, statusLabel, pa
         { label: 'الحالة', value: statusLabel },
       ]}
     >
-      <View style={s.head}>
+      <View style={s.head} minPresenceAhead={40}>
         <Text style={[s.th, { flex: 2.2, textAlign: 'right' }]}>{ar('الموظف')}</Text>
         <Text style={[s.th, { flex: 1.3, textAlign: 'left' }]}>{ar('الأساسي')}</Text>
         <Text style={[s.th, { flex: 1.3, textAlign: 'left' }]}>{ar('البدلات')}</Text>
@@ -57,7 +57,7 @@ export function PayrollPDF({ label, periodFrom, periodTo, total, statusLabel, pa
         <Text style={[s.th, { flex: 1.4, textAlign: 'left' }]}>{ar('الصافي')}</Text>
       </View>
       {rows.map((r, i) => (
-        <View key={`${r.name}-${i}`} style={[s.row, i % 2 === 1 && s.rowAlt]}>
+        <View key={`${r.name}-${i}`} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
           <View style={{ flex: 2.2 }}>
             <Text style={[s.td, { textAlign: 'right', fontWeight: 'bold' }]}>{ar(r.name)}</Text>
             <Text style={[s.td, { textAlign: 'right', fontSize: 7.5, color: PDF.muted }]}>{ar(r.jobTitle)}</Text>
@@ -68,8 +68,9 @@ export function PayrollPDF({ label, periodFrom, periodTo, total, statusLabel, pa
           <Text style={[s.td, { flex: 1.4, textAlign: 'left', fontWeight: 'bold' }]}>{ar(pdfFmtNum(r.net, 0))}</Text>
         </View>
       ))}
-      <View style={s.totalRow}>
-        <Text style={[s.tf, { flex: 5.1, textAlign: 'right' }]}>{ar('إجمالي كشف الرواتب')}</Text>
+      <View style={s.totalRow} wrap={false}>
+        {/* 6.1 = مجموع أعمدة الموظف+الأساسي+البدلات+الخصومات كي يصطف الإجمالي تحت عمود الصافي */}
+        <Text style={[s.tf, { flex: 6.1, textAlign: 'right' }]}>{ar('إجمالي كشف الرواتب')}</Text>
         <Text style={[s.tf, { flex: 1.4, textAlign: 'left' }]}>{ar(pdfFmtNum(total, 0))}</Text>
       </View>
 

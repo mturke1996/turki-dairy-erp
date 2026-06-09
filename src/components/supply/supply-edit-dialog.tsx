@@ -30,7 +30,11 @@ export function SupplyEditDialog({
   const [milkShift, setMilkShift] = useState<MilkShift>('morning');
   const [notes, setNotes] = useState('');
   const [date, setDate] = useState('');
+  const [periodFrom, setPeriodFrom] = useState('');
+  const [periodTo, setPeriodTo] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const isPeriod = !!(supply?.periodFrom && supply?.periodTo);
 
   useEffect(() => {
     if (!open || !supply) return;
@@ -41,6 +45,8 @@ export function SupplyEditDialog({
     setMilkShift(supply.milkShift ?? 'morning');
     setNotes(supply.notes ?? '');
     setDate(supply.date.slice(0, 10));
+    setPeriodFrom(supply.periodFrom ?? '');
+    setPeriodTo(supply.periodTo ?? '');
   }, [open, supply]);
 
   async function submit() {
@@ -51,6 +57,10 @@ export function SupplyEditDialog({
     if (qty <= 0) return toast.error('أدخل كمية صحيحة.');
     if (price <= 0) return toast.error('أدخل سعر شراء صحيح.');
     if (sample > qty) return toast.error('كمية العينة تتجاوز الكمية الكلية.');
+    if (isPeriod) {
+      if (!periodFrom || !periodTo) return toast.error('حدّد بداية ونهاية الفترة.');
+      if (periodFrom > periodTo) return toast.error('بداية الفترة يجب أن تسبق نهايتها.');
+    }
 
     setBusy(true);
     try {
@@ -60,9 +70,17 @@ export function SupplyEditDialog({
         unitPrice: price,
         sampleQty: sample > 0 ? sample : undefined,
         qualityTier,
-        milkShift,
         notes: notes.trim() || undefined,
-        date: new Date(`${date}T${String(hour).padStart(2, '0')}:00:00`).toISOString(),
+        ...(isPeriod
+          ? {
+              periodFrom,
+              periodTo,
+              date: new Date(`${periodTo}T12:00:00`).toISOString(),
+            }
+          : {
+              milkShift,
+              date: new Date(`${date}T${String(hour).padStart(2, '0')}:00:00`).toISOString(),
+            }),
       });
       if (res.ok) {
         toast.success('تم تحديث الاستلام');
@@ -103,20 +121,33 @@ export function SupplyEditDialog({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="الوجبة">
-              <Select value={milkShift} onValueChange={(v) => setMilkShift(v as MilkShift)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(MILK_SHIFT_LABELS) as MilkShift[]).map((k) => (
-                    <SelectItem key={k} value={k}>{MILK_SHIFT_LABELS[k]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+            {!isPeriod ? (
+              <Field label="الوجبة">
+                <Select value={milkShift} onValueChange={(v) => setMilkShift(v as MilkShift)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(MILK_SHIFT_LABELS) as MilkShift[]).map((k) => (
+                      <SelectItem key={k} value={k}>{MILK_SHIFT_LABELS[k]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : null}
           </div>
-          <Field label="التاريخ">
-            <Input type="date" dir="ltr" value={date} onChange={(e) => setDate(e.target.value)} />
-          </Field>
+          {isPeriod ? (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="بداية الفترة">
+                <Input type="date" dir="ltr" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} />
+              </Field>
+              <Field label="نهاية الفترة">
+                <Input type="date" dir="ltr" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} />
+              </Field>
+            </div>
+          ) : (
+            <Field label="التاريخ">
+              <Input type="date" dir="ltr" value={date} onChange={(e) => setDate(e.target.value)} />
+            </Field>
+          )}
           <Field label="ملاحظة" hint="اختياري">
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </Field>

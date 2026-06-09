@@ -8,22 +8,22 @@ import { PdfMoneyText, pdfFmtDate, pdfFmtNum } from './pdfBrandKit';
 import { PdfSectionTitle } from './PdfTable';
 
 const s = StyleSheet.create({
-  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.headerBg, paddingVertical: 7, paddingHorizontal: 8 },
-  th: { color: PDF.white, fontSize: 8, fontWeight: 'bold', textAlign: 'center' },
-  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 6, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: PDF.border },
+  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.primary, paddingVertical: 9, paddingHorizontal: 9, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: PDF.accent },
+  th: { color: PDF.white, fontSize: 8, fontWeight: 'bold', textAlign: 'center', lineHeight: 1.4 },
+  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 7.5, paddingHorizontal: 9, borderBottomWidth: 0.5, borderBottomColor: PDF.border, alignItems: 'center' },
   rowAlt: { backgroundColor: PDF.rowAlt },
-  td: { fontSize: 8, color: PDF.text, textAlign: 'center' },
+  td: { fontSize: 8, color: PDF.text, textAlign: 'center', lineHeight: 1.45 },
   totalRow: {
     direction: 'rtl',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: PDF.logoGreenSoft,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     marginTop: 8,
     borderTopWidth: 1.5,
-    borderTopColor: PDF.primary,
+    borderTopColor: PDF.accent,
   },
 });
 
@@ -64,12 +64,15 @@ export function DebtsRegisterPDF({
       metaCells={[
         { label: 'ديون علينا', moneyAmount: totalPayables },
         { label: 'ديون لنا', moneyAmount: totalReceivables },
-        { label: 'صافي المركز', moneyAmount: Math.abs(netPosition) },
+        {
+          label: netPosition >= 0 ? 'صافي المركز (لصالحنا)' : 'صافي المركز (علينا)',
+          moneyAmount: Math.abs(netPosition),
+        },
         { label: 'عدد السجلات', value: String(rows.length) },
       ]}
     >
       <PdfSectionTitle>الديون المسجّلة يدوياً</PdfSectionTitle>
-      <View style={s.head}>
+      <View style={s.head} minPresenceAhead={40}>
         <Text style={[s.th, { flex: 1.1 }]}>{ar('التاريخ')}</Text>
         <Text style={[s.th, { flex: 1.2 }]}>{ar('المرجع')}</Text>
         <Text style={[s.th, { flex: 1.6 }]}>{ar('الطرف')}</Text>
@@ -79,7 +82,7 @@ export function DebtsRegisterPDF({
         <Text style={[s.th, { flex: 1 }]}>{ar('المتبقي')}</Text>
       </View>
       {sorted.map((r, i) => (
-        <View key={r.ref} style={[s.row, i % 2 === 1 && s.rowAlt]}>
+        <View key={r.ref} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
           <Text style={[s.td, { flex: 1.1 }]}>{ar(pdfFmtDate(r.date))}</Text>
           <Text style={[s.td, { flex: 1.2, direction: 'ltr' }]}>{ar(r.ref)}</Text>
           <View style={{ flex: 1.6 }}>
@@ -95,8 +98,8 @@ export function DebtsRegisterPDF({
       {rows.length === 0 ? (
         <Text style={{ fontSize: 9, color: PDF.muted, textAlign: 'center', paddingVertical: 20 }}>{ar('لا توجد ديون مسجّلة')}</Text>
       ) : (
-        <View style={s.totalRow}>
-          <Text style={{ fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen }}>{ar('إجمالي المتبقي (مسجّل)')}</Text>
+        <View style={s.totalRow} wrap={false}>
+          <Text style={{ fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen, lineHeight: 1.4 }}>{ar('إجمالي المتبقي (مسجّل)')}</Text>
           <PdfMoneyText amount={sorted.reduce((sum, r) => sum + r.remaining, 0)} size="md" />
         </View>
       )}

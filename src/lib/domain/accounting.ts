@@ -262,11 +262,44 @@ export interface ProfitAndLoss {
   revenue: number;
   cogs: number;
   grossProfit: number;
+  /** هامش مجمل الربح ٪ من الإيرادات. */
   marginPct: number;
+  /** خسائر الهدر والتلف (مصروف غير نقدي يُخصم من قيمة المخزون). */
+  wasteLosses: number;
+  /** المصاريف التشغيلية النقدية (عدا الهدر). */
+  operatingExpenses: number;
+  /** الرواتب والأجور المدفوعة. */
+  salaries: number;
+  /** صافي الربح/الخسارة بعد خصم الهدر وكل المصاريف. */
+  netProfit: number;
+  /** هامش صافي الربح ٪ من الإيرادات. */
+  netMarginPct: number;
 }
 
-export function computePnL(revenue: number, cogs: number): ProfitAndLoss {
+/** تكاليف ما دون مجمل الربح — تُخصم للوصول إلى صافي الربح. */
+export interface PnLCosts {
+  wasteLosses?: number;
+  operatingExpenses?: number;
+  salaries?: number;
+}
+
+export function computePnL(revenue: number, cogs: number, costs: PnLCosts = {}): ProfitAndLoss {
+  const wasteLosses = round(costs.wasteLosses ?? 0);
+  const operatingExpenses = round(costs.operatingExpenses ?? 0);
+  const salaries = round(costs.salaries ?? 0);
   const grossProfit = round(revenue - cogs);
   const marginPct = revenue > 0 ? round((grossProfit / revenue) * 100) : 0;
-  return { revenue: round(revenue), cogs: round(cogs), grossProfit, marginPct };
+  const netProfit = round(grossProfit - wasteLosses - operatingExpenses - salaries);
+  const netMarginPct = revenue > 0 ? round((netProfit / revenue) * 100) : 0;
+  return {
+    revenue: round(revenue),
+    cogs: round(cogs),
+    grossProfit,
+    marginPct,
+    wasteLosses,
+    operatingExpenses,
+    salaries,
+    netProfit,
+    netMarginPct,
+  };
 }

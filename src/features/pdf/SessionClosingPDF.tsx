@@ -11,38 +11,40 @@ const s = StyleSheet.create({
   grid: { direction: 'rtl', flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
   stat: {
     width: '31.8%',
-    borderWidth: 1,
+    borderWidth: 0.75,
     borderColor: PDF.border,
-    borderRadius: 8,
-    padding: 10,
+    borderTopWidth: 2,
+    borderTopColor: PDF.accent,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
     backgroundColor: PDF.white,
   },
-  statTitle: { fontSize: 7.5, color: PDF.muted, marginBottom: 6, textAlign: 'right' },
-  statValue: { fontSize: 14, fontWeight: 'bold', color: PDF.primary, textAlign: 'right' },
-  statSub: { fontSize: 7.5, color: PDF.muted, marginTop: 4, textAlign: 'right' },
+  statTitle: { fontSize: 7.5, color: PDF.muted, marginBottom: 6, textAlign: 'right', lineHeight: 1.3 },
+  statValue: { fontSize: 14, fontWeight: 'bold', color: PDF.primary, textAlign: 'right', lineHeight: 1.3 },
+  statSub: { fontSize: 7.5, color: PDF.muted, marginTop: 4, textAlign: 'right', lineHeight: 1.3 },
 
-  section: { fontSize: 11, fontWeight: 'bold', color: PDF.primary, marginTop: 14, marginBottom: 8, textAlign: 'right', borderBottomWidth: 1.5, borderBottomColor: PDF.logoGreen, paddingBottom: 4 },
+  section: { fontSize: 11.5, fontWeight: 'bold', color: PDF.primary, marginTop: 20, marginBottom: 10, textAlign: 'right', borderBottomWidth: 0.75, borderBottomColor: PDF.border, borderRightWidth: 3, borderRightColor: PDF.accent, paddingBottom: 5, paddingRight: 8, lineHeight: 1.35 },
 
-  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.headerBg, paddingVertical: 6, paddingHorizontal: 8 },
-  th: { color: PDF.white, fontSize: 8.5, fontWeight: 'bold' },
-  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 5, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: PDF.border },
+  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.primary, paddingVertical: 9, paddingHorizontal: 9, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: PDF.accent },
+  th: { color: PDF.white, fontSize: 8.5, fontWeight: 'bold', lineHeight: 1.4 },
+  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 7, paddingHorizontal: 9, borderBottomWidth: 0.5, borderBottomColor: PDF.border, alignItems: 'center' },
   rowAlt: { backgroundColor: PDF.rowAlt },
-  td: { fontSize: 8.5, color: PDF.text },
+  td: { fontSize: 8.5, color: PDF.text, lineHeight: 1.45 },
 
   carry: {
     direction: 'rtl',
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 14,
-    padding: 12,
-    borderWidth: 1.5,
-    borderColor: PDF.primary,
-    borderRadius: 8,
-    backgroundColor: PDF.sunSoft,
+    gap: 0,
+    marginTop: 20,
+    borderWidth: 0.75,
+    borderColor: PDF.border,
+    borderTopWidth: 2.5,
+    borderTopColor: PDF.accent,
+    backgroundColor: PDF.paleGold,
   },
-  carryCell: { flex: 1, alignItems: 'center' },
-  carryLabel: { fontSize: 7.5, color: PDF.muted, marginBottom: 4 },
-  carryValue: { fontSize: 13, fontWeight: 'bold', color: PDF.primary },
+  carryCell: { flex: 1, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 10, borderLeftWidth: 0.5, borderLeftColor: PDF.border },
+  carryLabel: { fontSize: 7.5, color: PDF.muted, marginBottom: 5, lineHeight: 1.3 },
+  carryValue: { fontSize: 13, fontWeight: 'bold', color: PDF.primary, lineHeight: 1.3 },
 });
 
 export type SessionClosingProps = {
@@ -55,7 +57,7 @@ export type SessionClosingProps = {
 
 function Stat({ title, value, sub, color = PDF.primary }: any) {
   return (
-    <View style={s.stat}>
+    <View style={s.stat} wrap={false}>
       <Text style={s.statTitle}>{ar(title)}</Text>
       <Text style={[s.statValue, { color }]}>{ar(value)}</Text>
       {sub ? <Text style={s.statSub}>{ar(sub)}</Text> : null}
@@ -71,7 +73,7 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       summaryPrimaryDateLabel="تاريخ الإغلاق"
       metaCells={[
         { label: 'إجمالي المبيعات', moneyAmount: summary.salesRevenue },
-        { label: 'صافي الربح', moneyAmount: summary.grossProfit },
+        { label: 'الربح الإجمالي', moneyAmount: summary.grossProfit },
         { label: 'هامش الربح', value: `${pdfFmtNum(summary.marginPct, 1)}%` },
         { label: 'الرصيد الختامي', value: pdfFmtLiters(summary.closingStock, 0) },
       ]}
@@ -97,12 +99,12 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       {farmerBalances.length > 0 && (
         <>
           <Text style={s.section}>{ar('ديون الفلاحين')}</Text>
-          <View style={s.head}>
+          <View style={s.head} minPresenceAhead={40}>
             <Text style={[s.th, { flex: 3, textAlign: 'right' }]}>{ar('الفلاح')}</Text>
             <Text style={[s.th, { flex: 1.4, textAlign: 'left' }]}>{ar('الرصيد (د.ل)')}</Text>
           </View>
           {farmerBalances.slice(0, 12).map((b, i) => (
-            <View key={i} style={[s.row, i % 2 === 1 && s.rowAlt]}>
+            <View key={i} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
               <Text style={[s.td, { flex: 3, textAlign: 'right' }]}>{ar(b.name)}</Text>
               <Text style={[s.td, { flex: 1.4, textAlign: 'left', fontWeight: 'bold' }]}>{ar(pdfFmtNum(b.balance))}</Text>
             </View>
@@ -113,12 +115,12 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       {customerBalances.length > 0 && (
         <>
           <Text style={s.section}>{ar('أرصدة العملاء المدينة')}</Text>
-          <View style={s.head}>
+          <View style={s.head} minPresenceAhead={40}>
             <Text style={[s.th, { flex: 3, textAlign: 'right' }]}>{ar('العميل')}</Text>
             <Text style={[s.th, { flex: 1.4, textAlign: 'left' }]}>{ar('الرصيد (د.ل)')}</Text>
           </View>
           {customerBalances.slice(0, 12).map((b, i) => (
-            <View key={i} style={[s.row, i % 2 === 1 && s.rowAlt]}>
+            <View key={i} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
               <Text style={[s.td, { flex: 3, textAlign: 'right' }]}>{ar(b.name)}</Text>
               <Text style={[s.td, { flex: 1.4, textAlign: 'left', fontWeight: 'bold' }]}>{ar(pdfFmtNum(b.balance))}</Text>
             </View>
@@ -129,12 +131,12 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       {employeeBalances.length > 0 && (
         <>
           <Text style={s.section}>{ar('سلف الموظفين المُرحّلة')}</Text>
-          <View style={s.head}>
+          <View style={s.head} minPresenceAhead={40}>
             <Text style={[s.th, { flex: 3, textAlign: 'right' }]}>{ar('الموظف')}</Text>
             <Text style={[s.th, { flex: 1.4, textAlign: 'left' }]}>{ar('الرصيد (د.ل)')}</Text>
           </View>
           {employeeBalances.slice(0, 12).map((b, i) => (
-            <View key={i} style={[s.row, i % 2 === 1 && s.rowAlt]}>
+            <View key={i} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
               <Text style={[s.td, { flex: 3, textAlign: 'right' }]}>{ar(b.name)}</Text>
               <Text style={[s.td, { flex: 1.4, textAlign: 'left', fontWeight: 'bold' }]}>{ar(pdfFmtNum(b.balance))}</Text>
             </View>

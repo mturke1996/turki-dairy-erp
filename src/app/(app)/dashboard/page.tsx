@@ -15,10 +15,12 @@ import {
   Wallet,
 } from 'lucide-react';
 import { WelcomeHero } from '@/components/dashboard/welcome-hero';
+import { OperationsCommandCenter } from '@/components/dashboard/operations-command-center';
 import { KpiCard } from '@/components/dashboard/kpi-card';
 import { FlowChart } from '@/components/dashboard/flow-chart';
 import { ProfitBars } from '@/components/dashboard/profit-bars';
 import { NetPositionCard } from '@/components/dashboard/net-position-card';
+import { AlertsBanner, AlertsPanel } from '@/components/dashboard/alerts-panel';
 import { DashboardV3Panels } from '@/components/dashboard/v3-panels';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,12 +35,6 @@ import { formatNumber, formatShortDate } from '@/lib/utils';
 import { formatLiters } from '@/lib/format-currency';
 
 const C = COPY.collection;
-
-const ALERT_STYLE = {
-  danger: { dot: 'bg-rose-500', badge: 'danger' as const },
-  warning: { dot: 'bg-sun-500', badge: 'warning' as const },
-  info: { dot: 'bg-navy-500', badge: 'info' as const },
-};
 
 export default function DashboardPage() {
   const data = useErpData();
@@ -78,7 +74,6 @@ export default function DashboardPage() {
           roleLabel={ROLE_LABELS[auth?.role ?? 'viewer']}
           sessionLabel={d.activeSession?.label ?? 'الفترة الحالية'}
           alertsCount={d.alerts.length}
-          netPositive={d.adjustedNetPosition.finalBalance >= 0}
           actions={
             <>
               {canSupply ? (
@@ -102,8 +97,18 @@ export default function DashboardPage() {
         />
       </div>
 
+      <div className="animate-fade-up" style={{ animationDelay: '60ms' }}>
+        <OperationsCommandCenter />
+      </div>
+
+      {d.alerts.some((a) => a.level === 'danger') ? (
+        <div className="animate-fade-up" style={{ animationDelay: '80ms' }}>
+          <AlertsBanner alerts={d.alerts} />
+        </div>
+      ) : null}
+
       {/* المؤشرات الرئيسية */}
-      <div className="grid grid-cols-1 gap-4 animate-fade-up sm:grid-cols-2 xl:grid-cols-4" style={{ animationDelay: '70ms' }}>
+      <div className="grid grid-cols-2 gap-3 animate-fade-up sm:gap-4 xl:grid-cols-4" style={{ animationDelay: '120ms' }}>
         <KpiCard
           label="المخزون الحالي"
           value={<Liters value={d.totals.currentStock} />}
@@ -128,29 +133,43 @@ export default function DashboardPage() {
           }
         />
         <KpiCard
-          label="صافي الربح"
-          value={<Money value={s?.grossProfit ?? 0} decimals={0} />}
+          label="صافي ربح الفترة"
+          value={<Money value={s?.netProfit ?? 0} decimals={0} />}
           icon={TrendingUp}
-          accent="sun"
-          delta={{ value: s?.marginPct ?? 0 }}
-          hint={`هامش الربح الإجمالي`}
+          accent={s && s.netProfit < 0 ? 'rose' : 'sun'}
+          delta={{ value: s?.netMarginPct ?? 0 }}
+          hint={
+            s && s.wasteLosses > 0 ? (
+              <>
+                بعد خصم هدر <Money value={s.wasteLosses} decimals={0} className="inline text-[11.5px]" muted /> والمصاريف والرواتب
+              </>
+            ) : (
+              'بعد المصاريف والرواتب والهدر'
+            )
+          }
+          href="/reports"
         />
         <KpiCard
-          label="التنبيهات العاجلة"
+          label="التنبيهات"
           value={formatNumber(d.alerts.length)}
           icon={AlertTriangle}
-          accent="rose"
-          hint={d.alerts.length ? 'تتطلب مراجعة' : 'لا تنبيهات حالياً'}
+          accent={d.alerts.some((a) => a.level === 'danger') ? 'rose' : d.alerts.length ? 'sun' : 'meadow'}
+          hint={d.alerts.length ? 'اضغط للتفاصيل' : 'لا تنبيهات حالياً'}
+          href="#alerts"
         />
       </div>
 
+      <div className="animate-fade-up" style={{ animationDelay: '150ms' }}>
+        <AlertsPanel alerts={d.alerts} />
+      </div>
+
       {/* المركز المالي بعد التسويات — نفس منطق صفحة الخزائن */}
-      <div className="animate-fade-up" style={{ animationDelay: '130ms' }}>
+      <div className="animate-fade-up" style={{ animationDelay: '180ms' }}>
         <NetPositionCard position={d.adjustedNetPosition} />
       </div>
 
       {/* مؤشرات ثانوية */}
-      <div className="grid grid-cols-1 gap-4 animate-fade-up sm:grid-cols-2 xl:grid-cols-4" style={{ animationDelay: '190ms' }}>
+      <div className="grid grid-cols-2 gap-3 animate-fade-up sm:gap-4 xl:grid-cols-4" style={{ animationDelay: '240ms' }}>
         <KpiCard
           label="ديون الفلاحين"
           value={<Money value={d.totals.payables} decimals={0} />}
@@ -189,74 +208,40 @@ export default function DashboardPage() {
       </div>
 
       {/* لوحات v3.0 — الكاش والمصاريف والرواتب والدورة */}
-      <div className="animate-fade-up" style={{ animationDelay: '250ms' }}>
+      <div className="animate-fade-up" style={{ animationDelay: '300ms' }}>
         <DashboardV3Panels />
       </div>
 
-      {/* الحركة + التنبيهات */}
-      <div className="grid grid-cols-1 gap-4 animate-fade-up lg:grid-cols-3" style={{ animationDelay: '300ms' }}>
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex-row items-center justify-between">
-            <div>
-              <CardTitle>حركة المخزون اليومية</CardTitle>
-              <CardDescription>الوارد والصادر والرصيد خلال {d.activeSession?.label}</CardDescription>
-            </div>
-            <div className="hidden items-center gap-3 text-[11px] text-muted-foreground sm:flex">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-meadow-500" /> وارد
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-navy-600" /> صادر
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-sun-500" /> الرصيد
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {flow.length ? (
-              <FlowChart data={flow} />
-            ) : (
-              <EmptyState icon={Warehouse} title="لا توجد حركة بعد" description="ابدأ بتسجيل عمليات الاستلام والبيع." />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card id="alerts" className="scroll-mt-24">
-          <CardHeader>
-            <CardTitle>التنبيهات</CardTitle>
-            <CardDescription>أمور تتطلب انتباهك</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {d.alerts.length ? (
-              d.alerts.map((a) => {
-                const style = ALERT_STYLE[a.level];
-                const body = (
-                  <div className="flex items-start gap-3 rounded-lg border border-border bg-canvas-sunken/60 p-3 transition-colors hover:bg-canvas-sunken">
-                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
-                    <div className="space-y-0.5">
-                      <p className="text-[13px] font-semibold text-foreground">{a.title}</p>
-                      <p className="text-[12px] leading-relaxed text-muted-foreground">{a.detail}</p>
-                    </div>
-                  </div>
-                );
-                return a.href ? (
-                  <Link key={a.id} href={a.href} className="block">
-                    {body}
-                  </Link>
-                ) : (
-                  <div key={a.id}>{body}</div>
-                );
-              })
-            ) : (
-              <EmptyState title="كل شيء على ما يرام" description="لا توجد تنبيهات في الوقت الحالي." />
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* حركة المخزون */}
+      <Card className="animate-fade-up" style={{ animationDelay: '350ms' }}>
+        <CardHeader className="flex-row items-center justify-between">
+          <div>
+            <CardTitle>حركة المخزون اليومية</CardTitle>
+            <CardDescription>الوارد والصادر والرصيد خلال {d.activeSession?.label}</CardDescription>
+          </div>
+          <div className="hidden items-center gap-3 text-[11px] text-muted-foreground sm:flex">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-meadow-500" /> وارد
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-navy-600" /> صادر
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-sun-500" /> الرصيد
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {flow.length ? (
+            <FlowChart data={flow} />
+          ) : (
+            <EmptyState icon={Warehouse} title="لا توجد حركة بعد" description="ابدأ بتسجيل عمليات الاستلام والبيع." />
+          )}
+        </CardContent>
+      </Card>
 
       {/* الأرباح + أعلى الموردين */}
-      <div className="grid grid-cols-1 gap-4 animate-fade-up lg:grid-cols-3" style={{ animationDelay: '350ms' }}>
+      <div className="grid grid-cols-1 gap-4 animate-fade-up lg:grid-cols-3" style={{ animationDelay: '400ms' }}>
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>الأرباح حسب الفترة</CardTitle>
@@ -301,7 +286,7 @@ export default function DashboardPage() {
       </div>
 
       {/* آخر الحركات */}
-      <Card className="animate-fade-up" style={{ animationDelay: '400ms' }}>
+      <Card className="animate-fade-up" style={{ animationDelay: '450ms' }}>
         <CardHeader>
           <CardTitle>آخر الحركات</CardTitle>
           <CardDescription>أحدث عمليات الاستلام والبيع المسجّلة</CardDescription>

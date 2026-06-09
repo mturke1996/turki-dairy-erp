@@ -23,7 +23,8 @@ import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { toast } from 'sonner';
 import { usePermission } from '@/lib/store/use-permission';
-import { computeDailyFlow } from '@/lib/domain/calculations';
+import { computeDailyFlow, computeWasteSummary } from '@/lib/domain/calculations';
+import { WasteLossSection } from '@/components/inventory/waste-loss-section';
 import { buildInventoryLedger, sessionLedgerEntries } from '@/lib/domain/inventory';
 import { formatShortDate } from '@/lib/utils';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
@@ -102,6 +103,15 @@ export default function InventoryPage() {
     return [...list].sort((a, b) => b.date.localeCompare(a.date));
   }, [data.adjustments, sessionId]);
 
+  const wasteView = useMemo(() => {
+    const targetSession = sessionId === 'all' ? (d.activeSession?.id ?? '') : sessionId;
+    return computeWasteSummary(data.adjustments, targetSession);
+  }, [data.adjustments, sessionId, d.activeSession?.id]);
+
+  const wasteSessionId = sessionId === 'all' ? (d.activeSession?.id ?? '') : sessionId;
+  const wasteSessionLabel =
+    sessionId === 'all' ? (d.activeSession?.label ?? 'الفترة') : (session?.label ?? 'الفترة');
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -126,11 +136,17 @@ export default function InventoryPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         <StatTile label="المخزون الحالي" value={<Liters value={d.totals.currentStock} />} icon={Warehouse} tone="meadow" />
         <StatTile label="قيمة المخزون" value={<Money value={d.totals.inventoryValue} decimals={0} />} icon={Coins} tone="navy" />
         <StatTile label="متوسط التكلفة" value={<Money value={d.totals.wac} decimals={3} />} icon={Gauge} tone="sun" hint="للّتر الواحد" />
       </div>
+
+      <WasteLossSection
+        waste={wasteView}
+        sessionLabel={wasteSessionLabel}
+        sessionId={wasteSessionId}
+      />
 
       {d.activeSession?.status === 'open' && d.activeSession.openingStock > 0 && canAdjust ? (
         <Card className="border-amber-200 bg-amber-50/40">

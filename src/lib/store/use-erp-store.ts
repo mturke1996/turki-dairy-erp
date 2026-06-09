@@ -67,7 +67,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/repository";
 
 const DEFAULT_SETTINGS: AppSettings = {
   minStockThreshold: 0,
-  defaultBuyPrice: 1.85,
+  defaultBuyPrice: 2.85,
   defaultSellPrice: 2.55,
   currencyLabel: "د.ل",
 };
@@ -169,6 +169,9 @@ interface ErpState {
     fatPct?: number;
     sampleQty?: number;
     milkShift?: SupplyTransaction["milkShift"];
+    /** تجميع فترة كاملة (مثلاً كل 15 يوماً) بسجل واحد. */
+    periodFrom?: string;
+    periodTo?: string;
     notes?: string;
     /** دفع فوري كاش/تحويل عند الاستلام — يُخصم من الخزينة ويُسجّل دفعة للفلاح */
     immediatePayment?: {
@@ -291,6 +294,8 @@ interface ErpState {
         | "date"
         | "sampleQty"
         | "fatPct"
+        | "periodFrom"
+        | "periodTo"
       >
     >,
   ) => Promise<MutationResult>;
@@ -727,19 +732,39 @@ export const useErpStore = create<ErpState>()((set, get) => ({
 
   setActiveSession: async (id) => {
     const state = get();
-    if (!state.sessions.some((s) => s.id === id)) {
+    const target = state.sessions.find((s) => s.id === id);
+    if (!target) {
       return { ok: false, error: "الدورة غير موجودة." };
     }
+    const audit = makeAudit(
+      state,
+      "session",
+      id,
+      "update",
+      `تبديل الدورة النشطة إلى: ${target.label}`,
+    );
     if (isSupabaseConfigured()) {
       try {
-        const { applyLocalDbWrite } = await import("@/lib/supabase/live-db");
+        const { persistMutation } = await import("@/lib/supabase/live-db");
         const { persistAppSettings } =
           await import("@/lib/supabase/repository");
         await persistAppSettings({
           activeSessionId: id,
           settings: state.settings,
         });
-        applyLocalDbWrite(() => set({ activeSessionId: id }));
+        await persistMutation(
+          [
+            {
+              table: "audit_logs",
+              rows: [audit as unknown as Record<string, unknown>],
+            },
+          ],
+          () =>
+            set((s) => ({
+              activeSessionId: id,
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+        );
       } catch (e) {
         return {
           ok: false,
@@ -748,7 +773,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       }
       return { ok: true, id };
     }
-    set({ activeSessionId: id });
+    set((s) => ({ activeSessionId: id, auditLogs: [audit, ...s.auditLogs] }));
     return { ok: true, id };
   },
 
@@ -1111,33 +1136,31 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         10,
       ),
     };
-    if (isSupabaseConfigured()) {
-      try {
-        const { persistMutation } = await import("@/lib/supabase/live-db");
-        await persistMutation(
-          [
-            {
-              table: "farmers",
-              rows: [updated as unknown as Record<string, unknown>],
-            },
-          ],
-          () =>
-            set((s) => ({
-              farmers: s.farmers.map((f) => (f.id === id ? updated : f)),
-            })),
-        );
-      } catch (e) {
-        return {
-          ok: false,
-          error: e instanceof Error ? e.message : "فشل تحديث الفلاح",
-        };
-      }
-      return { ok: true, id };
-    }
-    set((s) => ({
-      farmers: s.farmers.map((f) => (f.id === id ? updated : f)),
-    }));
-    return { ok: true, id };
+    const audit = makeAudit(
+      state,
+      "farmer",
+      id,
+      "update",
+      `تعديل بيانات الفلاح: ${updated.fullName}`,
+    );
+    const res = await mutateWithDb(
+      () =>
+        set((s) => ({
+          farmers: s.farmers.map((f) => (f.id === id ? updated : f)),
+          auditLogs: [audit, ...s.auditLogs],
+        })),
+      [
+        {
+          table: "farmers",
+          rows: [updated as unknown as Record<string, unknown>],
+        },
+        {
+          table: "audit_logs",
+          rows: [audit as unknown as Record<string, unknown>],
+        },
+      ],
+    );
+    return res.ok ? { ok: true, id } : res;
   },
 
   deleteFarmer: async (id) => {
@@ -1174,28 +1197,31 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       onboardingDate: input.onboardingDate.slice(0, 10),
       createdAt: new Date().toISOString(),
     };
-    if (isSupabaseConfigured()) {
-      try {
-        const { persistMutation } = await import("@/lib/supabase/live-db");
-        await persistMutation(
-          [
-            {
-              table: "customers",
-              rows: [customer as unknown as Record<string, unknown>],
-            },
-          ],
-          () => set((s) => ({ customers: [customer, ...s.customers] })),
-        );
-      } catch (e) {
-        return {
-          ok: false,
-          error: e instanceof Error ? e.message : "فشل حفظ العميل",
-        };
-      }
-      return { ok: true, id: customer.id };
-    }
-    set((s) => ({ customers: [customer, ...s.customers] }));
-    return { ok: true, id: customer.id };
+    const audit = makeAudit(
+      state,
+      "customer",
+      customer.id,
+      "create",
+      `إضافة عميل: ${customer.entityName}`,
+    );
+    const res = await mutateWithDb(
+      () =>
+        set((s) => ({
+          customers: [customer, ...s.customers],
+          auditLogs: [audit, ...s.auditLogs],
+        })),
+      [
+        {
+          table: "customers",
+          rows: [customer as unknown as Record<string, unknown>],
+        },
+        {
+          table: "audit_logs",
+          rows: [audit as unknown as Record<string, unknown>],
+        },
+      ],
+    );
+    return res.ok ? { ok: true, id: customer.id } : res;
   },
   updateCustomer: async (id, patch) => {
     const state = get();
@@ -1209,33 +1235,31 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         10,
       ),
     };
-    if (isSupabaseConfigured()) {
-      try {
-        const { persistMutation } = await import("@/lib/supabase/live-db");
-        await persistMutation(
-          [
-            {
-              table: "customers",
-              rows: [updated as unknown as Record<string, unknown>],
-            },
-          ],
-          () =>
-            set((s) => ({
-              customers: s.customers.map((c) => (c.id === id ? updated : c)),
-            })),
-        );
-      } catch (e) {
-        return {
-          ok: false,
-          error: e instanceof Error ? e.message : "فشل تحديث العميل",
-        };
-      }
-      return { ok: true, id };
-    }
-    set((s) => ({
-      customers: s.customers.map((c) => (c.id === id ? updated : c)),
-    }));
-    return { ok: true, id };
+    const audit = makeAudit(
+      state,
+      "customer",
+      id,
+      "update",
+      `تعديل بيانات العميل: ${updated.entityName}`,
+    );
+    const res = await mutateWithDb(
+      () =>
+        set((s) => ({
+          customers: s.customers.map((c) => (c.id === id ? updated : c)),
+          auditLogs: [audit, ...s.auditLogs],
+        })),
+      [
+        {
+          table: "customers",
+          rows: [updated as unknown as Record<string, unknown>],
+        },
+        {
+          table: "audit_logs",
+          rows: [audit as unknown as Record<string, unknown>],
+        },
+      ],
+    );
+    return res.ok ? { ok: true, id } : res;
   },
 
   deleteCustomer: async (id) => {
@@ -1298,6 +1322,14 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         };
     }
 
+    const hasPeriod = !!(input.periodFrom || input.periodTo);
+    if (hasPeriod) {
+      if (!input.periodFrom || !input.periodTo)
+        return { ok: false, error: "حدّد بداية ونهاية فترة التجميع معاً." };
+      if (input.periodFrom > input.periodTo)
+        return { ok: false, error: "بداية الفترة يجب أن تسبق نهايتها." };
+    }
+
     const shift = input.milkShift ?? "morning";
     const date =
       input.date ??
@@ -1320,7 +1352,9 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       total,
       qualityTier: input.qualityTier,
       sampleQty: sampleQty > 0 ? sampleQty : undefined,
-      milkShift: shift,
+      milkShift: hasPeriod ? undefined : shift,
+      periodFrom: input.periodFrom,
+      periodTo: input.periodTo,
       fatPct: input.fatPct,
       notes: input.notes,
       createdAt: new Date().toISOString(),
@@ -2468,6 +2502,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         ok: false,
         error: "كمية العينة لا يمكن أن تتجاوز الكمية الكلية.",
       };
+    const periodFrom = patch.periodFrom ?? existing.periodFrom;
+    const periodTo = patch.periodTo ?? existing.periodTo;
+    if (periodFrom && periodTo && periodFrom > periodTo)
+      return { ok: false, error: "بداية الفترة يجب أن تسبق نهايتها." };
 
     if (quantity < existing.quantity) {
       const delta = existing.quantity - quantity;
@@ -3747,16 +3785,32 @@ export const useErpStore = create<ErpState>()((set, get) => ({
   updateSettings: async (patch) => {
     const state = get();
     const settings = { ...state.settings, ...patch };
+    const audit = makeAudit(
+      state,
+      "settings",
+      "app-settings",
+      "update",
+      "تحديث إعدادات النظام",
+    );
     if (isSupabaseConfigured()) {
       try {
-        const { applyLocalDbWrite } = await import("@/lib/supabase/live-db");
+        const { persistMutation } = await import("@/lib/supabase/live-db");
         const { persistAppSettings } =
           await import("@/lib/supabase/repository");
         await persistAppSettings({
           activeSessionId: state.activeSessionId,
           settings,
         });
-        applyLocalDbWrite(() => set({ settings }));
+        await persistMutation(
+          [
+            {
+              table: "audit_logs",
+              rows: [audit as unknown as Record<string, unknown>],
+            },
+          ],
+          () =>
+            set((s) => ({ settings, auditLogs: [audit, ...s.auditLogs] })),
+        );
       } catch (e) {
         return {
           ok: false,
@@ -3765,7 +3819,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       }
       return { ok: true };
     }
-    set({ settings });
+    set((s) => ({ settings, auditLogs: [audit, ...s.auditLogs] }));
     return { ok: true };
   },
 

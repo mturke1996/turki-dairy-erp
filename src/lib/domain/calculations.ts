@@ -15,7 +15,9 @@ import {
   journalForPayroll,
   journalForSale,
   journalForSupply,
+  type ProfitAndLoss,
 } from './accounting';
+import { resolveAdjustmentReasonKind } from './constants';
 import { buildInventoryLedger, round, type InventoryResult } from './inventory';
 import { computeTreasury, computeAdjustedNetPosition, type AdjustedNetPosition } from './treasury';
 import { debtBalanceContribution, paymentNetOfDebtSettlement, resolveDebtDirection } from './debt';
@@ -696,6 +698,11 @@ export interface SessionSummary {
   cogs: number;
   grossProfit: number;
   marginPct: number;
+  wasteLosses: number;
+  operatingExpenses: number;
+  salaries: number;
+  netProfit: number;
+  netMarginPct: number;
   farmerPayments: number;
   customerReceipts: number;
   openingStock: number;
@@ -714,7 +721,13 @@ export function computeSessionSummary(
   const salesQty = sum(sal.map((s) => s.quantity));
   const salesRevenue = sum(sal.map((s) => s.total));
   const cogs = sum(sal.map((s) => inv.saleCogs[s.id] ?? 0));
-  const pnl = computePnL(salesRevenue, cogs);
+  const approvedExpenses = data.expenses.filter((e) => e.sessionId === session.id && e.status === 'approved');
+  const wasteLosses = sum(approvedExpenses.filter((e) => e.nonCash).map((e) => e.amount));
+  const operatingExpenses = sum(approvedExpenses.filter((e) => !e.nonCash).map((e) => e.amount));
+  const salaries = sum(
+    data.payrollBatches.filter((b) => b.sessionId === session.id && b.status === 'paid').map((b) => b.totalAmount),
+  );
+  const pnl = computePnL(salesRevenue, cogs, { wasteLosses, operatingExpenses, salaries });
   const farmerPayments = sum(
     data.payments.filter((p) => p.kind === 'farmer_payment' && p.sessionId === session.id).map((p) => p.amount),
   );
@@ -734,10 +747,91 @@ export function computeSessionSummary(
     cogs: round(cogs),
     grossProfit: pnl.grossProfit,
     marginPct: pnl.marginPct,
+    wasteLosses: pnl.wasteLosses,
+    operatingExpenses: pnl.operatingExpenses,
+    salaries: pnl.salaries,
+    netProfit: pnl.netProfit,
+    netMarginPct: pnl.netMarginPct,
     farmerPayments: round(farmerPayments),
     customerReceipts: round(customerReceipts),
     openingStock: round(session.openingStock),
     closingStock,
+  };
+}
+
+// ============================================================
+// هدر وتلف الحليب
+// ============================================================
+
+export interface WasteLineItem {
+  id: string;
+  ref: string;
+  date: string;
+  sessionId: string;
+  quantity: number;
+  value: number;
+  reason: string;
+}
+
+export interface WasteReasonBreakdown {
+  reason: string;
+  qty: number;
+  value: number;
+}
+
+export interface WasteSummary {
+  sessionQty: number;
+  sessionValue: number;
+  totalQty: number;
+  totalValue: number;
+  byReason: WasteReasonBreakdown[];
+  recent: WasteLineItem[];
+}
+
+function adjustmentIsLoss(a: InventoryAdjustment): boolean {
+  if (a.quantity >= 0) return false;
+  const kind = a.reasonKind ?? resolveAdjustmentReasonKind(a.reason, a.quantity);
+  return kind === 'loss';
+}
+
+function toWasteLine(a: InventoryAdjustment): WasteLineItem {
+  const abs = Math.abs(a.quantity);
+  return {
+    id: a.id,
+    ref: a.ref,
+    date: a.date,
+    sessionId: a.sessionId,
+    quantity: round(abs),
+    value: round(abs * a.unitCost),
+    reason: a.reason,
+  };
+}
+
+export function computeWasteSummary(
+  adjustments: InventoryAdjustment[],
+  activeSessionId: string,
+): WasteSummary {
+  const lossLines = adjustments.filter(adjustmentIsLoss).map(toWasteLine);
+  const sessionLines = lossLines.filter((l) => l.sessionId === activeSessionId);
+
+  const byReasonMap = new Map<string, { qty: number; value: number }>();
+  for (const l of sessionLines) {
+    const prev = byReasonMap.get(l.reason) ?? { qty: 0, value: 0 };
+    byReasonMap.set(l.reason, {
+      qty: round(prev.qty + l.quantity),
+      value: round(prev.value + l.value),
+    });
+  }
+
+  return {
+    sessionQty: round(sum(sessionLines.map((l) => l.quantity))),
+    sessionValue: round(sum(sessionLines.map((l) => l.value))),
+    totalQty: round(sum(lossLines.map((l) => l.quantity))),
+    totalValue: round(sum(lossLines.map((l) => l.value))),
+    byReason: [...byReasonMap.entries()]
+      .map(([reason, v]) => ({ reason, qty: v.qty, value: v.value }))
+      .sort((a, b) => b.value - a.value),
+    recent: [...lossLines].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10),
   };
 }
 
@@ -794,6 +888,10 @@ export interface DerivedData {
   };
   /** الرصيد النهائي = نقد + لنا + مخزون − علينا (حساب متسلسل) */
   adjustedNetPosition: AdjustedNetPosition;
+  /** قائمة الدخل التراكمية: إيراد − تكلفة مبيعات − هدر − مصاريف − رواتب = صافي الربح */
+  incomeStatement: ProfitAndLoss;
+  /** ملخص هدر وتلف الحليب — فترة نشطة وتراكمي */
+  wasteSummary: WasteSummary;
   alerts: SystemAlert[];
 }
 
@@ -822,7 +920,29 @@ export function computeDerived(data: ErpData): DerivedData {
     payables,
   });
 
-  const alerts = buildAlerts({ inv, customers, farmers, data });
+  const incomeStatement = computePnL(
+    sum(sessionSummaries.map((s) => s.salesRevenue)),
+    sum(sessionSummaries.map((s) => s.cogs)),
+    {
+      wasteLosses: sum(sessionSummaries.map((s) => s.wasteLosses)),
+      operatingExpenses: sum(sessionSummaries.map((s) => s.operatingExpenses)),
+      salaries: sum(sessionSummaries.map((s) => s.salaries)),
+    },
+  );
+
+  const wasteSummary = computeWasteSummary(data.adjustments, data.activeSessionId);
+
+  const alerts = buildAlerts({
+    inv,
+    customers,
+    farmers,
+    data,
+    waste: wasteSummary,
+    netCash: treasury.total,
+    payables,
+    finalNetPosition: adjustedNetPosition.finalBalance,
+    activeSession,
+  });
 
   return {
     inv,
@@ -847,6 +967,8 @@ export function computeDerived(data: ErpData): DerivedData {
       finalNetPosition: adjustedNetPosition.finalBalance,
     },
     adjustedNetPosition,
+    incomeStatement,
+    wasteSummary,
     alerts,
   };
 }
@@ -856,8 +978,67 @@ function buildAlerts(ctx: {
   customers: CustomerStats[];
   farmers: FarmerStats[];
   data: ErpData;
+  waste: WasteSummary;
+  netCash: number;
+  payables: number;
+  finalNetPosition: number;
+  activeSession?: Session;
 }): SystemAlert[] {
   const alerts: SystemAlert[] = [];
+  const { settings } = ctx.data;
+
+  if (settings.minStockThreshold > 0 && ctx.inv.currentStock <= settings.minStockThreshold) {
+    alerts.push({
+      id: 'low-stock',
+      level: ctx.inv.currentStock <= settings.minStockThreshold * 0.5 ? 'danger' : 'warning',
+      title: 'مخزون منخفض',
+      detail: `المخزون الحالي ${Math.round(ctx.inv.currentStock).toLocaleString('ar-LY')} لتر — أقل من حد التنبيه (${Math.round(settings.minStockThreshold).toLocaleString('ar-LY')} لتر).`,
+      href: '/inventory',
+    });
+  }
+
+  if (ctx.waste.sessionValue > 0) {
+    alerts.push({
+      id: 'milk-waste',
+      level: 'warning',
+      title: 'هدر حليب في الفترة',
+      detail: `${Math.round(ctx.waste.sessionQty).toLocaleString('ar-LY')} لتر تالف بقيمة ${Math.round(ctx.waste.sessionValue).toLocaleString('ar-LY')} د.ل — خسارة غير نقدية تُخصم من صافي الربح.`,
+      href: '/inventory',
+    });
+  }
+
+  const pendingExpenses = ctx.data.expenses.filter((e) => e.status === 'pending');
+  if (pendingExpenses.length) {
+    const pendingTotal = sum(pendingExpenses.map((e) => e.amount));
+    alerts.push({
+      id: 'pending-expenses',
+      level: 'info',
+      title: 'مصاريف بانتظار الموافقة',
+      detail: `${pendingExpenses.length} مصروف بمجموع ${Math.round(pendingTotal).toLocaleString('ar-LY')} د.ل يحتاج مراجعة.`,
+      href: '/expenses',
+    });
+  }
+
+  if (ctx.netCash < 0) {
+    alerts.push({
+      id: 'negative-cash',
+      level: 'danger',
+      title: 'رصيد نقدي سالب',
+      detail: `إجمالي الخزائن والبنوك ${Math.round(ctx.netCash).toLocaleString('ar-LY')} د.ل — راجع الحركات والصرف.`,
+      href: '/treasury',
+    });
+  }
+
+  if (ctx.finalNetPosition < 0) {
+    alerts.push({
+      id: 'negative-position',
+      level: 'danger',
+      title: 'مركز مالي سالب بعد التسويات',
+      detail: `الرصيد النهائي (نقد + لنا + مخزون − علينا) = ${Math.round(ctx.finalNetPosition).toLocaleString('ar-LY')} د.ل.`,
+      href: '/treasury',
+    });
+  }
+
   const overdueCustomers = ctx.customers.filter((c) => c.overdueAmount > 0);
   if (overdueCustomers.length) {
     alerts.push({
@@ -865,9 +1046,10 @@ function buildAlerts(ctx: {
       level: 'warning',
       title: 'مستحقات متأخرة',
       detail: `${overdueCustomers.length} عميل لديه مبالغ متأخرة عن السداد.`,
-      href: '/reports',
+      href: '/debts',
     });
   }
+
   const overLimit = ctx.customers.filter((c) => c.creditLimit > 0 && c.outstanding > c.creditLimit);
   if (overLimit.length) {
     alerts.push({
@@ -878,6 +1060,18 @@ function buildAlerts(ctx: {
       href: '/customers',
     });
   }
+
+  const highPayableFarmers = ctx.farmers.filter((f) => f.creditBalance > 10_000);
+  if (highPayableFarmers.length) {
+    alerts.push({
+      id: 'farmer-payables',
+      level: 'info',
+      title: 'ديون فلاحين مرتفعة',
+      detail: `${highPayableFarmers.length} فلاح لديه مستحقات تتجاوز 10,000 د.ل — راجع جدول الدفع.`,
+      href: '/debts',
+    });
+  }
+
   const onHold = ctx.data.customers.filter((c) => c.onHold);
   if (onHold.length) {
     alerts.push({
@@ -888,5 +1082,22 @@ function buildAlerts(ctx: {
       href: '/customers',
     });
   }
-  return alerts;
+
+  if (ctx.activeSession?.status === 'open' && ctx.activeSession.periodTo) {
+    const daysLeft = Math.ceil(
+      (new Date(ctx.activeSession.periodTo + 'T23:59:59').getTime() - Date.now()) / 86_400_000,
+    );
+    if (daysLeft >= 0 && daysLeft <= 3) {
+      alerts.push({
+        id: 'session-ending',
+        level: daysLeft === 0 ? 'danger' : 'warning',
+        title: daysLeft === 0 ? 'الفترة تنتهي اليوم' : `الفترة تنتهي خلال ${daysLeft} يوم`,
+        detail: `فترة «${ctx.activeSession.label}» تنتهي ${ctx.activeSession.periodTo} — راجع الإقفال والترحيل.`,
+        href: '/sessions',
+      });
+    }
+  }
+
+  const levelOrder: Record<SystemAlert['level'], number> = { danger: 0, warning: 1, info: 2 };
+  return alerts.sort((a, b) => levelOrder[a.level] - levelOrder[b.level]);
 }

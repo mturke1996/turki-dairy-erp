@@ -8,24 +8,25 @@ import { pdfFmtNum, pdfFmtDate, pdfFmtLiters } from './pdfBrandKit';
 import type { InventoryLedgerEntry } from '@/lib/domain/types';
 
 const s = StyleSheet.create({
-  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.headerBg, paddingVertical: 7, paddingHorizontal: 8 },
-  th: { color: PDF.white, fontSize: 8.5, fontWeight: 'bold', textAlign: 'center' },
-  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 5.5, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: PDF.border },
+  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.primary, paddingVertical: 9, paddingHorizontal: 9, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: PDF.accent },
+  th: { color: PDF.white, fontSize: 8.5, fontWeight: 'bold', textAlign: 'center', lineHeight: 1.4 },
+  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 7, paddingHorizontal: 9, borderBottomWidth: 0.5, borderBottomColor: PDF.border, alignItems: 'center' },
   rowAlt: { backgroundColor: PDF.rowAlt },
-  td: { fontSize: 8.5, color: PDF.text, textAlign: 'center' },
-  tdIn: { fontSize: 8.5, color: PDF.logoGreen, textAlign: 'center', fontWeight: 'bold' },
-  tdOut: { fontSize: 8.5, color: PDF.primary, textAlign: 'center', fontWeight: 'bold' },
+  td: { fontSize: 8.5, color: PDF.text, textAlign: 'center', lineHeight: 1.45 },
+  tdIn: { fontSize: 8.5, color: PDF.logoGreen, textAlign: 'center', fontWeight: 'bold', lineHeight: 1.45 },
+  tdOut: { fontSize: 8.5, color: PDF.primary, textAlign: 'center', fontWeight: 'bold', lineHeight: 1.45 },
 
   totalRow: {
     direction: 'rtl',
     flexDirection: 'row',
     backgroundColor: PDF.logoGreenSoft,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 9,
     borderTopWidth: 1.5,
-    borderTopColor: PDF.primary,
+    borderTopColor: PDF.accent,
+    alignItems: 'center',
   },
-  tf: { fontSize: 9, fontWeight: 'bold', color: PDF.text, textAlign: 'center' },
+  tf: { fontSize: 9, fontWeight: 'bold', color: PDF.text, textAlign: 'center', lineHeight: 1.4 },
 });
 
 export type DailyMovementProps = {
@@ -50,7 +51,7 @@ export function DailyMovementPDF({ entries, sessionLabel, openingStock, totals }
         { label: 'الرصيد الختامي', value: pdfFmtLiters(totals.closing, 0) },
       ]}
     >
-      <View style={s.head}>
+      <View style={s.head} minPresenceAhead={40}>
         <Text style={[s.th, { flex: 1.1 }]}>{ar('التاريخ')}</Text>
         <Text style={[s.th, { flex: 1.4 }]}>{ar('المرجع')}</Text>
         <Text style={[s.th, { flex: 1.6 }]}>{ar('البيان')}</Text>
@@ -60,7 +61,7 @@ export function DailyMovementPDF({ entries, sessionLabel, openingStock, totals }
         <Text style={[s.th, { flex: 1.1 }]}>{ar('الرصيد')}</Text>
       </View>
       {sorted.map((e, i) => (
-        <View key={e.id} style={[s.row, i % 2 === 1 && s.rowAlt]}>
+        <View key={e.id} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
           <Text style={[s.td, { flex: 1.1 }]}>{ar(pdfFmtDate(e.date))}</Text>
           <Text style={[s.td, { flex: 1.4, direction: 'ltr' }]}>{ar(e.ref)}</Text>
           <Text style={[s.td, { flex: 1.6, textAlign: 'right' }]}>{ar(e.label)}</Text>
@@ -70,7 +71,7 @@ export function DailyMovementPDF({ entries, sessionLabel, openingStock, totals }
           <Text style={[s.td, { flex: 1.1, fontWeight: 'bold' }]}>{ar(pdfFmtNum(e.balanceAfter, 1))}</Text>
         </View>
       ))}
-      <View style={s.totalRow}>
+      <View style={s.totalRow} wrap={false}>
         <Text style={[s.tf, { flex: 2.5, textAlign: 'right', color: PDF.logoGreen }]}>{ar('الإجماليات')}</Text>
         <Text style={[s.tf, { flex: 1.6 }]}> </Text>
         <Text style={[s.tf, { flex: 1, color: PDF.logoGreen }]}>{ar(pdfFmtNum(totals.inQty, 0))}</Text>

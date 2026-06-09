@@ -32,19 +32,19 @@ export function KpiCard({
   const positive = (delta?.value ?? 0) >= 0;
 
   const inner = (
-    <div className="group relative flex h-full flex-col justify-between overflow-hidden rounded-xl border border-border bg-card p-5 shadow-whisper transition-all duration-200 hover:shadow-lift">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-[12.5px] font-medium text-muted-foreground">{label}</p>
-          <div className="text-[26px] font-bold leading-tight tracking-tight text-foreground">{value}</div>
+    <div className="group relative flex h-full flex-col justify-between overflow-hidden rounded-xl border border-border bg-card p-3.5 shadow-whisper transition-all duration-200 hover:shadow-lift sm:p-5">
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="truncate text-[11.5px] font-medium text-muted-foreground sm:text-[12.5px]">{label}</p>
+          <div className="text-[19px] font-bold leading-tight tracking-tight text-foreground sm:text-[26px]">{value}</div>
         </div>
-        <span className={cn('flex h-11 w-11 items-center justify-center rounded-xl', a.bar)}>
-          <Icon className={cn('h-5 w-5 stroke-[1.7]', a.icon)} />
+        <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11', a.bar)}>
+          <Icon className={cn('h-4 w-4 stroke-[1.7] sm:h-5 sm:w-5', a.icon)} />
         </span>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2">
-        {hint ? <p className="text-[11.5px] text-muted-foreground">{hint}</p> : <span />}
+      <div className="mt-2.5 flex items-center justify-between gap-2 sm:mt-3">
+        {hint ? <p className="line-clamp-1 min-w-0 text-[10.5px] text-muted-foreground sm:text-[11.5px]">{hint}</p> : <span />}
         {delta ? (
           <span
             className={cn(

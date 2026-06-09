@@ -25,8 +25,9 @@ export type ReportShellMetaCell = {
 };
 
 /**
- * غلاف PDF موحّد — ترويسة مثبتة واحدة (بدون تكرار يُسبّب صفحات فارغة).
- * مُحسَّن وفق منظومة Fluxen: هوامش معقولة + تذييل فقط مثبت.
+ * غلاف PDF موحّد — تصميم «ورقة رسمية» نظيف:
+ * خط هوية ثلاثي أعلى الورقة، ترويسة مثبتة بخط فاصل واحد،
+ * شريط ملخص هادئ بفواصل شعرية، وتذييل منخفض لا يزاحم المحتوى.
  */
 export function ReportShell({
   title,
@@ -62,6 +63,8 @@ export function ReportShell({
     summaryDate && !Number.isNaN(summaryDate.getTime()) ? summaryDate : new Date(),
   );
   const bigDateLabel = summaryPrimaryDateLabel ?? 'تاريخ إصدار الوثيقة';
+  // «يونيو 2026» → شهر وسنة منفصلان لعرضهما بترتيب بصري حتمي
+  const [dateMonth = '', dateYear = ''] = dateParts.monthYear.split(' ');
 
   return (
     <Document
@@ -71,10 +74,12 @@ export function ReportShell({
       producer={BRAND.fullName}
     >
       <Page size="A4" style={pdfBase.page} wrap>
+        {/* خط الهوية الثلاثي أعلى الورقة */}
         <View style={pdfBase.pageAccentBar} fixed />
         <View style={pdfBase.pageAccentStripe} fixed />
+        <View style={pdfBase.pageAccentSun} fixed />
 
-        {/* ترويسة واحدة مثبتة — عنوان + شعار + تواصل */}
+        {/* الترويسة المثبتة: عنوان (يسار) + هوية المصنع (يمين) فوق خط فاصل */}
         <View style={pdfBase.headerFixed} fixed wrap={false}>
           <View style={pdfBase.header}>
             <View style={pdfBase.titleBoxAtLeft}>
@@ -86,59 +91,58 @@ export function ReportShell({
               <PdfBrandIdentity />
             </View>
           </View>
+          <View style={pdfBase.headerRule} />
+          <View style={pdfBase.headerRuleAccent} />
           <View style={pdfBase.headerContactInline}>
             <PdfFactoryContactBar />
           </View>
         </View>
 
+        {/* شريط ملخص الوثيقة */}
         {metaCells.length > 0 && (
-          <View style={pdfBase.luxe} wrap={false}>
-            <View style={pdfBase.luxeRibbon}>
-              <Text style={pdfBase.luxeRibbonText}>{ar('ملخّص الوثيقة')}</Text>
-              <Text style={pdfBase.luxeRibbonHint}>{ar(BRAND.name)}</Text>
-            </View>
-
-            <View style={pdfBase.luxeRow}>
-              <View style={pdfBase.luxeDateCell}>
-                <Text style={pdfBase.luxeEyebrow}>{ar(bigDateLabel)}</Text>
-                <View style={pdfBase.luxeDateBlock}>
-                  <Text style={pdfBase.luxeDay}>{dateParts.day}</Text>
-                  <View style={pdfBase.luxeDateTexts}>
-                    <Text style={pdfBase.luxeMonthYear}>{ar(dateParts.monthYear)}</Text>
-                    <Text style={pdfBase.luxeWeekday}>{ar(dateParts.weekday)}</Text>
-                  </View>
-                </View>
-                <Text style={pdfBase.luxeGregorian}>{ar(`ميلادي · ${dateParts.gregorian}`)}</Text>
+          <View style={pdfBase.summaryStrip} wrap={false}>
+            <View style={pdfBase.summaryCellDate}>
+              <Text style={pdfBase.summaryEyebrow}>{ar(bigDateLabel)}</Text>
+              {/* نصوص منفصلة بترتيب بصري صريح (سنة ← شهر ← يوم) كي لا يعبث البيدي بالترتيب */}
+              <View style={pdfBase.summaryDateRow}>
+                <Text style={pdfBase.summaryValue}>{ar(dateYear)}</Text>
+                <Text style={pdfBase.summaryValue}>{ar(dateMonth)}</Text>
+                <Text style={pdfBase.summaryValue}>{ar(dateParts.day)}</Text>
               </View>
-
-              {metaCells.flatMap((c, i) => [
-                <View key={`luxe-div-${i}`} style={pdfBase.luxeDivider} />,
-                <View key={`luxe-cell-${i}`} style={pdfBase.luxeCell}>
-                  <Text style={pdfBase.luxeEyebrow}>{ar(c.label)}</Text>
-                  {c.moneyAmount != null && Number.isFinite(c.moneyAmount) ? (
-                    <Text style={pdfBase.luxeValue} dir="ltr">
-                      {pdfFmtMoneyLibyan(c.moneyAmount)}
-                    </Text>
-                  ) : (
-                    <Text
-                      style={[
-                        pdfBase.luxeValue,
-                        c.valueDirection === 'ltr' && { direction: 'ltr', textAlign: 'left' },
-                      ]}
-                    >
-                      {ar(c.value ?? '')}
-                    </Text>
-                  )}
-                </View>,
-              ])}
+              <View style={pdfBase.summaryDateRow}>
+                <Text style={pdfBase.summarySub}>{dateParts.gregorian}</Text>
+                <Text style={pdfBase.summarySub}>{ar('·')}</Text>
+                <Text style={pdfBase.summarySub}>{ar(dateParts.weekday)}</Text>
+              </View>
             </View>
+
+            {metaCells.flatMap((c, i) => [
+              <View key={`sum-div-${i}`} style={pdfBase.summaryDivider} />,
+              <View key={`sum-cell-${i}`} style={pdfBase.summaryCell}>
+                <Text style={pdfBase.summaryEyebrow}>{ar(c.label)}</Text>
+                {c.moneyAmount != null && Number.isFinite(c.moneyAmount) ? (
+                  <Text style={[pdfBase.summaryValue, { direction: 'ltr' }]}>
+                    {pdfFmtMoneyLibyan(c.moneyAmount)}
+                  </Text>
+                ) : (
+                  <Text
+                    style={[
+                      pdfBase.summaryValue,
+                      c.valueDirection === 'ltr' && { direction: 'ltr', textAlign: 'left' },
+                    ]}
+                  >
+                    {ar(c.value ?? '')}
+                  </Text>
+                )}
+              </View>,
+            ])}
           </View>
         )}
 
         <View style={pdfBase.contentLayer}>{children}</View>
 
         {showSignature ? (
-          <View style={pdfBase.signatureStrip}>
+          <View style={pdfBase.signatureStrip} wrap={false}>
             <View style={pdfBase.signatureCell}>
               <Text style={pdfBase.signatureLabel}>{ar('التوقيع المعتمد')}</Text>
               <View style={pdfBase.signatureLine} />

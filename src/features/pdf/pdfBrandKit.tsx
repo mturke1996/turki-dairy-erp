@@ -2,7 +2,7 @@
 import { View, Text, StyleSheet, Image } from '@react-pdf/renderer';
 import { PDF_FONT_FAMILY } from './pdfFonts';
 import { ar } from './arabicPDF';
-import { BRAND, buildPdfFooterLine } from '@/lib/brand';
+import { BRAND } from '@/lib/brand';
 import { usePdfLogoDataUri, usePdfMarkDataUri } from './pdf-logo-context';
 
 export const LIBYAN_CURRENCY_LABEL = 'د.ل';
@@ -38,32 +38,27 @@ export const pdfBrandStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 10,
+    gap: 9,
   },
   brandTextCol: {
     alignItems: 'flex-end',
-    maxWidth: 260,
+    maxWidth: 240,
   },
   brandName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 'bold',
     color: P.primary,
     textAlign: 'right',
-    lineHeight: 1.25,
+    lineHeight: 1.3,
   },
   brandTagline: {
-    fontSize: 9,
+    fontSize: 7.5,
     color: P.muted,
     textAlign: 'right',
-    marginTop: 3,
+    marginTop: 2,
     lineHeight: 1.35,
   },
   brandMarkShell: {
-    backgroundColor: P.white,
-    borderWidth: 0.75,
-    borderColor: P.border,
-    borderRadius: 8,
-    padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -71,102 +66,84 @@ export const pdfBrandStyles = StyleSheet.create({
     objectFit: 'contain',
   },
 
+  /* سطر تواصل نظيف بدون صندوق — عنوان يميناً، هاتف وبريد يساراً */
   contactBar: {
     direction: 'rtl',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 0,
-    marginBottom: 0,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    backgroundColor: P.mutedBg,
-    borderWidth: 0.5,
-    borderColor: P.border,
-    borderRadius: 4,
   },
   contactBarItem: {
-    fontSize: 7,
-    color: P.text,
+    fontSize: 6.8,
+    color: P.muted,
     textAlign: 'right',
+    lineHeight: 1.35,
   },
   contactBarMuted: {
-    fontSize: 6.5,
+    fontSize: 6.8,
     color: P.muted,
     textAlign: 'left',
+    lineHeight: 1.35,
+    letterSpacing: 0.3,
   },
 
+  /* ── تذييل نحيف: خط ثلاثي + سطر واحد ── */
   footer: {
     position: 'absolute',
-    bottom: 14,
-    left: 36,
-    right: 36,
+    bottom: 20,
+    left: 40,
+    right: 40,
   },
   footerTopLine: {
-    flexDirection: 'row',
-    height: 4,
+    direction: 'ltr',
+    flexDirection: 'row-reverse',
+    height: 2.5,
     marginBottom: 8,
-    borderRadius: 2,
-    overflow: 'hidden',
   },
-  footerNavy: { flex: 5, backgroundColor: P.primary },
-  footerGreen: { flex: 2, backgroundColor: P.accent },
-  footerSun: { flex: 1, backgroundColor: P.sun },
+  footerNavy: { flex: 6, backgroundColor: P.primary },
+  footerGreen: { flex: 1.6, backgroundColor: P.accent },
+  footerSun: { flex: 0.6, backgroundColor: P.sun },
 
   footerMain: {
     direction: 'rtl',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 5,
+    alignItems: 'center',
   },
-  footerBrandCol: { maxWidth: '58%' },
   footerBrandName: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: 'bold',
     color: P.primary,
     textAlign: 'right',
-    lineHeight: 1.3,
-  },
-  footerTagline: {
-    fontSize: 6.5,
-    color: P.logoGreen,
-    textAlign: 'right',
-    marginTop: 2,
-  },
-  footerMetaCol: { alignItems: 'flex-start', maxWidth: '38%' },
-  footerRegion: {
-    fontSize: 7,
-    fontWeight: 'bold',
-    color: P.primary,
-    textAlign: 'left',
+    lineHeight: 1.35,
   },
   footerRef: {
-    fontSize: 6.5,
+    fontSize: 6.3,
     color: P.muted,
     textAlign: 'left',
-    marginTop: 2,
+    direction: 'ltr',
+    lineHeight: 1.35,
   },
 
   footerContactRow: {
     direction: 'rtl',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    borderTopWidth: 0.5,
-    borderTopColor: P.border,
-    paddingTop: 5,
+    alignItems: 'center',
+    marginTop: 3.5,
   },
   footerContact: {
-    fontSize: 6.8,
+    fontSize: 6.5,
     color: P.muted,
     textAlign: 'right',
-    flex: 1,
+    lineHeight: 1.35,
   },
   footerEmail: {
-    fontSize: 6.8,
+    fontSize: 6.5,
     color: P.muted,
     textAlign: 'left',
     direction: 'ltr',
+    lineHeight: 1.35,
   },
 
   moneyRow: {
@@ -182,36 +159,35 @@ export const pdfBrandStyles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 0,
-    marginBottom: 14,
-    borderWidth: 1,
+    marginBottom: 16,
+    borderWidth: 0.75,
     borderColor: P.border,
-    borderRadius: 6,
     overflow: 'hidden',
     backgroundColor: P.white,
   },
   infoCell: {
     width: '33.33%',
-    paddingVertical: 9,
-    paddingHorizontal: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderBottomWidth: 0.5,
     borderLeftWidth: 0.5,
     borderColor: P.border,
-    backgroundColor: P.rowAlt,
+    backgroundColor: P.white,
   },
   infoLabel: {
     fontSize: 6.8,
     color: P.muted,
     fontWeight: 'bold',
-    letterSpacing: 0.6,
     marginBottom: 4,
     textAlign: 'right',
+    lineHeight: 1.3,
   },
   infoValue: {
     fontSize: 9.5,
     color: P.text,
     fontWeight: 'bold',
     textAlign: 'right',
-    lineHeight: 1.25,
+    lineHeight: 1.4,
   },
 
   headerShell: {
@@ -229,7 +205,6 @@ export const pdfBrandStyles = StyleSheet.create({
     fontSize: 7,
     color: P.logoGreen,
     fontWeight: 'bold',
-    letterSpacing: 1.2,
     marginBottom: 4,
     textAlign: 'left',
   },
@@ -257,7 +232,7 @@ export const PdfLogoMark = ({ width = 56, height = 56 }: { width?: number; heigh
 };
 
 /** هوية PDF — اسم المصنع + الشعار الرسومي (مقروء على A4، مثل الواجهة) */
-export const PdfBrandIdentity = ({ markSize = 68 }: { markSize?: number }) => {
+export const PdfBrandIdentity = ({ markSize = 50 }: { markSize?: number }) => {
   const mark = usePdfMarkDataUri();
   return (
     <View style={pdfBrandStyles.brandBlock} wrap={false}>
@@ -279,13 +254,13 @@ export const PdfBrandIdentity = ({ markSize = 68 }: { markSize?: number }) => {
   );
 };
 
-/** شريط بيانات المصنع تحت الترويسة. */
+/** سطر بيانات المصنع تحت خط الترويسة — نص هادئ بلا صناديق. */
 export const PdfFactoryContactBar = () => (
   <View style={pdfBrandStyles.contactBar} wrap={false}>
     <Text style={pdfBrandStyles.contactBarItem}>{ar(BRAND.contact.address)}</Text>
     <Text style={pdfBrandStyles.contactBarMuted} dir="ltr">
       {BRAND.contact.phone}
-      {BRAND.contact.email ? `  ·  ${BRAND.contact.email}` : ''}
+      {BRAND.contact.email ? `   ·   ${BRAND.contact.email}` : ''}
     </Text>
   </View>
 );
@@ -349,34 +324,29 @@ export const PdfMoneyText = ({
   decimals?: number;
   color?: string;
 }) => (
-  <Text style={{ fontSize: MONEY_SIZE[size], fontWeight: 'bold', color, direction: 'ltr', textAlign: 'right' }}>
+  <Text style={{ fontSize: MONEY_SIZE[size], fontWeight: 'bold', color, direction: 'ltr', textAlign: 'right', lineHeight: 1.35 }}>
     {pdfFmtMoneyLibyan(amount, decimals)}
   </Text>
 );
 
-/** تذييل رسمي ببيانات المصنع الكاملة. */
+/** تذييل رسمي نحيف — خط هوية ثلاثي وسطران هادئان، لا يزاحم المحتوى أبداً. */
 export const TurkiPdfFooter = ({ fixed = true, docRef }: { fixed?: boolean; docRef?: string }) => (
-  <View style={pdfBrandStyles.footer} fixed={fixed}>
+  <View style={pdfBrandStyles.footer} fixed={fixed} wrap={false}>
     <View style={pdfBrandStyles.footerTopLine}>
       <View style={pdfBrandStyles.footerNavy} />
       <View style={pdfBrandStyles.footerGreen} />
       <View style={pdfBrandStyles.footerSun} />
     </View>
     <View style={pdfBrandStyles.footerMain}>
-      <View style={pdfBrandStyles.footerBrandCol}>
-        <Text style={pdfBrandStyles.footerBrandName}>{ar(BRAND.fullName)}</Text>
-        <Text style={pdfBrandStyles.footerTagline}>{ar(BRAND.tagline)}</Text>
-      </View>
-      <View style={pdfBrandStyles.footerMetaCol}>
-        <Text style={pdfBrandStyles.footerRegion}>{ar(BRAND.region)}</Text>
-        {docRef ? <Text style={pdfBrandStyles.footerRef} dir="ltr">{docRef}</Text> : null}
-      </View>
+      <Text style={pdfBrandStyles.footerBrandName}>{ar(BRAND.fullName)}</Text>
+      <Text style={pdfBrandStyles.footerEmail}>
+        {BRAND.contact.phone}
+        {BRAND.contact.email ? `   ·   ${BRAND.contact.email}` : ''}
+      </Text>
     </View>
     <View style={pdfBrandStyles.footerContactRow}>
-      <Text style={pdfBrandStyles.footerContact}>{ar(buildPdfFooterLine())}</Text>
-      {BRAND.contact.email ? (
-        <Text style={pdfBrandStyles.footerEmail}>{BRAND.contact.email}</Text>
-      ) : null}
+      <Text style={pdfBrandStyles.footerContact}>{ar(`${BRAND.contact.address} · ${BRAND.region}`)}</Text>
+      {docRef ? <Text style={pdfBrandStyles.footerRef}>{docRef}</Text> : null}
     </View>
   </View>
 );

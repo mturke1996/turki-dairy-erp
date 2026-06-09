@@ -1,8 +1,13 @@
 // @ts-nocheck
 /**
  * أنماط PDF الأساسية — مصنع التركي (التقارير والوثائق).
- * الاتجاه: الصفحة rtl للنص؛ صف «ملخص الوثيقة» يستخدم row-reverse + ltr
- * لأن Yoga في react-pdf لا يعكس محور flex مع rtl كالمتصفح.
+ *
+ * فلسفة التصميم: «ورقة رسمية سويسرية» — أبيض نظيف، خط فاصل واحد قوي،
+ * مساحات تنفّس واسعة، ولا صناديق متراكبة. الهوية تظهر في خط الترويسة
+ * الثلاثي (كحلي/أخضر/شمسي) وفي شريط الملخص أعلى الوثيقة فقط.
+ *
+ * الاتجاه: الصفحة rtl للنص؛ الصفوف الأفقية المتعددة الخلايا تستخدم
+ * row-reverse + ltr لأن Yoga لا يعكس محور flex مع rtl كالمتصفح.
  */
 
 import { PDF_FONT_FAMILY } from './pdfFonts';
@@ -39,51 +44,75 @@ export const pdfBase = {
     direction: 'rtl',
     fontFamily: PDF_FONT_FAMILY,
     fontSize: 9,
+    lineHeight: 1.5,
     color: PDF.text,
     backgroundColor: PDF.white,
-    paddingTop: 118,
-    paddingBottom: 54,
-    paddingHorizontal: 36,
+    // الترويسة المثبتة تنتهي عند ~118pt — نبدأ المحتوى بعدها بهواء كافٍ
+    paddingTop: 134,
+    // التذييل الجديد منخفض الارتفاع (~46pt من أسفل الورقة)
+    paddingBottom: 72,
+    paddingHorizontal: 40,
   },
 
+  /* ── خط الهوية أعلى الورقة: كحلي ممتد + مقطع أخضر + مقطع شمسي ── */
   pageAccentBar: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 5,
+    height: 4,
     backgroundColor: PDF.primary,
   },
 
   pageAccentStripe: {
     position: 'absolute',
-    top: 5,
-    left: 0,
+    top: 0,
     right: 0,
-    height: 2,
+    width: 120,
+    height: 4,
     backgroundColor: PDF.accent,
   },
 
   pageAccentSun: {
     position: 'absolute',
-    top: 5,
-    left: 0,
-    width: 64,
-    height: 2,
+    top: 0,
+    right: 120,
+    width: 28,
+    height: 4,
     backgroundColor: PDF.sun,
   },
 
-  /** كتلة الترويسة المثبتة — عنوان + شعار + تواصل */
+  /* ── الترويسة المثبتة ── */
   headerFixed: {
     position: 'absolute',
-    top: 8,
-    left: 36,
-    right: 36,
+    top: 26,
+    left: 40,
+    right: 40,
+  },
+
+  header: {
+    direction: 'rtl',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+  },
+
+  /* خط فاصل تحت الترويسة — كحلي بكامل العرض */
+  headerRule: {
+    height: 1.5,
+    backgroundColor: PDF.primary,
+  },
+
+  headerRuleAccent: {
+    height: 1.5,
+    width: 96,
+    backgroundColor: PDF.accent,
+    marginTop: -1.5,
   },
 
   headerContactInline: {
-    marginTop: 4,
-    marginBottom: 0,
+    marginTop: 7,
   },
 
   contentLayer: {
@@ -91,233 +120,156 @@ export const pdfBase = {
     zIndex: 1,
   },
 
-  header: {
-    position: 'relative',
-    width: '100%',
-    minHeight: 96,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: PDF.primary,
-  },
-
-  headerContactWrap: {
-    marginBottom: 12,
-  },
-
   titleBoxAtLeft: {
-    position: 'absolute',
-    left: 0,
-    top: 8,
-    direction: 'rtl',
     alignItems: 'flex-start',
-    maxWidth: '44%',
+    maxWidth: '46%',
   },
 
   brandBoxFixed: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    direction: 'rtl',
     alignItems: 'flex-end',
-    maxWidth: '56%',
+    maxWidth: '54%',
   },
 
+  /* ملاحظة: لا letterSpacing على نصوص عربية — يفصل الحروف المتصلة */
   reportType: {
     fontSize: 7.5,
     color: PDF.logoGreen,
-    alignSelf: 'flex-start',
-    paddingBottom: 3,
-    marginBottom: 6,
-    letterSpacing: 1.2,
     fontWeight: 'bold',
+    marginBottom: 5,
     textAlign: 'left',
-    borderBottomWidth: 1.5,
-    borderBottomColor: PDF.logoGreen,
+    lineHeight: 1.3,
   },
 
   reportTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 'bold',
     color: PDF.primary,
     textAlign: 'left',
-    letterSpacing: 0.2,
     lineHeight: 1.3,
   },
 
   reportSub: {
-    fontSize: 9,
+    fontSize: 8.5,
     color: PDF.muted,
-    marginTop: 4,
+    marginTop: 3,
     textAlign: 'left',
     lineHeight: 1.45,
   },
 
-  /** بطاقة ملخص فاخرة */
-  luxe: {
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: PDF.primary,
-    backgroundColor: PDF.white,
-  },
-
-  luxeRibbon: {
-    backgroundColor: PDF.primary,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    flexDirection: 'row-reverse',
-    direction: 'ltr',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  luxeRibbonText: {
-    fontSize: 7.5,
-    color: '#ffffff',
-    fontWeight: 'bold',
-    letterSpacing: 1.4,
-    textAlign: 'right',
-  },
-
-  luxeRibbonHint: {
-    fontSize: 7,
-    color: '#ffffff',
-    opacity: 0.75,
-    fontWeight: 'normal',
-    letterSpacing: 0.6,
-    textAlign: 'left',
-  },
-
-  luxeRow: {
+  /* ── شريط ملخص الوثيقة — شريط واحد هادئ بفواصل شعرية ── */
+  summaryStrip: {
     direction: 'ltr',
     flexDirection: 'row-reverse',
     alignItems: 'stretch',
+    backgroundColor: PDF.paleGold,
+    borderTopWidth: 2,
+    borderTopColor: PDF.accent,
+    borderBottomWidth: 0.5,
+    borderBottomColor: PDF.border,
+    marginBottom: 20,
   },
 
-  luxeDateCell: {
-    direction: 'rtl',
-    flex: 1.55,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    backgroundColor: PDF.rowAlt,
-    justifyContent: 'center',
-  },
-
-  luxeCell: {
+  summaryCell: {
     direction: 'rtl',
     flex: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
     justifyContent: 'center',
   },
 
-  luxeDivider: {
-    width: 1,
-    backgroundColor: PDF.border,
+  summaryCellDate: {
+    direction: 'rtl',
+    flex: 1.25,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
   },
 
-  luxeEyebrow: {
-    fontSize: 7.5,
+  summaryDivider: {
+    width: 0.5,
+    backgroundColor: PDF.border,
+    marginVertical: 10,
+  },
+
+  summaryEyebrow: {
+    fontSize: 6.8,
     color: PDF.muted,
     fontWeight: 'bold',
-    letterSpacing: 1.1,
-    marginBottom: 10,
+    marginBottom: 5,
     textAlign: 'right',
+    lineHeight: 1.3,
   },
 
-  luxeDateBlock: {
-    direction: 'rtl',
+  /* صف تاريخ مركّب: حاوية LTR بترتيب بصري صريح (سنة، شهر، يوم) — حتمي بلا بيدي */
+  summaryDateRow: {
+    direction: 'ltr',
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
+    justifyContent: 'flex-end',
+    alignItems: 'baseline',
+    gap: 4,
   },
 
-  luxeDay: {
-    fontSize: 34,
-    fontWeight: 'bold',
-    color: PDF.primary,
-    lineHeight: 1,
-    textAlign: 'right',
-  },
-
-  luxeDateTexts: {
-    alignItems: 'flex-end',
-    paddingBottom: 4,
-  },
-
-  luxeMonthYear: {
+  summaryValue: {
     fontSize: 11.5,
     fontWeight: 'bold',
-    color: PDF.text,
+    color: PDF.primary,
     textAlign: 'right',
-    lineHeight: 1.25,
+    lineHeight: 1.35,
   },
 
-  luxeWeekday: {
-    fontSize: 8.5,
-    color: PDF.logoGreen,
-    fontWeight: 'bold',
-    marginTop: 3,
-    letterSpacing: 0.4,
-    textAlign: 'right',
-  },
-
-  luxeGregorian: {
-    fontSize: 8.5,
+  summarySub: {
+    fontSize: 7.5,
     color: PDF.muted,
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 0.5,
-    borderTopColor: PDF.border,
-    letterSpacing: 0.8,
+    marginTop: 3,
     textAlign: 'right',
+    lineHeight: 1.35,
   },
 
-  luxeValue: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: PDF.primary,
-    textAlign: 'right',
-    letterSpacing: 0.2,
-    lineHeight: 1.15,
-  },
+  /* ── أنماط legacy (يُحتفظ بها للتوافق — لم تعد مستخدمة في الغلاف) ── */
+  luxe: { marginBottom: 16 },
+  luxeRibbon: { display: 'none' },
+  luxeRibbonText: { fontSize: 7.5 },
+  luxeRibbonHint: { fontSize: 7 },
+  luxeRow: { direction: 'ltr', flexDirection: 'row-reverse' },
+  luxeDateCell: { flex: 1.25, padding: 14 },
+  luxeCell: { flex: 1, padding: 14 },
+  luxeDivider: { width: 0.5, backgroundColor: PDF.border },
+  luxeEyebrow: { fontSize: 7, color: PDF.muted },
+  luxeDateBlock: { flexDirection: 'row' },
+  luxeDay: { fontSize: 20, fontWeight: 'bold', color: PDF.primary },
+  luxeDateTexts: { alignItems: 'flex-end' },
+  luxeMonthYear: { fontSize: 10, fontWeight: 'bold' },
+  luxeWeekday: { fontSize: 8, color: PDF.logoGreen },
+  luxeGregorian: { fontSize: 8, color: PDF.muted },
+  luxeValue: { fontSize: 12, fontWeight: 'bold', color: PDF.primary },
+  luxeMoneyRow: { flexDirection: 'row', direction: 'ltr' },
+  luxeMoneyCurrency: { fontSize: 11, fontWeight: 'bold', color: PDF.primary },
 
-  luxeMoneyRow: {
-    width: '100%',
-    flexDirection: 'row',
-    direction: 'ltr',
-    alignItems: 'baseline',
-    justifyContent: 'flex-end',
-    gap: 6,
-  },
-
-  luxeMoneyCurrency: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: PDF.primary,
-    letterSpacing: 0.2,
-  },
-
+  /* ── الجداول ── */
   tableHead: {
     direction: 'rtl',
     flexDirection: 'row',
-    backgroundColor: PDF.headerBg,
-    paddingVertical: 8,
-    paddingHorizontal: 9,
-    marginBottom: 2,
+    backgroundColor: PDF.primary,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: PDF.accent,
   },
 
   th: {
     color: PDF.white,
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: 'bold',
     textAlign: 'right',
+    lineHeight: 1.4,
   },
 
   tableRow: {
     direction: 'rtl',
     flexDirection: 'row',
-    paddingVertical: 6.5,
-    paddingHorizontal: 9,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderBottomWidth: 0.5,
     borderBottomColor: PDF.border,
     alignItems: 'center',
@@ -332,10 +284,10 @@ export const pdfBase = {
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: PDF.logoGreenSoft,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     borderTopWidth: 1.5,
-    borderTopColor: PDF.primary,
+    borderTopColor: PDF.accent,
     marginTop: 2,
   },
 
@@ -344,6 +296,7 @@ export const pdfBase = {
     fontWeight: 'bold',
     color: PDF.logoGreen,
     textAlign: 'right',
+    lineHeight: 1.4,
   },
 
   footValue: {
@@ -351,53 +304,57 @@ export const pdfBase = {
     fontWeight: 'bold',
     color: PDF.text,
     textAlign: 'left',
+    lineHeight: 1.4,
   },
 
-  td: { fontSize: 9, color: PDF.text, textAlign: 'right' },
-  tdMuted: { fontSize: 9, color: PDF.muted, textAlign: 'center', paddingVertical: 12 },
-  tdBold: { fontSize: 9, fontWeight: 'bold', color: PDF.text, textAlign: 'right' },
-  tdNum: { fontSize: 9, color: PDF.text, textAlign: 'center' },
+  td: { fontSize: 9, color: PDF.text, textAlign: 'right', lineHeight: 1.45 },
+  tdMuted: { fontSize: 9, color: PDF.muted, textAlign: 'center', paddingVertical: 14, lineHeight: 1.45 },
+  tdBold: { fontSize: 9, fontWeight: 'bold', color: PDF.text, textAlign: 'right', lineHeight: 1.45 },
+  tdNum: { fontSize: 9, color: PDF.text, textAlign: 'center', lineHeight: 1.45 },
 
+  /* رقم الصفحة — منتصف أسفل الورقة، تحت التذييل */
   pageNumber: {
     position: 'absolute',
-    top: 12,
-    right: 26,
-    width: 130,
-    textAlign: 'right',
-    fontSize: 7,
+    bottom: 8,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 6.5,
     color: PDF.muted,
-    fontWeight: 'bold',
-    lineHeight: 1.25,
+    lineHeight: 1.3,
   },
 
   sectionTitle: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: 'bold',
     color: PDF.primary,
-    marginBottom: 8,
-    marginTop: 14,
+    marginBottom: 10,
+    marginTop: 20,
     paddingBottom: 5,
-    paddingRight: 6,
-    borderBottomWidth: 1.5,
-    borderBottomColor: PDF.logoGreen,
-    letterSpacing: 0.2,
+    paddingRight: 8,
+    borderBottomWidth: 0.75,
+    borderBottomColor: PDF.border,
+    borderRightWidth: 3,
+    borderRightColor: PDF.accent,
     textAlign: 'right',
+    lineHeight: 1.35,
   },
 
-  caption: { fontSize: 8, color: PDF.muted, marginTop: 12, textAlign: 'center' },
+  caption: { fontSize: 8, color: PDF.muted, marginTop: 12, textAlign: 'center', lineHeight: 1.4 },
 
+  /* ── شريط التوقيع ── */
   signatureStrip: {
     direction: 'rtl',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 14,
-    paddingTop: 10,
-    borderTopWidth: 1,
+    marginTop: 30,
+    paddingTop: 14,
+    borderTopWidth: 0.5,
     borderTopColor: PDF.border,
   },
 
   signatureCell: {
-    width: '42%',
+    width: '40%',
     alignItems: 'flex-end',
   },
 
@@ -405,14 +362,14 @@ export const pdfBase = {
     fontSize: 7.5,
     color: PDF.muted,
     fontWeight: 'bold',
-    letterSpacing: 0.8,
-    marginBottom: 22,
+    marginBottom: 26,
     textAlign: 'right',
+    lineHeight: 1.3,
   },
 
   signatureLine: {
     width: '100%',
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.75,
     borderBottomColor: PDF.text,
     marginBottom: 6,
   },
@@ -421,18 +378,20 @@ export const pdfBase = {
     fontSize: 7,
     color: PDF.muted,
     textAlign: 'right',
+    lineHeight: 1.35,
   },
 
   docRef: {
     position: 'absolute',
     top: 14,
-    left: 34,
+    left: 40,
     fontSize: 7,
     color: PDF.muted,
     fontWeight: 'bold',
     letterSpacing: 0.4,
     direction: 'ltr',
     textAlign: 'left',
+    lineHeight: 1.3,
   },
 
   badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 3, fontSize: 7.5, fontWeight: 'bold' },

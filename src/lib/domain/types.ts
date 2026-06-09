@@ -105,6 +105,10 @@ export interface SupplyTransaction {
   unitPrice: number;
   total: number; // (quantity - sampleQty) * unitPrice
   qualityTier: QualityTier;
+  /** بداية فترة التجميع (yyyy-mm-dd) — عند تسجيل وارد فترة كاملة (مثلاً 15 يوماً) دفعة واحدة. */
+  periodFrom?: string;
+  /** نهاية فترة التجميع (yyyy-mm-dd). */
+  periodTo?: string;
   /** وجبة الاستلام: صباحية أو مسائية */
   milkShift?: MilkShift;
   /** لترات العينة — تدخل المخزون لكن لا تُحسب في مستحقات الفلاح */

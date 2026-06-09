@@ -26,7 +26,8 @@ export function PdfTable({
 }) {
   return (
     <View>
-      <View style={pdfBase.tableHead}>
+      {/* minPresenceAhead: لا يُطبع رأس الجدول يتيماً أسفل الصفحة دون صفوف تليه */}
+      <View style={pdfBase.tableHead} minPresenceAhead={40}>
         {columns.map((c) => (
           <Text key={c.key} style={[pdfBase.th, { flex: c.flex, textAlign: c.align ?? 'right' }]}>
             {ar(c.label)}
@@ -38,7 +39,7 @@ export function PdfTable({
         <Text style={pdfBase.tdMuted}>{ar(emptyMessage)}</Text>
       ) : (
         rows.map((row, i) => (
-          <View key={i} style={[pdfBase.tableRow, i % 2 === 1 && pdfBase.rowEven]}>
+          <View key={i} style={[pdfBase.tableRow, i % 2 === 1 && pdfBase.rowEven]} wrap={false}>
             {columns.map((c) => (
               <View key={c.key} style={{ flex: c.flex }}>
                 {typeof row[c.key] === 'string' || typeof row[c.key] === 'number' ? (
@@ -52,7 +53,7 @@ export function PdfTable({
         ))
       )}
 
-      {footer ? <View style={pdfBase.tableFoot}>{footer}</View> : null}
+      {footer ? <View style={pdfBase.tableFoot} wrap={false}>{footer}</View> : null}
     </View>
   );
 }

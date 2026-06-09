@@ -127,9 +127,9 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     href: '/audit',
-    label: 'سجل التدقيق',
+    label: 'سجل النشاط',
     icon: History,
-    description: 'كل تغيير موثّق',
+    description: 'كل حركة موثّقة',
     group: 'system',
   },
   {
