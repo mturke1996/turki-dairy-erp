@@ -18,6 +18,7 @@ import { CustomerCycleSettlement } from '@/components/customers/customer-cycle-s
 import { CarryForwardBanner } from '@/components/sessions/carry-forward-banner';
 import { CreateSessionDialog } from '@/components/sessions/create-session-dialog';
 import { buildSessionCarryForwardSnapshot } from '@/lib/domain/calculations';
+import { resolveAdjustmentReasonKind } from '@/lib/domain/constants';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { useCycle } from '@/lib/store/use-cycle';
@@ -42,6 +43,21 @@ export default function SessionsPage() {
 
   const active = d.activeSession;
   const summary = d.activeSummary;
+
+  const wasteThisCycle = useMemo(() => {
+    if (!active) return { qty: 0, value: 0 };
+    let qty = 0;
+    let value = 0;
+    for (const a of data.adjustments) {
+      if (a.sessionId !== active.id || a.quantity >= 0) continue;
+      const kind = a.reasonKind ?? resolveAdjustmentReasonKind(a.reason, a.quantity);
+      if (kind !== 'loss') continue;
+      const abs = Math.abs(a.quantity);
+      qty += abs;
+      value += abs * a.unitCost;
+    }
+    return { qty: Math.round(qty), value: Math.round(value) };
+  }, [active, data.adjustments]);
 
   const closePreview = useMemo(() => {
     if (!active) return null;
@@ -400,8 +416,16 @@ export default function SessionsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 rounded-xl bg-canvas-sunken p-4 text-[12.5px]">
+            {wasteThisCycle.qty > 0 ? (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">هدر مخصوم من المخزون</span>
+                <span className="font-semibold text-rose-600">
+                  <Liters value={wasteThisCycle.qty} /> · <Money value={wasteThisCycle.value} decimals={0} />
+                </span>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">مخزون مُرحّل</span>
+              <span className="text-muted-foreground">مخزون مُرحّل (بعد خصم الهدر)</span>
               <Liters value={summary.closingStock} className="font-semibold text-meadow-700" />
             </div>
             <div className="flex items-center justify-between">

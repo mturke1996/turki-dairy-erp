@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { computeFarmerSessionStats, buildSessionCarryForwardSnapshot, computeDerived } from '@/lib/domain/calculations';
-import type { Farmer, Payment, Session, SupplyTransaction } from '@/lib/domain/types';
+import {
+  computeFarmerSessionStats,
+  buildSessionCarryForwardSnapshot,
+  computeDerived,
+} from '@/lib/domain/calculations';
+import { resolveAdjustmentReasonKind } from '@/lib/domain/constants';
+import type { Expense, Farmer, InventoryAdjustment, Payment, Session, SupplyTransaction } from '@/lib/domain/types';
 
 const farmer: Farmer = {
   id: 'f1',
@@ -170,5 +175,67 @@ describe('computeDerived adjustedNetPosition', () => {
     expect(derived.adjustedNetPosition.finalBalance).toBe(
       derived.totals.netCash + derived.totals.receivables + derived.totals.inventoryValue - derived.totals.payables,
     );
+  });
+});
+
+describe('resolveAdjustmentReasonKind', () => {
+  it('classifies real losses vs corrections', () => {
+    expect(resolveAdjustmentReasonKind('تلف وفساد', -10)).toBe('loss');
+    expect(resolveAdjustmentReasonKind('رفض جودة', -5)).toBe('loss');
+    expect(resolveAdjustmentReasonKind('جرد فعلي (نقص)', -8)).toBe('correction');
+    expect(resolveAdjustmentReasonKind('تصحيح إدخال', -3)).toBe('correction');
+    expect(resolveAdjustmentReasonKind('أي سبب', 10)).toBe('correction');
+  });
+});
+
+describe('inventory waste as non-cash expense', () => {
+  const wasteSession: Session = {
+    id: 'sw', label: 'يونيو', periodFrom: '2026-06-01', periodTo: '2026-06-30',
+    status: 'open', openingStock: 0, openingAvgCost: 2, openingPayables: 0, openingReceivables: 0,
+    createdAt: '2026-06-01',
+  };
+  const supplies: SupplyTransaction[] = [{
+    id: 'sup1', ref: 'SUP-1', farmerId: 'f1', sessionId: 'sw', date: '2026-06-01',
+    quantity: 100, unitPrice: 2, total: 200, qualityTier: 'A', createdAt: '2026-06-01',
+  }];
+  const wasteAdj: InventoryAdjustment = {
+    id: 'adj-w', ref: 'ADJ-1', sessionId: 'sw', date: '2026-06-05',
+    quantity: -10, unitCost: 2, reason: 'تلف وفساد', reasonKind: 'loss', createdAt: '2026-06-05',
+  };
+  const wasteExpense: Expense = {
+    id: 'exp-w', ref: 'EXP-1', categoryId: 'cat-waste', amount: 20, description: 'هدر مخزون',
+    date: '2026-06-05', sessionId: 'sw', status: 'approved', nonCash: true, sourceAdjustmentId: 'adj-w',
+    createdAt: '2026-06-05',
+  };
+
+  function build(extraExpenses: Expense[]) {
+    return computeDerived({
+      sessions: [wasteSession], activeSessionId: 'sw',
+      farmers: [farmer], customers: [], employees: [],
+      supplies, sales: [], payments: [], debtEntries: [],
+      adjustments: [wasteAdj], expenses: extraExpenses, payrollBatches: [],
+      vaults: [], banks: [], cashMovements: [], externalIncomes: [],
+      settings: { minStockThreshold: 0, defaultBuyPrice: 2, defaultSellPrice: 2.5 },
+    });
+  }
+
+  it('deducts waste from stock and value', () => {
+    const d = build([wasteExpense]);
+    expect(d.activeSummary.closingStock).toBe(90);
+    expect(d.totals.inventoryValue).toBe(180);
+  });
+
+  it('does not double-count: non-cash expense produces no separate expense journal', () => {
+    const d = build([wasteExpense]);
+    const expenseJournals = d.journals.filter((j) => j.kind === 'expense');
+    const adjustmentJournals = d.journals.filter((j) => j.kind === 'adjustment');
+    expect(expenseJournals).toHaveLength(0);
+    expect(adjustmentJournals).toHaveLength(1);
+  });
+
+  it('keeps the trial balance balanced with a non-cash waste expense', () => {
+    const d = build([wasteExpense]);
+    expect(d.trialBalance.balanced).toBe(true);
+    expect(Math.round(d.trialBalance.totalDebit)).toBe(Math.round(d.trialBalance.totalCredit));
   });
 });

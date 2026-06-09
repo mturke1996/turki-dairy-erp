@@ -277,7 +277,9 @@ function ExpensesContent() {
                               <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">{e.description}</p>
                             ) : null}
                             <p className="mt-1.5 text-[11px] text-muted-foreground">
-                              {accountLabel(e.paidFromType, e.paidFromId, vaults, banks)}
+                              {e.nonCash || !e.paidFromType || !e.paidFromId
+                                ? 'غير نقدي · هدر مخزون'
+                                : accountLabel(e.paidFromType, e.paidFromId, vaults, banks)}
                             </p>
                           </div>
                           <Money value={e.amount} decimals={0} className="shrink-0 text-[15px] font-bold text-rose-600" />
@@ -287,20 +289,26 @@ function ExpensesContent() {
                             <Badge variant={STATUS_VARIANT[e.status]}>{EXPENSE_STATUS_LABELS[e.status]}</Badge>
                             <span className="text-[11px] text-muted-foreground" dir="ltr">{formatShortDate(e.date)}</span>
                           </div>
-                          <div className="flex gap-1">
-                            <Button type="button" size="icon" variant="ghost" className="h-9 w-9" onClick={() => setEditExpense(e)}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <RowDeleteButton
-                              label={e.ref}
-                              onConfirm={async () => {
-                                const res = await deleteExpense(e.id);
-                                if (res.ok) toast.success('تم حذف المصروف');
-                                else toast.error(res.error ?? 'تعذّر الحذف');
-                                return res;
-                              }}
-                            />
-                          </div>
+                          {e.nonCash ? (
+                            <Link href="/inventory" className="text-[11px] font-medium text-meadow-700">
+                              من تسوية مخزون ←
+                            </Link>
+                          ) : (
+                            <div className="flex gap-1">
+                              <Button type="button" size="icon" variant="ghost" className="h-9 w-9" onClick={() => setEditExpense(e)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <RowDeleteButton
+                                label={e.ref}
+                                onConfirm={async () => {
+                                  const res = await deleteExpense(e.id);
+                                  if (res.ok) toast.success('تم حذف المصروف');
+                                  else toast.error(res.error ?? 'تعذّر الحذف');
+                                  return res;
+                                }}
+                              />
+                            </div>
+                          )}
                         </div>
                       </article>
                     );
@@ -332,25 +340,35 @@ function ExpensesContent() {
                         <TableCell className="text-[11.5px] text-muted-foreground">
                           {expenseSession ? sessionDisplayLabel(expenseSession, 'compact') : '—'}
                         </TableCell>
-                        <TableCell className="text-[12px] text-muted-foreground">{accountLabel(e.paidFromType, e.paidFromId, vaults, banks)}</TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">
+                          {e.nonCash || !e.paidFromType || !e.paidFromId
+                            ? 'غير نقدي · هدر مخزون'
+                            : accountLabel(e.paidFromType, e.paidFromId, vaults, banks)}
+                        </TableCell>
                         <TableCell className="text-left"><Money value={e.amount} decimals={0} className="font-semibold text-rose-600" /></TableCell>
                         <TableCell><Badge variant={STATUS_VARIANT[e.status]}>{EXPENSE_STATUS_LABELS[e.status]}</Badge></TableCell>
                         <TableCell className="text-left text-[12px] text-muted-foreground" dir="ltr">{formatShortDate(e.date)}</TableCell>
                         <TableCell>
-                          <div className="flex justify-end gap-1">
-                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditExpense(e)}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <RowDeleteButton
-                              label={e.ref}
-                              onConfirm={async () => {
-                                const res = await deleteExpense(e.id);
-                                if (res.ok) toast.success('تم حذف المصروف');
-                                else toast.error(res.error ?? 'تعذّر الحذف');
-                                return res;
-                              }}
-                            />
-                          </div>
+                          {e.nonCash ? (
+                            <Link href="/inventory" className="flex justify-end text-[11px] font-medium text-meadow-700">
+                              من تسوية مخزون ←
+                            </Link>
+                          ) : (
+                            <div className="flex justify-end gap-1">
+                              <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditExpense(e)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <RowDeleteButton
+                                label={e.ref}
+                                onConfirm={async () => {
+                                  const res = await deleteExpense(e.id);
+                                  if (res.ok) toast.success('تم حذف المصروف');
+                                  else toast.error(res.error ?? 'تعذّر الحذف');
+                                  return res;
+                                }}
+                              />
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     );

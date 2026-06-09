@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { AlertTriangle, Receipt } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,8 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Field } from '@/components/shared/field';
 import { AmountInput } from '@/components/shared/amount-input';
 import { VolumeInput } from '@/components/shared/volume-input';
+import { Money } from '@/components/shared/money';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { formatLiters } from '@/lib/format-currency';
+import { ADJUSTMENT_DECREASE_REASONS, ADJUSTMENT_INCREASE_REASONS } from '@/lib/domain/constants';
 
 type Props = {
   open: boolean;
@@ -19,37 +22,60 @@ type Props = {
   wac: number;
 };
 
-const REASONS = ['هدر / تلف', 'جرد فعلي', 'فاقد نقل', 'تصحيح إدخال', 'أخرى'];
-
 export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Props) {
   const addAdjustment = useErpStore((s) => s.addAdjustment);
   const [direction, setDirection] = useState<'decrease' | 'increase'>('decrease');
   const [quantity, setQuantity] = useState('');
   const [unitCost, setUnitCost] = useState(() => String(Number(wac.toFixed(3)) || 0));
-  const [reason, setReason] = useState(REASONS[0]);
+  const reasons = direction === 'decrease' ? ADJUSTMENT_DECREASE_REASONS : ADJUSTMENT_INCREASE_REASONS;
+  const [reasonValue, setReasonValue] = useState(reasons[0].value);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [busy, setBusy] = useState(false);
+
+  const selectedReason = useMemo(
+    () => reasons.find((r) => r.value === reasonValue) ?? reasons[0],
+    [reasons, reasonValue],
+  );
 
   const qtyAbs = Number(quantity) || 0;
   const signed = direction === 'decrease' ? -qtyAbs : qtyAbs;
   const projected = currentStock + signed;
+  const isLoss = direction === 'decrease' && selectedReason.kind === 'loss';
+  const lossValue = Math.round(qtyAbs * (Number(unitCost) || wac));
+
+  function changeDirection(v: 'decrease' | 'increase') {
+    setDirection(v);
+    const list = v === 'decrease' ? ADJUSTMENT_DECREASE_REASONS : ADJUSTMENT_INCREASE_REASONS;
+    setReasonValue(list[0].value);
+  }
 
   async function submit() {
     if (qtyAbs <= 0) return toast.error('أدخل كمية التسوية.');
     if (direction === 'decrease' && qtyAbs > currentStock + 0.001) {
       return toast.error('كمية النقص تتجاوز المخزون المتاح.');
     }
-    const res = await addAdjustment({
-      quantity: signed,
-      unitCost: Number(unitCost) || wac,
-      reason: reason.trim(),
-      date: new Date(date + 'T11:00:00').toISOString(),
-    });
-    if (res.ok) {
-      toast.success('تم تسجيل التسوية', { description: `${signed > 0 ? '+' : ''}${formatLiters(signed, 0, false)}` });
-      setQuantity('');
-      onOpenChange(false);
-    } else {
-      toast.error(res.error ?? 'تعذّر التسجيل');
+    setBusy(true);
+    try {
+      const res = await addAdjustment({
+        quantity: signed,
+        unitCost: Number(unitCost) || wac,
+        reason: selectedReason.value,
+        reasonKind: selectedReason.kind,
+        date: new Date(date + 'T11:00:00').toISOString(),
+      });
+      if (res.ok) {
+        toast.success('تم تسجيل التسوية', {
+          description: isLoss
+            ? `سُجِّل هدر ${formatLiters(qtyAbs, 0, false)} كمصروف غير نقدي`
+            : `${signed > 0 ? '+' : ''}${formatLiters(signed, 0, false)}`,
+        });
+        setQuantity('');
+        onOpenChange(false);
+      } else {
+        toast.error(res.error ?? 'تعذّر التسجيل');
+      }
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -58,17 +84,17 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>تسوية مخزون</DialogTitle>
-          <DialogDescription>تعديل الرصيد لمعالجة الهدر أو فروقات الجرد.</DialogDescription>
+          <DialogDescription>معالجة الهدر والتلف أو فروقات الجرد — الهدر يُرحَّل تلقائياً للمصاريف.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <Field label="نوع التسوية">
-            <Select value={direction} onValueChange={(v) => setDirection(v as typeof direction)}>
+            <Select value={direction} onValueChange={(v) => changeDirection(v as typeof direction)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="decrease">نقص (هدر / فاقد)</SelectItem>
+                <SelectItem value="decrease">نقص (هدر / فاقد / جرد)</SelectItem>
                 <SelectItem value="increase">زيادة (تصحيح)</SelectItem>
               </SelectContent>
             </Select>
@@ -82,14 +108,14 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
             </Field>
           </div>
           <Field label="السبب">
-            <Select value={reason} onValueChange={setReason}>
+            <Select value={reasonValue} onValueChange={setReasonValue}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {REASONS.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {r}
+                {reasons.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -105,10 +131,30 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
               {formatLiters(projected, 0, false)}
             </span>
           </div>
+
+          {isLoss ? (
+            <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-[12px] text-amber-900">
+              <Receipt className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="space-y-0.5">
+                <p className="font-semibold">
+                  سيُسجَّل كمصروف هدر غير نقدي:{' '}
+                  <Money value={lossValue} decimals={0} className="inline font-bold" />
+                </p>
+                <p className="text-[11px] leading-relaxed text-amber-800">
+                  لا يُخصم من الخزنة (ثمن الحليب دُفع سابقاً) — يظهر في «المصاريف» لتتبّع الخسارة، وتُخصم الكمية من المخزون المرحّل.
+                </p>
+              </div>
+            </div>
+          ) : direction === 'decrease' ? (
+            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              تصحيح كمية فقط — لن يُسجَّل كمصروف.
+            </p>
+          ) : null}
         </div>
 
         <DialogFooter>
-          <Button onClick={submit}>تأكيد التسوية</Button>
+          <Button onClick={submit} disabled={busy}>{busy ? 'جارٍ الحفظ…' : 'تأكيد التسوية'}</Button>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             إلغاء
           </Button>

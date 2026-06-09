@@ -49,6 +49,12 @@ import type {
   DebtPartyKind,
   ExpenseGroup,
 } from "@/lib/domain/types";
+import {
+  WASTE_EXPENSE_CATEGORY_ID,
+  WASTE_EXPENSE_CATEGORY_NAME,
+  resolveAdjustmentReasonKind,
+} from "@/lib/domain/constants";
+import type { AdjustmentReasonKind } from "@/lib/domain/types";
 import { uid } from "@/lib/utils";
 import {
   formatLiters,
@@ -260,12 +266,16 @@ interface ErpState {
     quantity: number;
     unitCost: number;
     reason: string;
+    reasonKind?: AdjustmentReasonKind;
     date?: string;
   }) => Promise<MutationResult>;
   updateAdjustment: (
     id: string,
     patch: Partial<
-      Pick<InventoryAdjustment, "quantity" | "unitCost" | "reason" | "date">
+      Pick<
+        InventoryAdjustment,
+        "quantity" | "unitCost" | "reason" | "reasonKind" | "date"
+      >
     >,
   ) => Promise<MutationResult>;
   updateSupply: (
@@ -633,6 +643,52 @@ function makeAudit(
     performedByRole: state.auth?.role ?? "viewer",
     performedAt: new Date().toISOString(),
     reason,
+  };
+}
+
+/** فئة مصروف الهدر الثابتة (تُنشأ تلقائياً إن لم توجد في قاعدة البيانات). */
+function wasteCategoryRow(): ExpenseCategory {
+  return {
+    id: WASTE_EXPENSE_CATEGORY_ID,
+    name: WASTE_EXPENSE_CATEGORY_NAME,
+    group: "operations",
+    isRecurring: false,
+  };
+}
+
+/**
+ * يحدّد ما إن كانت التسوية خسارة (هدر) تستوجب مصروفاً غير نقدي.
+ * الخسارة = نقص فعلي بسبب تلف/فقد (وليست مجرد تصحيح جرد).
+ */
+function adjustmentIsLoss(
+  quantity: number,
+  reason: string,
+  reasonKind?: AdjustmentReasonKind,
+): boolean {
+  if (quantity >= 0) return false;
+  const kind = reasonKind ?? resolveAdjustmentReasonKind(reason, quantity);
+  return kind === "loss";
+}
+
+/** يبني مصروف هدر غير نقدي مرتبطاً بتسوية مخزون. */
+function buildWasteExpense(
+  state: { expenses: { ref: string }[]; auth: AuthUser | null },
+  adjustment: InventoryAdjustment,
+): Expense {
+  const value = round(Math.abs(adjustment.quantity) * adjustment.unitCost);
+  return {
+    id: uid("exp-"),
+    ref: nextRef("EXP", state.expenses),
+    categoryId: WASTE_EXPENSE_CATEGORY_ID,
+    amount: value,
+    description: `هدر مخزون: ${adjustment.reason} — ${formatLiters(Math.abs(adjustment.quantity), 0, false)}`,
+    date: adjustment.date,
+    sessionId: adjustment.sessionId,
+    status: "approved",
+    nonCash: true,
+    sourceAdjustmentId: adjustment.id,
+    recordedBy: state.auth?.name,
+    createdAt: new Date().toISOString(),
   };
 }
 
@@ -2127,14 +2183,18 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const gate = requireOpenSession(state);
     if (!gate.ok) return gate;
     if (input.quantity === 0) return { ok: false, error: "حدّد كمية التسوية." };
+    const quantity = round(input.quantity);
+    const reasonKind: AdjustmentReasonKind =
+      input.reasonKind ?? resolveAdjustmentReasonKind(input.reason, quantity);
     const tx: InventoryAdjustment = {
       id: uid("adj-"),
       ref: nextRef("ADJ", state.adjustments),
       sessionId: state.activeSessionId,
       date: input.date ?? new Date().toISOString(),
-      quantity: round(input.quantity),
+      quantity,
       unitCost: round(input.unitCost, 3),
       reason: input.reason,
+      reasonKind,
       createdAt: new Date().toISOString(),
     };
     const audit = makeAudit(
@@ -2144,17 +2204,46 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       "create",
       `تسوية مخزون: ${tx.reason}`,
     );
+
+    // خسارة هدر → مصروف غير نقدي تلقائي (لا يختفي ثمن الحليب)
+    const isLoss = adjustmentIsLoss(quantity, input.reason, reasonKind);
+    const wasteExpense = isLoss ? buildWasteExpense(state, tx) : null;
+    const needsCategory =
+      isLoss &&
+      !state.expenseCategories.some((c) => c.id === WASTE_EXPENSE_CATEGORY_ID);
+    const wasteCat = needsCategory ? wasteCategoryRow() : null;
+
     const res = await mutateWithDb(
       () =>
         set((s) => ({
           adjustments: [tx, ...s.adjustments],
+          expenseCategories: wasteCat
+            ? [...s.expenseCategories, wasteCat]
+            : s.expenseCategories,
+          expenses: wasteExpense ? [wasteExpense, ...s.expenses] : s.expenses,
           auditLogs: [audit, ...s.auditLogs],
         })),
       [
+        ...(wasteCat
+          ? [
+              {
+                table: "expense_categories",
+                rows: [wasteCat as unknown as Record<string, unknown>],
+              },
+            ]
+          : []),
         {
           table: "inventory_adjustments",
           rows: [tx as unknown as Record<string, unknown>],
         },
+        ...(wasteExpense
+          ? [
+              {
+                table: "expenses",
+                rows: [wasteExpense as unknown as Record<string, unknown>],
+              },
+            ]
+          : []),
       ],
     );
     return res.ok ? { ok: true, id: tx.id } : res;
@@ -2192,11 +2281,14 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       };
     }
 
+    const reasonKind: AdjustmentReasonKind =
+      patch.reasonKind ?? resolveAdjustmentReasonKind(reason, quantity);
     const updated: InventoryAdjustment = {
       ...existing,
       quantity,
       unitCost,
       reason,
+      reasonKind,
       date: patch.date ?? existing.date,
     };
     const audit = makeAudit(
@@ -2206,17 +2298,82 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       "update",
       `تعديل تسوية ${existing.ref}`,
     );
+
+    // مزامنة مصروف الهدر المرتبط
+    const linkedExpense = state.expenses.find(
+      (e) => e.sourceAdjustmentId === id,
+    );
+    const isLoss = adjustmentIsLoss(quantity, reason, reasonKind);
+    const wasteValue = round(Math.abs(quantity) * unitCost);
+
+    let nextExpense: Expense | null = null;
+    let removeExpenseId: string | null = null;
+    let needsCategory = false;
+    if (isLoss) {
+      needsCategory = !state.expenseCategories.some(
+        (c) => c.id === WASTE_EXPENSE_CATEGORY_ID,
+      );
+      if (linkedExpense) {
+        nextExpense = {
+          ...linkedExpense,
+          amount: wasteValue,
+          date: updated.date,
+          sessionId: updated.sessionId,
+          description: `هدر مخزون: ${reason} — ${formatLiters(Math.abs(quantity), 0, false)}`,
+        };
+      } else {
+        nextExpense = buildWasteExpense(state, updated);
+      }
+    } else if (linkedExpense) {
+      removeExpenseId = linkedExpense.id;
+    }
+    const wasteCat = needsCategory ? wasteCategoryRow() : null;
+
     const res = await mutateWithDb(
       () =>
         set((s) => ({
           adjustments: s.adjustments.map((a) => (a.id === id ? updated : a)),
+          expenseCategories: wasteCat
+            ? [...s.expenseCategories, wasteCat]
+            : s.expenseCategories,
+          expenses: (() => {
+            let list = s.expenses;
+            if (removeExpenseId)
+              list = list.filter((e) => e.id !== removeExpenseId);
+            if (nextExpense) {
+              const exists = list.some((e) => e.id === nextExpense!.id);
+              list = exists
+                ? list.map((e) => (e.id === nextExpense!.id ? nextExpense! : e))
+                : [nextExpense, ...list];
+            }
+            return list;
+          })(),
           auditLogs: [audit, ...s.auditLogs],
         })),
       [
+        ...(wasteCat
+          ? [
+              {
+                table: "expense_categories",
+                rows: [wasteCat as unknown as Record<string, unknown>],
+              },
+            ]
+          : []),
         {
           table: "inventory_adjustments",
           rows: [updated as unknown as Record<string, unknown>],
         },
+        ...(nextExpense
+          ? [
+              {
+                table: "expenses",
+                rows: [nextExpense as unknown as Record<string, unknown>],
+              },
+            ]
+          : []),
+        ...(removeExpenseId
+          ? [{ table: "expenses", deletes: [removeExpenseId] }]
+          : []),
       ],
     );
     return res.ok ? { ok: true, id } : res;
@@ -2470,6 +2627,9 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const state = get();
     const tx = state.adjustments.find((a) => a.id === id);
     if (!tx) return { ok: false, error: "التسوية غير موجودة." };
+    const linkedExpenseIds = state.expenses
+      .filter((e) => e.sourceAdjustmentId === id)
+      .map((e) => e.id);
     const audit = makeAudit(
       state,
       "adjustment",
@@ -2481,9 +2641,17 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       () =>
         set((s) => ({
           adjustments: s.adjustments.filter((a) => a.id !== id),
+          expenses: linkedExpenseIds.length
+            ? s.expenses.filter((e) => !linkedExpenseIds.includes(e.id))
+            : s.expenses,
           auditLogs: [audit, ...s.auditLogs],
         })),
-      [{ table: "inventory_adjustments", deletes: [id] }],
+      [
+        { table: "inventory_adjustments", deletes: [id] },
+        ...(linkedExpenseIds.length
+          ? [{ table: "expenses", deletes: linkedExpenseIds }]
+          : []),
+      ],
     ).then((r) => (r.ok ? { ok: true, id } : r));
   },
 

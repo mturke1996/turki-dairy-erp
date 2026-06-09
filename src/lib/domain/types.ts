@@ -193,6 +193,13 @@ export interface ExternalIncome {
   createdBy?: string;
 }
 
+/**
+ * نوع التسوية:
+ * - loss: هدر/تلف/فاقد حقيقي — يُسجَّل تلقائياً كمصروف غير نقدي (خسارة مخزون).
+ * - correction: فرق جرد أو تصحيح إدخال — لا يُنشئ مصروفاً (مجرد تعديل كمية).
+ */
+export type AdjustmentReasonKind = 'loss' | 'correction';
+
 export interface InventoryAdjustment {
   id: string;
   ref: string;
@@ -201,6 +208,8 @@ export interface InventoryAdjustment {
   quantity: number; // موجب = زيادة، سالب = نقص (هدر/جرد)
   unitCost: number;
   reason: string;
+  /** يحدّد إن كانت التسوية خسارة (هدر) تُرحَّل للمصاريف أم مجرد تصحيح. */
+  reasonKind?: AdjustmentReasonKind;
   createdAt: string;
 }
 
@@ -438,13 +447,18 @@ export interface Expense {
   amount: number;
   description: string;
   date: string;
-  paidFromType: AccountSourceType;
-  paidFromId: string;
+  /** اختياري للمصاريف غير النقدية (هدر مخزون) — لا تُخصم من خزنة. */
+  paidFromType?: AccountSourceType;
+  paidFromId?: string;
   invoiceRef?: string;
   sessionId: string;
   status: ExpenseStatus;
   recordedBy?: string;
   approvedBy?: string;
+  /** مصروف غير نقدي (خسارة مخزون): لا حركة نقدية ولا قيد منفصل. */
+  nonCash?: boolean;
+  /** يربط المصروف بتسوية المخزون المولِّدة له (هدر). */
+  sourceAdjustmentId?: string;
   createdAt: string;
 }
 

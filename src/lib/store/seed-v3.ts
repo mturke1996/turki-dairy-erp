@@ -28,6 +28,7 @@ export interface SeedV3 {
 }
 
 export const DEFAULT_EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  { id: 'cat-waste', name: 'هدر وتلف الحليب', group: 'operations', isRecurring: false },
   { id: 'cat-fuel', name: 'وقود ونقل', group: 'logistics', budgetMonthly: 9000, isRecurring: true },
   { id: 'cat-power', name: 'كهرباء وماء', group: 'operations', budgetMonthly: 4500, isRecurring: true },
   { id: 'cat-maint', name: 'صيانة معدات', group: 'operations', budgetMonthly: 3000, isRecurring: false },
@@ -159,6 +160,7 @@ export function generateSeedV3(sessionId: string): SeedV3 {
   // مصاريف
   for (const e of expenses) {
     if (e.status === 'rejected' || e.status === 'pending') continue;
+    if (e.nonCash || !e.paidFromType || !e.paidFromId) continue;
     cm({
       movementType: 'expense',
       sourceType: e.paidFromType,

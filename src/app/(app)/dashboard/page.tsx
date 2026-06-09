@@ -14,7 +14,7 @@ import {
   Warehouse,
   Wallet,
 } from 'lucide-react';
-import { PageHeader } from '@/components/layout/page-header';
+import { WelcomeHero } from '@/components/dashboard/welcome-hero';
 import { KpiCard } from '@/components/dashboard/kpi-card';
 import { FlowChart } from '@/components/dashboard/flow-chart';
 import { ProfitBars } from '@/components/dashboard/profit-bars';
@@ -25,9 +25,10 @@ import { Button } from '@/components/ui/button';
 import { Money, Liters } from '@/components/shared/money';
 import { EmptyState } from '@/components/shared/empty-state';
 import { useDerived, useErpData } from '@/lib/store/use-derived';
+import { useErpStore } from '@/lib/store/use-erp-store';
 import { usePermission } from '@/lib/store/use-permission';
 import { computeDailyFlow } from '@/lib/domain/calculations';
-import { COPY } from '@/lib/domain/constants';
+import { COPY, ROLE_LABELS } from '@/lib/domain/constants';
 import { formatNumber, formatShortDate } from '@/lib/utils';
 import { formatLiters } from '@/lib/format-currency';
 
@@ -42,6 +43,7 @@ const ALERT_STYLE = {
 export default function DashboardPage() {
   const data = useErpData();
   const d = useDerived();
+  const auth = useErpStore((st) => st.auth);
   const canSupply = usePermission('supply.record');
   const canSell = usePermission('sales.record');
 
@@ -70,34 +72,38 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="نظرة تنفيذية"
-        title="لوحة التحكم"
-        description={`المؤشرات اللحظية لفترة ${d.activeSession?.label ?? ''} — مخزون، إيرادات، أرباح وتنبيهات.`}
-        actions={
-          <>
-            {canSupply ? (
-              <Button asChild variant="meadow">
-                <Link href="/supply">
-                  <ArrowDownToLine className="h-4 w-4" />
-                  {C.record}
-                </Link>
-              </Button>
-            ) : null}
-            {canSell ? (
-              <Button asChild>
-                <Link href="/sales">
-                  <ArrowUpFromLine className="h-4 w-4" />
-                  تسجيل بيع
-                </Link>
-              </Button>
-            ) : null}
-          </>
-        }
-      />
+      <div className="animate-fade-up">
+        <WelcomeHero
+          userName={auth?.name ?? 'مستخدم'}
+          roleLabel={ROLE_LABELS[auth?.role ?? 'viewer']}
+          sessionLabel={d.activeSession?.label ?? 'الفترة الحالية'}
+          alertsCount={d.alerts.length}
+          netPositive={d.adjustedNetPosition.finalBalance >= 0}
+          actions={
+            <>
+              {canSupply ? (
+                <Button asChild variant="meadow">
+                  <Link href="/supply">
+                    <ArrowDownToLine className="h-4 w-4" />
+                    {C.record}
+                  </Link>
+                </Button>
+              ) : null}
+              {canSell ? (
+                <Button asChild>
+                  <Link href="/sales">
+                    <ArrowUpFromLine className="h-4 w-4" />
+                    تسجيل بيع
+                  </Link>
+                </Button>
+              ) : null}
+            </>
+          }
+        />
+      </div>
 
       {/* المؤشرات الرئيسية */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 animate-fade-up sm:grid-cols-2 xl:grid-cols-4" style={{ animationDelay: '70ms' }}>
         <KpiCard
           label="المخزون الحالي"
           value={<Liters value={d.totals.currentStock} />}
@@ -139,10 +145,12 @@ export default function DashboardPage() {
       </div>
 
       {/* المركز المالي بعد التسويات — نفس منطق صفحة الخزائن */}
-      <NetPositionCard position={d.adjustedNetPosition} />
+      <div className="animate-fade-up" style={{ animationDelay: '130ms' }}>
+        <NetPositionCard position={d.adjustedNetPosition} />
+      </div>
 
       {/* مؤشرات ثانوية */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 animate-fade-up sm:grid-cols-2 xl:grid-cols-4" style={{ animationDelay: '190ms' }}>
         <KpiCard
           label="ديون الفلاحين"
           value={<Money value={d.totals.payables} decimals={0} />}
@@ -181,10 +189,12 @@ export default function DashboardPage() {
       </div>
 
       {/* لوحات v3.0 — الكاش والمصاريف والرواتب والدورة */}
-      <DashboardV3Panels />
+      <div className="animate-fade-up" style={{ animationDelay: '250ms' }}>
+        <DashboardV3Panels />
+      </div>
 
       {/* الحركة + التنبيهات */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 animate-fade-up lg:grid-cols-3" style={{ animationDelay: '300ms' }}>
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between">
             <div>
@@ -212,7 +222,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="alerts" className="scroll-mt-24">
           <CardHeader>
             <CardTitle>التنبيهات</CardTitle>
             <CardDescription>أمور تتطلب انتباهك</CardDescription>
@@ -246,7 +256,7 @@ export default function DashboardPage() {
       </div>
 
       {/* الأرباح + أعلى الموردين */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 animate-fade-up lg:grid-cols-3" style={{ animationDelay: '350ms' }}>
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>الأرباح حسب الفترة</CardTitle>
@@ -291,7 +301,7 @@ export default function DashboardPage() {
       </div>
 
       {/* آخر الحركات */}
-      <Card>
+      <Card className="animate-fade-up" style={{ animationDelay: '400ms' }}>
         <CardHeader>
           <CardTitle>آخر الحركات</CardTitle>
           <CardDescription>أحدث عمليات الاستلام والبيع المسجّلة</CardDescription>

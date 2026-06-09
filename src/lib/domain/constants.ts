@@ -1,6 +1,7 @@
 import type {
   AccountKey,
   AccountSourceType,
+  AdjustmentReasonKind,
   AuditAction,
   CashMovementType,
   ContractType,
@@ -207,6 +208,54 @@ export const EXPENSE_STATUS_LABELS: Record<ExpenseStatus, string> = {
   approved: 'معتمد',
   rejected: 'مرفوض',
 };
+
+// ============================================================
+// تسوية المخزون — أسباب منظّمة (هدر = خسارة تُرحَّل للمصاريف)
+// ============================================================
+
+/** تصنيف فئة مصروف الهدر الثابت — يُنشأ تلقائياً إن لم يوجد. */
+export const WASTE_EXPENSE_CATEGORY_ID = 'cat-waste';
+export const WASTE_EXPENSE_CATEGORY_NAME = 'هدر وتلف الحليب';
+
+export interface AdjustmentReasonOption {
+  value: string;
+  label: string;
+  kind: AdjustmentReasonKind;
+  hint?: string;
+}
+
+/** أسباب النقص — أغلبها خسارة فعلية (loss) تُسجَّل كمصروف غير نقدي. */
+export const ADJUSTMENT_DECREASE_REASONS: AdjustmentReasonOption[] = [
+  { value: 'تلف وفساد', label: 'تلف وفساد', kind: 'loss', hint: 'حليب فسد أو تحمّض' },
+  { value: 'انسكاب وفقد أثناء النقل', label: 'انسكاب / فقد بالنقل', kind: 'loss' },
+  { value: 'رفض جودة', label: 'رفض جودة (شوائب/حموضة)', kind: 'loss' },
+  { value: 'فقد أثناء التصنيع', label: 'فقد أثناء التصنيع', kind: 'loss' },
+  { value: 'عيّنات وفحص مخبري', label: 'عيّنات وفحص مخبري', kind: 'loss' },
+  { value: 'انتهاء صلاحية', label: 'انتهاء صلاحية', kind: 'loss' },
+  { value: 'عطل تبريد', label: 'عطل تبريد / انقطاع كهرباء', kind: 'loss' },
+  { value: 'سرقة أو فقد', label: 'سرقة / فقد غير مبرّر', kind: 'loss' },
+  { value: 'هدر طبيعي', label: 'هدر طبيعي (تبخّر/التصاق)', kind: 'loss' },
+  { value: 'جرد فعلي (نقص)', label: 'فرق جرد فعلي (نقص)', kind: 'correction', hint: 'تصحيح كمية فقط — بدون مصروف' },
+  { value: 'تصحيح إدخال', label: 'تصحيح خطأ إدخال', kind: 'correction', hint: 'تصحيح كمية فقط — بدون مصروف' },
+];
+
+/** أسباب الزيادة — تصحيحات فقط (لا مصروف). */
+export const ADJUSTMENT_INCREASE_REASONS: AdjustmentReasonOption[] = [
+  { value: 'جرد فعلي (زيادة)', label: 'فرق جرد فعلي (زيادة)', kind: 'correction' },
+  { value: 'تصحيح إدخال', label: 'تصحيح خطأ إدخال', kind: 'correction' },
+  { value: 'مرتجع للمخزون', label: 'مرتجع للمخزون', kind: 'correction' },
+];
+
+/** يبحث عن تصنيف السبب من نصّه (للحفاظ على التوافق مع التسجيلات القديمة). */
+export function resolveAdjustmentReasonKind(reason: string, quantity: number): AdjustmentReasonKind {
+  if (quantity > 0) return 'correction';
+  const all = [...ADJUSTMENT_DECREASE_REASONS, ...ADJUSTMENT_INCREASE_REASONS];
+  const match = all.find((r) => r.value === reason || r.label === reason);
+  if (match) return match.kind;
+  // أسباب قديمة محتملة
+  if (/تصحيح|جرد/.test(reason)) return 'correction';
+  return 'loss';
+}
 
 export const DEPARTMENT_LABELS: Record<Department, string> = {
   operations: 'العمليات',

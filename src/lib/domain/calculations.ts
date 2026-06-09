@@ -661,7 +661,8 @@ export function buildAllJournals(data: ErpData, saleCogs: Record<string, number>
     if (je) entries.push(je);
   }
   for (const e of data.expenses) {
-    if (e.status === 'approved') entries.push(journalForExpense(e));
+    // المصاريف غير النقدية (هدر مخزون) محسوبة فعلاً ضمن قيد التسوية — تفادياً للازدواج.
+    if (e.status === 'approved' && !e.nonCash) entries.push(journalForExpense(e));
   }
   for (const b of data.payrollBatches) {
     if (b.status === 'paid') entries.push(journalForPayroll(b));
