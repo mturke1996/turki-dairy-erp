@@ -295,10 +295,11 @@ export default function DashboardPage() {
           {recent.length ? (
             <div className="space-y-1">
               {recent.map((r) => {
+                const party =
+                  r.kind === 'supply'
+                    ? d.farmers.find((f) => f.id === r.farmerId)?.fullName
+                    : d.customers.find((c) => c.id === r.customerId)?.entityName;
                 const isSupply = r.kind === 'supply';
-                const party = isSupply
-                  ? d.farmers.find((f) => f.id === (r as any).farmerId)?.fullName
-                  : d.customers.find((c) => c.id === (r as any).customerId)?.entityName;
                 return (
                   <div
                     key={r.id}

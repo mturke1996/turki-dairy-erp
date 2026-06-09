@@ -24,7 +24,7 @@ export function CustomerCycleSettlement({ session, readonly }: { session: Sessio
   const [payCustomer, setPayCustomer] = useState<CustomerSessionStats | null>(null);
 
   const rows = useMemo(() => {
-    const archived = session.archive?.balancesSnapshot.customers;
+    const archived = session.archive?.balancesSnapshot?.customers;
     if (archived?.length && session.status === 'archived') {
       return archived.map((c) => {
         const customer = data.customers.find((x) => x.id === c.id);

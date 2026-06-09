@@ -29,7 +29,7 @@ export function FarmerCycleSettlement({ session, readonly }: Props) {
   const [payFarmer, setPayFarmer] = useState<FarmerSessionStats | null>(null);
 
   const rows = useMemo(() => {
-    const archived = session.archive?.balancesSnapshot.farmers;
+    const archived = session.archive?.balancesSnapshot?.farmers;
     if (archived?.length && session.status === 'archived') {
       return archived.map((f) => {
         const farmer = data.farmers.find((x) => x.id === f.id);

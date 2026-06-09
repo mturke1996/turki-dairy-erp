@@ -5,7 +5,13 @@ import type { SessionSummary } from '@/lib/domain/calculations';
 import { Money } from '@/components/shared/money';
 import { formatNumber } from '@/lib/utils';
 
-function ProfitTooltip({ active, payload }: any) {
+function ProfitTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: { payload: { label: string; revenue: number; profit: number; margin: number } }[];
+}) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload as { label: string; revenue: number; profit: number; margin: number };
   return (

@@ -31,9 +31,22 @@ function FlowRow({ label, value, className }: { label: string; value: number; cl
   );
 }
 
-function FlowTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  const get = (key: string) => payload.find((p: any) => p.dataKey === key)?.value ?? 0;
+interface FlowTooltipPayload {
+  dataKey?: string;
+  value?: number;
+}
+
+function FlowTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: FlowTooltipPayload[];
+  label?: string;
+}) {
+  if (!active || !payload?.length || !label) return null;
+  const get = (key: string) => payload.find((p) => p.dataKey === key)?.value ?? 0;
   return (
     <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] shadow-lift">
       <p className="mb-1 font-semibold text-foreground">{shortDate(label)}</p>
