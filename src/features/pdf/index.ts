@@ -37,3 +37,5 @@ export { SessionClosingPDF, type SessionClosingProps } from './SessionClosingPDF
 export { FinancialReportPDF, type FinancialReportProps } from './FinancialReportPDF';
 export { PayrollPDF, type PayrollPdfProps, type PayrollLineRow } from './PayrollPDF';
 export { CashStatementPDF, type CashStatementPdfProps, type CashStatementRow } from './CashStatementPDF';
+export { DebtsRegisterPDF, type DebtsRegisterPdfProps, type DebtRegisterRow } from './DebtsRegisterPDF';
+export { ExternalIncomePDF, type ExternalIncomePdfProps, type ExternalIncomeRow } from './ExternalIncomePDF';

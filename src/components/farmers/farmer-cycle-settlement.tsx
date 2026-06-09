@@ -38,6 +38,7 @@ export function FarmerCycleSettlement({ session, readonly }: Props) {
           sessionId: session.id,
           fullName: f.name,
           code: farmer?.code ?? '—',
+          carriedForward: 0,
           suppliedQty: f.suppliedQty ?? 0,
           sampleQty: 0,
           billableQty: f.suppliedQty ?? 0,
@@ -50,7 +51,7 @@ export function FarmerCycleSettlement({ session, readonly }: Props) {
         } satisfies FarmerSessionStats;
       });
     }
-    return allFarmerSessionStats(data, session.id);
+    return allFarmerSessionStats(data, session);
   }, [data, session]);
 
   const totals = useMemo(
@@ -96,6 +97,7 @@ export function FarmerCycleSettlement({ session, readonly }: Props) {
               <TableHeader>
                 <TableRow>
                   <TableHead>الفلاح</TableHead>
+                  <TableHead className="text-left">مرحّل</TableHead>
                   <TableHead className="text-left">الكمية</TableHead>
                   <TableHead className="text-left">القيمة</TableHead>
                   <TableHead className="text-left">المدفوع</TableHead>
@@ -112,6 +114,13 @@ export function FarmerCycleSettlement({ session, readonly }: Props) {
                       <TableCell>
                         <p className="text-[13px] font-medium">{r.fullName}</p>
                         <p className="font-mono text-[10.5px] text-muted-foreground" dir="ltr">{r.code}</p>
+                      </TableCell>
+                      <TableCell className="text-left">
+                        {r.carriedForward > 0.01 ? (
+                          <Money value={r.carriedForward} className="text-[12px] text-amber-700" />
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-left">
                         <Liters value={r.suppliedQty} className="text-[12px]" />

@@ -35,22 +35,25 @@ export function OpeningStockDialog({
   currentStock: number;
   currentWac: number;
   sessionOpening: number;
-  onSubmit: (input: { quantity: number; unitCost: number; note?: string }) => { ok: boolean; error?: string };
+  onSubmit: (input: { quantity: number; unitCost: number; note?: string }) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [quantity, setQuantity] = useState('');
   const [unitCost, setUnitCost] = useState('');
   const [note, setNote] = useState('متبقي حليب حتى 30/5 — بداية الدورة 1/6');
   const [busy, setBusy] = useState(false);
 
-  function submit() {
+  async function submit() {
     const qty = Number(quantity) || 0;
     const cost = Number(unitCost) || 0;
     if (qty <= 0) return toast.error('أدخل كمية أكبر من صفر');
     if (cost <= 0) return toast.error('أدخل تكلفة اللتر');
     setBusy(true);
-    const res = onSubmit({ quantity: qty, unitCost: cost, note: note.trim() || undefined });
-    setBusy(false);
-    if (res.ok) onOpenChange(false);
+    try {
+      const res = await onSubmit({ quantity: qty, unitCost: cost, note: note.trim() || undefined });
+      if (res.ok) onOpenChange(false);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

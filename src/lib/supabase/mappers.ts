@@ -15,7 +15,7 @@ function toCamel(key: string): string {
 }
 
 /** حقول jsonb تُنسخ كما هي (دون لمس مفاتيحها الداخلية). */
-const OPAQUE = new Set(['archive', 'allowances', 'lines']);
+const OPAQUE = new Set(['archive', 'allowances', 'lines', 'carryForwardBalances']);
 
 /** حقول Postgres من نوع date — تُرسل بصيغة YYYY-MM-DD فقط. */
 const DATE_ONLY = new Set([
@@ -49,6 +49,7 @@ const NUMERIC = new Set([
   'minStockThreshold',
   'syncVersion',
   'sampleQty',
+  'settledAmount',
 ]);
 export function toRow<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
   const out: Record<string, unknown> = {};

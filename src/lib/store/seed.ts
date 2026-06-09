@@ -391,6 +391,8 @@ export function generateSeed(): SeedResult {
               mayReceipts.filter((p) => p.partyId === c.id).reduce((s, x) => s + x.amount, 0),
           ),
         })),
+        employees: [],
+        external: [],
       },
       carryForward: {
         openingStock: mayInv.currentStock,

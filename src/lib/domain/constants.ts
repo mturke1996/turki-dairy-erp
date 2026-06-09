@@ -93,16 +93,18 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cheque: 'شيك',
 };
 
-export const DEBT_PARTY_LABELS: Record<'farmer' | 'customer' | 'employee', string> = {
+export const DEBT_PARTY_LABELS: Record<'farmer' | 'customer' | 'employee' | 'external', string> = {
   farmer: 'فلاح',
   customer: 'عميل',
   employee: 'موظف',
+  external: 'خارجي',
 };
 
-export const DEBT_PARTY_HINTS: Record<'farmer' | 'customer' | 'employee', string> = {
-  farmer: 'دين علينا — مبلغ مستحق للفلاح',
-  customer: 'دين لنا — مبلغ على العميل',
-  employee: 'دين لنا — سلفة أو مستحق على الموظف',
+export const DEBT_PARTY_HINTS: Record<'farmer' | 'customer' | 'employee' | 'external', string> = {
+  farmer: 'له = مستحق للفلاح، عليه = على الفلاح لنا',
+  customer: 'عليه = على العميل لنا، له = مستحق للعميل',
+  employee: 'عليه = سلفة/مستحق على الموظف، له = مستحق للموظف',
+  external: 'دين خارج الفلاحين والعملاء والموظفين — مورد، جار، جهة أخرى',
 };
 
 export const ACCOUNT_LABELS: Record<AccountKey, string> = {
@@ -114,6 +116,9 @@ export const ACCOUNT_LABELS: Record<AccountKey, string> = {
   cash: 'النقدية والمصارف',
   operating_expense: 'مصاريف تشغيلية',
   payroll_expense: 'رواتب وأجور',
+  opening_equity: 'أرصدة افتتاحية',
+  other_receivable: 'ذمم مدينة متنوعة',
+  other_payable: 'ذمم دائنة متنوعة',
 };
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -183,11 +188,18 @@ export const CASH_MOVEMENT_LABELS: Record<CashMovementType, string> = {
   adjustment: 'تسوية',
 };
 
-export const EXPENSE_GROUP_LABELS: Record<'operations' | 'logistics' | 'admin' | 'labor', string> = {
+export const EXPENSE_GROUP_LABELS: Record<
+  'operations' | 'logistics' | 'admin' | 'labor' | 'daily_life' | 'factory' | 'barn' | 'personal',
+  string
+> = {
   operations: 'تشغيل',
   logistics: 'لوجستيات',
   admin: 'إدارية',
   labor: 'عمالة',
+  daily_life: 'حياة يومية',
+  factory: 'مصنعية',
+  barn: 'الحوش',
+  personal: 'شخصية',
 };
 
 export const EXPENSE_STATUS_LABELS: Record<ExpenseStatus, string> = {

@@ -23,6 +23,7 @@ import { usePermission } from '@/lib/store/use-permission';
 import { computeDailyFlow } from '@/lib/domain/calculations';
 import { sessionLedgerEntries } from '@/lib/domain/inventory';
 import { formatShortDate } from '@/lib/utils';
+import { RowDeleteButton } from '@/components/shared/row-delete-button';
 
 const MOVEMENT_BADGE = {
   IN: { variant: 'success' as const, label: 'وارد' },
@@ -36,6 +37,7 @@ export default function InventoryPage() {
   const data = useErpData();
   const d = useDerived();
   const setSessionOpeningStock = useErpStore((s) => s.setSessionOpeningStock);
+  const deleteAdjustment = useErpStore((s) => s.deleteAdjustment);
   const canAdjust = usePermission('supply.record');
   const [sessionId, setSessionId] = useState(() => d.activeSession?.id ?? 'all');
   const [adjOpen, setAdjOpen] = useState(false);
@@ -57,6 +59,11 @@ export default function InventoryPage() {
   }, [d.inv.entries, sessionId, session]);
 
   const flow = computeDailyFlow(sessionId, d.inv);
+
+  const sessionAdjustments = useMemo(() => {
+    const list = sessionId === 'all' ? data.adjustments : data.adjustments.filter((a) => a.sessionId === sessionId);
+    return [...list].sort((a, b) => b.date.localeCompare(a.date));
+  }, [data.adjustments, sessionId]);
 
   return (
     <div className="space-y-6">
@@ -184,6 +191,49 @@ export default function InventoryPage() {
         </CardContent>
       </Card>
 
+      {sessionAdjustments.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-[15px]">تسويات المخزون</CardTitle>
+            <CardDescription>تعديلات يدوية على الرصيد — يمكن حذفها (admin)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>التاريخ</TableHead>
+                  <TableHead>المرجع</TableHead>
+                  <TableHead>السبب</TableHead>
+                  <TableHead className="text-left">الكمية</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sessionAdjustments.map((a) => (
+                  <TableRow key={a.id}>
+                    <TableCell className="text-[12px]">{formatShortDate(a.date)}</TableCell>
+                    <TableCell className="font-mono text-[11px]" dir="ltr">{a.ref}</TableCell>
+                    <TableCell className="text-[12px]">{a.reason}</TableCell>
+                    <TableCell className="text-left"><Liters value={a.quantity} decimals={1} className="text-[12px]" /></TableCell>
+                    <TableCell>
+                      <RowDeleteButton
+                        label={a.ref}
+                        onConfirm={async () => {
+                          const res = await deleteAdjustment(a.id);
+                          if (res.ok) toast.success('تم حذف التسوية');
+                          else toast.error(res.error ?? 'تعذّر الحذف');
+                          return res;
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <OpeningStockDialog
         open={openingOpen}
         onOpenChange={setOpeningOpen}
@@ -192,8 +242,8 @@ export default function InventoryPage() {
         currentStock={d.totals.currentStock}
         currentWac={d.totals.wac}
         sessionOpening={d.activeSession?.openingStock ?? 0}
-        onSubmit={(input) => {
-          const res = setSessionOpeningStock(input);
+        onSubmit={async (input) => {
+          const res = await setSessionOpeningStock(input);
           if (res.ok) toast.success('تم ضبط المخزون الافتتاحي');
           else toast.error(res.error ?? 'تعذّر الحفظ');
           return res;

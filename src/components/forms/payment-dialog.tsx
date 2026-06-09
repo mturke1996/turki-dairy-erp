@@ -75,7 +75,7 @@ export function PaymentDialog({
   const selected = accounts.find((a) => a.value === source) ?? null;
   const sourceBalance = selected ? accountBalance(selected.type, selected.id, vaults, banks, cashMovements) : 0;
 
-  function submit() {
+  async function submit() {
     if (val <= 0) return toast.error('أدخل مبلغاً صحيحاً.');
     if (isFarmer && selected && val > sourceBalance + 0.001) {
       return toast.error(`رصيد «${selected.label}» (${moneyText(sourceBalance, 0)}) لا يكفي.`);
@@ -91,8 +91,8 @@ export function PaymentDialog({
       settlementComplete: isFarmer ? settlementComplete : undefined,
     };
     const res = isFarmer
-      ? recordFarmerPayment({ farmerId: partyId, ...base })
-      : recordCustomerPayment({ customerId: partyId, ...base });
+      ? await recordFarmerPayment({ farmerId: partyId, ...base })
+      : await recordCustomerPayment({ customerId: partyId, ...base });
     if (res.ok) {
       toast.success(isFarmer ? 'تم تسجيل دفعة للفلاح' : 'تم تسجيل تحصيل من العميل', {
         description: `${moneyText(val, 0)} — ${partyName}`,

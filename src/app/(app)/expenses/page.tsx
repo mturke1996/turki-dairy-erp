@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Receipt, Plus, TrendingDown, PieChart, Layers, Wallet, Landmark, AlertCircle } from 'lucide-react';
+import { Receipt, Plus, TrendingDown, PieChart, Layers, Wallet, Landmark, AlertCircle, Tags, Pencil } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { AccessGate } from '@/components/shared/access-gate';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,8 +30,11 @@ import { usePermission } from '@/lib/store/use-permission';
 import { computeExpenseTotals, accountLabel, accountBalance } from '@/lib/domain/treasury';
 import { EXPENSE_GROUP_LABELS, EXPENSE_STATUS_LABELS } from '@/lib/domain/constants';
 import { DEFAULT_EXPENSE_CATEGORIES } from '@/lib/store/seed-v3';
-import type { AccountSourceType, BankAccount, CashMovement, CashVault, ExpenseStatus } from '@/lib/domain/types';
+import type { AccountSourceType, BankAccount, CashMovement, CashVault, Expense, ExpenseStatus } from '@/lib/domain/types';
 import { cn, formatShortDate } from '@/lib/utils';
+import { RowDeleteButton } from '@/components/shared/row-delete-button';
+import { ExpenseCategoriesDialog } from '@/components/expenses/expense-categories-dialog';
+import { ExpenseEditDialog } from '@/components/expenses/expense-edit-dialog';
 
 const STATUS_VARIANT: Record<ExpenseStatus, 'success' | 'warning' | 'danger'> = {
   approved: 'success',
@@ -57,6 +60,7 @@ function ExpensesContent() {
   const activeSessionId = useErpStore((s) => s.activeSessionId);
   const sessions = useErpStore((s) => s.sessions);
   const recordExpense = useErpStore((s) => s.recordExpense);
+  const deleteExpense = useErpStore((s) => s.deleteExpense);
   const setupMainVault = useErpStore((s) => s.setupMainVault);
   const canManageVaults = usePermission('vaults.manage');
 
@@ -80,6 +84,8 @@ function ExpensesContent() {
   );
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [editExpense, setEditExpense] = useState<Expense | null>(null);
 
   return (
     <div className="space-y-6">
@@ -88,10 +94,16 @@ function ExpensesContent() {
         title="المصاريف"
         description="تسجيل وتصنيف المصاريف التشغيلية — كل مصروف يُخصم فوراً من خزنة أو بنك."
         actions={
-          <Button type="button" onClick={() => setDialogOpen(true)}>
-            <Plus className="h-4 w-4" />
-            تسجيل مصروف
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => setCategoriesOpen(true)}>
+              <Tags className="h-4 w-4" />
+              التصنيفات
+            </Button>
+            <Button type="button" onClick={() => setDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              تسجيل مصروف
+            </Button>
+          </div>
         }
       />
 
@@ -202,6 +214,7 @@ function ExpensesContent() {
                     <TableHead className="text-left">المبلغ</TableHead>
                     <TableHead>الحالة</TableHead>
                     <TableHead className="text-left">التاريخ</TableHead>
+                    <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -217,6 +230,22 @@ function ExpensesContent() {
                         <TableCell className="text-left"><Money value={e.amount} decimals={0} className="font-semibold text-rose-600" /></TableCell>
                         <TableCell><Badge variant={STATUS_VARIANT[e.status]}>{EXPENSE_STATUS_LABELS[e.status]}</Badge></TableCell>
                         <TableCell className="text-left text-[12px] text-muted-foreground" dir="ltr">{formatShortDate(e.date)}</TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-1">
+                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditExpense(e)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <RowDeleteButton
+                              label={e.ref}
+                              onConfirm={async () => {
+                                const res = await deleteExpense(e.id);
+                                if (res.ok) toast.success('تم حذف المصروف');
+                                else toast.error(res.error ?? 'تعذّر الحذف');
+                                return res;
+                              }}
+                            />
+                          </div>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -239,6 +268,8 @@ function ExpensesContent() {
         setupMainVault={setupMainVault}
         recordExpense={recordExpense}
       />
+      <ExpenseCategoriesDialog open={categoriesOpen} onOpenChange={setCategoriesOpen} />
+      <ExpenseEditDialog open={!!editExpense} onOpenChange={(o) => !o && setEditExpense(null)} expense={editExpense} categories={categories} />
     </div>
   );
 }
@@ -264,7 +295,7 @@ function ExpenseRecordDialog({
   vaults: CashVault[];
   banks: BankAccount[];
   cashMovements: CashMovement[];
-  setupMainVault: (input: { openingBalance: number; name?: string }) => { ok: boolean; error?: string; id?: string };
+  setupMainVault: (input: { openingBalance: number; name?: string }) => Promise<{ ok: boolean; error?: string; id?: string }>;
   recordExpense: (input: {
     categoryId: string;
     amount: number;
@@ -272,7 +303,7 @@ function ExpenseRecordDialog({
     paidFromType: AccountSourceType;
     paidFromId: string;
     invoiceRef?: string;
-  }) => { ok: boolean; error?: string };
+  }) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [step, setStep] = useState<'setup' | 'expense'>(hasAccounts ? 'expense' : 'setup');
   const [vaultName, setVaultName] = useState('الخزنة الرئيسية');
@@ -316,15 +347,20 @@ function ExpenseRecordDialog({
     const bal = Number(opening) || 0;
     if (bal <= 0) return toast.error('أدخل رصيداً افتتاحياً أكبر من صفر.');
     setBusy(true);
-    const res = setupMainVault({ openingBalance: bal, name: vaultName.trim() || undefined });
-    setBusy(false);
-    if (!res.ok) return toast.error(res.error ?? 'تعذّر إعداد الخزنة');
-    toast.success('تم إعداد الخزنة', { description: moneyText(bal, 0) });
-    if (res.id) setAccount(`vault:${res.id}`);
-    setStep('expense');
+    void (async () => {
+      try {
+        const res = await setupMainVault({ openingBalance: bal, name: vaultName.trim() || undefined });
+        if (!res.ok) return toast.error(res.error ?? 'تعذّر إعداد الخزنة');
+        toast.success('تم إعداد الخزنة', { description: moneyText(bal, 0) });
+        if (res.id) setAccount(`vault:${res.id}`);
+        setStep('expense');
+      } finally {
+        setBusy(false);
+      }
+    })();
   }
 
-  function handleExpense() {
+  async function handleExpense() {
     if (!sessionOpen) return toast.error('لا توجد دورة نشطة — اختر دورة مفتوحة من شريط الأعلى.');
     if (!categoryId) return toast.error('اختر التصنيف');
     if (!account) return toast.error('اختر مصدر الصرف');
@@ -334,21 +370,22 @@ function ExpenseRecordDialog({
       return toast.error(`الرصيد المتاح ${moneyText(balance, 0)} — لا يكفي`);
     }
     setBusy(true);
-    const [paidFromType, paidFromId] = account.split(':') as [AccountSourceType, string];
-    const res = recordExpense({
-      categoryId,
-      amount: amountNum,
-      description: desc.trim(),
-      paidFromType,
-      paidFromId,
-      invoiceRef: invoice.trim() || undefined,
-    });
-    setBusy(false);
-    if (res.ok) {
-      toast.success('تم تسجيل المصروف', { description: moneyText(amountNum, 0) });
-      close();
-    } else {
-      toast.error(res.error ?? 'تعذّر التسجيل');
+    try {
+      const [paidFromType, paidFromId] = account.split(':') as [AccountSourceType, string];
+      const res = await recordExpense({
+        categoryId,
+        amount: amountNum,
+        description: desc.trim(),
+        paidFromType,
+        paidFromId,
+        invoiceRef: invoice.trim() || undefined,
+      });
+      if (res.ok) {
+        toast.success('تم تسجيل المصروف', { description: moneyText(amountNum, 0) });
+        close();
+      } else toast.error(res.error ?? 'تعذّر التسجيل');
+    } finally {
+      setBusy(false);
     }
   }
 

@@ -28,7 +28,9 @@ export type TransactionKind =
   | 'employee_advance'
   | 'adjustment'
   | 'expense'
-  | 'payroll';
+  | 'payroll'
+  | 'debt'
+  | 'external_income';
 
 /** مفاتيح دليل الحسابات للمحرّك المزدوج القيد */
 export type AccountKey =
@@ -39,7 +41,10 @@ export type AccountKey =
   | 'cogs' // تكلفة البضاعة المباعة
   | 'cash' // النقدية والمصارف
   | 'operating_expense' // مصاريف تشغيلية
-  | 'payroll_expense'; // رواتب وأجور
+  | 'payroll_expense' // رواتب وأجور
+  | 'opening_equity' // أرصدة افتتاحية / ديون يدوية
+  | 'other_receivable' // ذمم متنوعة (موظفون، خارجيون)
+  | 'other_payable'; // التزامات متنوعة
 
 export type Role = 'admin' | 'accountant' | 'operator' | 'hr_manager' | 'viewer';
 
@@ -146,7 +151,10 @@ export interface Payment {
 }
 
 /** دين مسجّل يدوياً — افتتاحي أو مستقل (بدون استلام/بيع/مخزون) */
-export type DebtPartyKind = 'farmer' | 'customer' | 'employee';
+export type DebtPartyKind = 'farmer' | 'customer' | 'employee' | 'external';
+
+/** payable = له (علينا)، receivable = عليه (لنا) */
+export type DebtDirection = 'payable' | 'receivable';
 
 export interface DebtEntry {
   id: string;
@@ -154,9 +162,31 @@ export interface DebtEntry {
   sessionId: string;
   date: string;
   partyKind: DebtPartyKind;
-  partyId: string;
+  /** معرّف الطرف — للخارجي يُولَّد تلقائياً */
+  partyId?: string;
+  /** اسم الطرف الخارجي */
+  partyName?: string;
   amount: number;
+  /** إجمالي المبالغ المُسَدَّدة (للعرض والتدقيق) */
+  settledAmount?: number;
+  /** تاريخ اكتمال التسوية */
+  settledAt?: string;
+  direction?: DebtDirection;
   description?: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
+/** مدخول خارج الخدمة — يُرحّل للخزينة أو البنك */
+export interface ExternalIncome {
+  id: string;
+  ref: string; // INC-2026-0001
+  sessionId: string;
+  date: string;
+  amount: number;
+  description: string;
+  destinationType: AccountSourceType;
+  destinationId: string;
   createdAt: string;
   createdBy?: string;
 }
@@ -183,8 +213,26 @@ export interface SessionArchive {
   balancesSnapshot: {
     farmers: { id: string; name: string; balance: number; suppliedQty?: number; paidAmount?: number; status?: 'pending' | 'partial' | 'paid' }[];
     customers: { id: string; name: string; balance: number }[];
+    employees: { id: string; name: string; balance: number }[];
+    external: { id: string; name: string; balance: number; direction: 'payable' | 'receivable' }[];
   };
   carryForward: {
+    openingStock: number;
+    payables: number;
+    receivables: number;
+  };
+}
+
+/** أرصدة مُرحّلة من دورة سابقة — تُعرض في الدورة الجديدة حتى تُسدَّد. */
+export interface SessionCarryForwardBalances {
+  fromSessionId: string;
+  fromSessionLabel: string;
+  closedAt: string;
+  farmers: { id: string; name: string; balance: number }[];
+  customers: { id: string; name: string; balance: number }[];
+  employees: { id: string; name: string; balance: number }[];
+  external: { id: string; name: string; balance: number; direction: 'payable' | 'receivable' }[];
+  totals: {
     openingStock: number;
     payables: number;
     receivables: number;
@@ -202,6 +250,8 @@ export interface Session {
   openingAvgCost: number;
   openingPayables: number;
   openingReceivables: number;
+  /** أرصدة الأطراف المُرحّلة عند فتح هذه الدورة */
+  carryForwardBalances?: SessionCarryForwardBalances;
   createdAt: string;
   closedAt?: string;
   archive?: SessionArchive;
@@ -283,7 +333,17 @@ export type CashMovementType =
   | 'salary'
   | 'adjustment';
 
-export type CashReferenceType = 'sale' | 'supply' | 'expense' | 'payroll' | 'transfer' | 'manual' | 'opening' | 'payment';
+export type CashReferenceType =
+  | 'sale'
+  | 'supply'
+  | 'expense'
+  | 'payroll'
+  | 'transfer'
+  | 'manual'
+  | 'opening'
+  | 'payment'
+  | 'external_income'
+  | 'debt';
 
 export interface CashVault {
   id: string;
@@ -349,10 +409,20 @@ export interface CashTransfer {
 // v3.0 — المصاريف
 // ============================================================
 
+export type ExpenseGroup =
+  | 'operations'
+  | 'logistics'
+  | 'admin'
+  | 'labor'
+  | 'daily_life'
+  | 'factory'
+  | 'barn'
+  | 'personal';
+
 export interface ExpenseCategory {
   id: string;
   name: string;
-  group: 'operations' | 'logistics' | 'admin' | 'labor';
+  group: ExpenseGroup;
   budgetMonthly?: number;
   isRecurring: boolean;
 }

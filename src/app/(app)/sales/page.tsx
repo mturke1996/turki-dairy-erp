@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowUpFromLine, ShoppingCart, Lock, Warehouse, Wallet, TrendingUp, Receipt } from 'lucide-react';
+import { ArrowUpFromLine, ShoppingCart, Lock, Warehouse, Wallet, TrendingUp, Receipt, Pencil } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,12 +28,17 @@ import { usePermission } from '@/lib/store/use-permission';
 import { CUSTOMER_TYPE_LABELS } from '@/lib/domain/constants';
 import { formatShortDate, formatNumber } from '@/lib/utils';
 import { formatLiters, formatMoney, formatPricePerLiter } from '@/lib/format-currency';
+import { RowDeleteButton } from '@/components/shared/row-delete-button';
+import { SaleEditDialog } from '@/components/sales/sale-edit-dialog';
+import type { SaleTransaction } from '@/lib/domain/types';
 
 export default function SalesPage() {
   const data = useErpData();
   const d = useDerived();
   const recordSale = useErpStore((s) => s.recordSale);
+  const deleteSale = useErpStore((s) => s.deleteSale);
   const canSell = usePermission('sales.record');
+  const [editSale, setEditSale] = useState<SaleTransaction | null>(null);
 
   const sessionLocked = d.activeSession?.status === 'archived';
   const stock = d.totals.currentStock;
@@ -78,19 +83,21 @@ export default function SalesPage() {
     if (!customerId) return toast.error('اختر العميل.');
     if (qty <= 0) return toast.error('أدخل كمية صحيحة باللتر.');
     if (price <= 0) return toast.error('أدخل سعر بيع اللتر.');
-    const res = recordSale({
-      customerId,
-      quantity: qty,
-      unitPrice: price,
-      date: new Date(date + 'T09:00:00').toISOString(),
-      notes: notes.trim() || undefined,
-    });
-    if (res.ok) {
-      toast.success('تم تسجيل البيع', { description: `${formatLiters(qty, 0, false)} — ${selectedCustomer?.entityName}` });
-      reset();
-    } else {
-      toast.error(res.error ?? 'تعذّر التسجيل');
-    }
+    void (async () => {
+      const res = await recordSale({
+        customerId,
+        quantity: qty,
+        unitPrice: price,
+        date: new Date(date + 'T09:00:00').toISOString(),
+        notes: notes.trim() || undefined,
+      });
+      if (res.ok) {
+        toast.success('تم تسجيل البيع', { description: `${formatLiters(qty, 0, false)} — ${selectedCustomer?.entityName}` });
+        reset();
+      } else {
+        toast.error(res.error ?? 'تعذّر التسجيل');
+      }
+    })();
   }
 
   const sessionSales = useMemo(
@@ -227,6 +234,7 @@ export default function SalesPage() {
                     <TableHead className="text-left">الكمية</TableHead>
                     <TableHead className="text-left">السعر</TableHead>
                     <TableHead className="text-left">الإجمالي</TableHead>
+                    <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -248,6 +256,22 @@ export default function SalesPage() {
                         <TableCell className="text-left">
                           <Money value={s.total} className="text-[13px] font-semibold" />
                         </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-1">
+                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditSale(s)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <RowDeleteButton
+                              label={s.ref}
+                              onConfirm={async () => {
+                                const res = await deleteSale(s.id);
+                                if (res.ok) toast.success('تم حذف البيع');
+                                else toast.error(res.error ?? 'تعذّر الحذف');
+                                return res;
+                              }}
+                            />
+                          </div>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -259,6 +283,7 @@ export default function SalesPage() {
           </CardContent>
         </Card>
       </div>
+      <SaleEditDialog open={!!editSale} onOpenChange={(o) => !o && setEditSale(null)} sale={editSale} />
     </div>
   );
 }

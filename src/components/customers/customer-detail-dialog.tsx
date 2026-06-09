@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Banknote, Phone, Pencil, CreditCard } from 'lucide-react';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +20,9 @@ import { computeAging } from '@/lib/domain/calculations';
 import { CUSTOMER_TYPE_LABELS, PRICE_TIER_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import type { CustomerStats } from '@/lib/domain/calculations';
 import { formatShortDate, formatNumber } from '@/lib/utils';
+import { RowDeleteButton } from '@/components/shared/row-delete-button';
+import { PartyDeleteButton } from '@/components/shared/party-delete-button';
+import { useErpStore } from '@/lib/store/use-erp-store';
 
 export function CustomerDetailDialog({
   customerId,
@@ -32,6 +36,8 @@ export function CustomerDetailDialog({
   const data = useErpData();
   const d = useDerived();
   const canReceive = usePermission('sales.record');
+  const deletePayment = useErpStore((s) => s.deletePayment);
+  const deleteCustomer = useErpStore((s) => s.deleteCustomer);
   const [payOpen, setPayOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
@@ -134,6 +140,14 @@ export function CustomerDetailDialog({
               <Pencil className="h-4 w-4" />
               تعديل
             </Button>
+            <PartyDeleteButton
+              label={`العميل ${customer.entityName}`}
+              onConfirm={async () => {
+                const res = await deleteCustomer(customer.id);
+                if (res.ok) onOpenChange(false);
+                return res;
+              }}
+            />
             <TurkiPdfToolbar
               fileName={`كشف-عميل-${customer.code}`}
               label="كشف حساب PDF"
@@ -195,6 +209,7 @@ export function CustomerDetailDialog({
                         <TableHead>المرجع</TableHead>
                         <TableHead className="text-center">الطريقة</TableHead>
                         <TableHead className="text-left">المبلغ</TableHead>
+                        <TableHead />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -204,6 +219,17 @@ export function CustomerDetailDialog({
                           <TableCell className="font-mono text-[11.5px] text-muted-foreground" dir="ltr">{p.ref}</TableCell>
                           <TableCell className="text-center text-[12px]">{PAYMENT_METHOD_LABELS[p.method]}</TableCell>
                           <TableCell className="text-left"><Money value={p.amount} className="text-[12.5px] font-semibold text-meadow-700" /></TableCell>
+                          <TableCell>
+                            <RowDeleteButton
+                              label={p.ref}
+                              onConfirm={async () => {
+                                const res = await deletePayment(p.id);
+                                if (res.ok) toast.success('تم حذف التحصيل');
+                                else toast.error(res.error ?? 'تعذّر الحذف');
+                                return res;
+                              }}
+                            />
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

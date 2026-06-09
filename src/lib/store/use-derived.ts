@@ -21,6 +21,7 @@ export function useErpData(): ErpData {
   const vaults = useErpStore((s) => s.vaults);
   const banks = useErpStore((s) => s.banks);
   const cashMovements = useErpStore((s) => s.cashMovements);
+  const externalIncomes = useErpStore((s) => s.externalIncomes);
   const settings = useErpStore((s) => s.settings);
 
   return useMemo(
@@ -40,6 +41,7 @@ export function useErpData(): ErpData {
       vaults,
       banks,
       cashMovements,
+      externalIncomes,
       settings: {
         minStockThreshold: settings.minStockThreshold,
         defaultBuyPrice: settings.defaultBuyPrice,
@@ -48,7 +50,7 @@ export function useErpData(): ErpData {
     }),
     [
       sessions, activeSessionId, farmers, customers, employees, supplies, sales, payments, debtEntries, adjustments,
-      expenses, payrollBatches, vaults, banks, cashMovements, settings,
+      expenses, payrollBatches, vaults, banks, cashMovements, externalIncomes, settings,
     ],
   );
 }

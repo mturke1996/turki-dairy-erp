@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -11,6 +12,7 @@ import {
   ArrowUpRight,
   AlertTriangle,
   Coins,
+  TrendingUp,
   Settings2,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
@@ -122,6 +124,12 @@ function TreasuryContent() {
         description="مركز إدارة السيولة — كل حركة مالية موثّقة بمصدرها أو وجهتها."
         actions={
           <>
+            <Button type="button" variant="outline" asChild>
+              <Link href="/income">
+                <TrendingUp className="h-4 w-4" />
+                مدخول خارج الخدمة
+              </Link>
+            </Button>
             <Button type="button" variant="secondary" onClick={() => setOpeningOpen(true)}>
               <Settings2 className="h-4 w-4" />
               ضبط أرصدة البداية
@@ -273,14 +281,22 @@ function TreasuryContent() {
           currentBalance: a.balance,
           currentOpening: a.opening,
         }))}
-        onSave={(rows) => {
+        onSave={async (rows) => {
           for (const row of rows) {
-            const res = setAccountOpeningBalance(row);
+            const res = await setAccountOpeningBalance(row);
             if (!res.ok) toast.error(res.error ?? 'تعذّر الحفظ');
           }
         }}
-        onAddVault={(input) => addVault({ ...input, isActive: true, responsible: 'أمين الصندوق', location: 'المقر', minThreshold: 0 })}
-        onAddBank={(input) => addBank({ ...input, isActive: true })}
+        onAddVault={async (input) => {
+          const res = await addVault({ ...input, isActive: true, responsible: 'أمين الصندوق', location: 'المقر', minThreshold: 0 });
+          if (!res.ok) toast.error(res.error ?? 'تعذّرت الإضافة');
+          return res;
+        }}
+        onAddBank={async (input) => {
+          const res = await addBank({ ...input, isActive: true });
+          if (!res.ok) toast.error(res.error ?? 'تعذّرت الإضافة');
+          return res;
+        }}
       />
 
       <TransferDialog
@@ -288,8 +304,8 @@ function TreasuryContent() {
         onOpenChange={setTransferOpen}
         vaults={vaults}
         banks={banks}
-        onSubmit={(input) => {
-          const res = recordTransfer(input);
+        onSubmit={async (input) => {
+          const res = await recordTransfer(input);
           if (res.ok) {
             toast.success('تم تنفيذ التحويل بنجاح');
             setTransferOpen(false);
@@ -302,15 +318,15 @@ function TreasuryContent() {
       <AccountDialog
         open={accountOpen}
         onOpenChange={setAccountOpen}
-        onSubmitVault={(input) => {
-          const res = addVault(input);
+        onSubmitVault={async (input) => {
+          const res = await addVault(input);
           if (res.ok) {
             toast.success('تمت إضافة الخزنة');
             setAccountOpen(false);
           } else toast.error(res.error ?? 'تعذّرت الإضافة');
         }}
-        onSubmitBank={(input) => {
-          const res = addBank(input);
+        onSubmitBank={async (input) => {
+          const res = await addBank(input);
           if (res.ok) {
             toast.success('تمت إضافة الحساب البنكي');
             setAccountOpen(false);

@@ -8,9 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Field } from '@/components/shared/field';
 import { CopyableInput } from '@/components/shared/copyable-input';
+import { AmountInput } from '@/components/shared/amount-input';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { QUALITY_LABELS, FARMER_STATUS_LABELS } from '@/lib/domain/constants';
-import type { Farmer, FarmerStatus, QualityTier } from '@/lib/domain/types';
+import { DEBT_DIRECTION_LABELS } from '@/lib/domain/debt';
+import type { DebtDirection, Farmer, FarmerStatus, QualityTier } from '@/lib/domain/types';
+import { cn } from '@/lib/utils';
 
 type Props = {
   open: boolean;
@@ -30,6 +33,8 @@ const EMPTY = {
   defaultBuyPrice: '',
   status: 'active' as FarmerStatus,
   notes: '',
+  openingAmount: '',
+  openingDirection: 'payable' as DebtDirection,
 };
 
 function normalizeIban(value: string): string {
@@ -56,6 +61,8 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
           defaultBuyPrice: String(farmer.defaultBuyPrice),
           status: farmer.status,
           notes: farmer.notes ?? '',
+          openingAmount: '',
+          openingDirection: 'payable' as DebtDirection,
         }
       : { ...EMPTY, defaultBuyPrice: String(defaultBuy) },
   );
@@ -97,9 +104,13 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
           toast.error(res.error ?? 'تعذّر تحديث الفلاح');
         }
       } else {
+        const openingAmt = Number(form.openingAmount) || 0;
         const res = await addFarmer({
           ...payload,
           onboardingDate: new Date().toISOString().slice(0, 10),
+          ...(openingAmt > 0
+            ? { openingBalance: { amount: openingAmt, direction: form.openingDirection } }
+            : {}),
         });
         if (res.ok) {
           toast.success('تمت إضافة الفلاح');
@@ -119,8 +130,43 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'تعديل بيانات فلاح' : 'إضافة فلاح جديد'}</DialogTitle>
-          <DialogDescription>المعلومات الأساسية لمورّد الحليب وسعره الافتراضي.</DialogDescription>
+          <DialogDescription>
+            {isEdit ? 'تحديث بيانات المورّد.' : 'أدخل البيانات الأساسية — يمكنك تسجيل رصيد ديون افتتاحي (له/عليه) مباشرة.'}
+          </DialogDescription>
         </DialogHeader>
+
+        {!isEdit ? (
+          <div className="rounded-xl border border-meadow-200/80 bg-meadow-50/40 p-4">
+            <p className="text-[13px] font-semibold text-meadow-900">رصيد الديون الافتتاحي</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">اختياري — يُسجّل كدين ويظهر في صفحة الديون</p>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="المبلغ">
+                <AmountInput value={form.openingAmount} onChange={(v) => set({ openingAmount: v })} placeholder="0" />
+              </Field>
+              <Field label="الاتجاه">
+                <div className="grid grid-cols-2 gap-2">
+                  {(['payable', 'receivable'] as DebtDirection[]).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => set({ openingDirection: d })}
+                      className={cn(
+                        'rounded-xl border px-2 py-2.5 text-[11px] font-semibold transition-all',
+                        form.openingDirection === d
+                          ? d === 'payable'
+                            ? 'border-rose-300 bg-rose-50 text-rose-800 ring-2 ring-rose-200'
+                            : 'border-meadow-300 bg-meadow-50 text-meadow-800 ring-2 ring-meadow-200'
+                          : 'border-border text-muted-foreground hover:bg-canvas-sunken/60',
+                      )}
+                    >
+                      {DEBT_DIRECTION_LABELS[d]}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="الاسم الكامل" required className="sm:col-span-2">

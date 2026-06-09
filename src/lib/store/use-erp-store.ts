@@ -2,9 +2,10 @@
 
 import { create } from 'zustand';
 import { buildInventoryLedger, round } from '@/lib/domain/inventory';
-import { computeSessionSummary, computeFarmerStats, computeCustomerStats, computeFarmerSessionStats, computeEmployeeAdvanceBalance } from '@/lib/domain/calculations';
+import { computeSessionSummary, computeCustomerStats, computeFarmerSessionStats, computeEmployeeAdvanceBalance, buildSessionCarryForwardSnapshot, type ErpData } from '@/lib/domain/calculations';
 import { accountBalance } from '@/lib/domain/treasury';
-import { cycleForDate } from '@/lib/domain/cycle';
+import { cycleForDate, cycleOfMonth } from '@/lib/domain/cycle';
+import { defaultDebtDirection, debtRemainingAmount, debtSettlementIsCashOut, isDebtFullySettled } from '@/lib/domain/debt';
 import type {
   AccountSourceType,
   AppSettings,
@@ -16,9 +17,11 @@ import type {
   CashTransfer,
   CashVault,
   Customer,
+  DebtDirection,
   Employee,
   Expense,
   ExpenseCategory,
+  ExternalIncome,
   Farmer,
   InventoryAdjustment,
   Payment,
@@ -29,6 +32,7 @@ import type {
   SupplyTransaction,
   DebtEntry,
   DebtPartyKind,
+  ExpenseGroup,
 } from '@/lib/domain/types';
 import { uid } from '@/lib/utils';
 import { formatLiters, formatMoney, formatPricePerLiter } from '@/lib/format-currency';
@@ -89,20 +93,28 @@ interface ErpState {
   employees: Employee[];
   payrollBatches: PayrollBatch[];
   auditLogs: AuditLog[];
+  externalIncomes: ExternalIncome[];
 
   // auth
   login: (user?: Partial<AuthUser>) => void;
   logout: () => void;
 
   // sessions
-  setActiveSession: (id: string) => void;
-  closeActiveSession: () => MutationResult;
+  setActiveSession: (id: string) => Promise<MutationResult>;
+  closeActiveSession: () => Promise<MutationResult>;
+  createSessionForCycle: (input: { year: number; month: number; cycleNumber: 1 | 2 }) => Promise<MutationResult>;
 
   // entities
-  addFarmer: (input: Omit<Farmer, 'id' | 'code' | 'createdAt'>) => Promise<MutationResult>;
+  addFarmer: (
+    input: Omit<Farmer, 'id' | 'code' | 'createdAt'> & {
+      openingBalance?: { amount: number; direction: DebtDirection };
+    },
+  ) => Promise<MutationResult>;
   updateFarmer: (id: string, patch: Partial<Farmer>) => Promise<MutationResult>;
+  deleteFarmer: (id: string) => Promise<MutationResult>;
   addCustomer: (input: Omit<Customer, 'id' | 'code' | 'createdAt'>) => Promise<MutationResult>;
   updateCustomer: (id: string, patch: Partial<Customer>) => Promise<MutationResult>;
+  deleteCustomer: (id: string) => Promise<MutationResult>;
   updateVault: (id: string, patch: Partial<CashVault>) => Promise<MutationResult>;
   updateBank: (id: string, patch: Partial<BankAccount>) => Promise<MutationResult>;
 
@@ -126,7 +138,7 @@ interface ErpState {
       reference?: string;
       settlementComplete?: boolean;
     };
-  }) => MutationResult;
+  }) => Promise<MutationResult>;
   recordSale: (input: {
     customerId: string;
     quantity: number;
@@ -134,7 +146,7 @@ interface ErpState {
     date?: string;
     dueDate?: string;
     notes?: string;
-  }) => MutationResult;
+  }) => Promise<MutationResult>;
   recordFarmerPayment: (input: {
     farmerId: string;
     amount: number;
@@ -145,7 +157,7 @@ interface ErpState {
     sourceType?: AccountSourceType;
     sourceId?: string;
     settlementComplete?: boolean;
-  }) => MutationResult;
+  }) => Promise<MutationResult>;
   recordCustomerPayment: (input: {
     customerId: string;
     amount: number;
@@ -155,7 +167,7 @@ interface ErpState {
     notes?: string;
     sourceType?: AccountSourceType;
     sourceId?: string;
-  }) => MutationResult;
+  }) => Promise<MutationResult>;
   recordEmployeeAdvance: (input: {
     employeeId: string;
     amount: number;
@@ -165,34 +177,63 @@ interface ErpState {
     notes?: string;
     sourceType: AccountSourceType;
     sourceId: string;
-  }) => MutationResult;
+  }) => Promise<MutationResult>;
   recordDebtEntry: (input: {
     partyKind: DebtPartyKind;
-    partyId: string;
+    partyId?: string;
+    partyName?: string;
     amount: number;
+    direction?: DebtDirection;
     date?: string;
     description?: string;
   }) => Promise<MutationResult>;
-  addAdjustment: (input: { quantity: number; unitCost: number; reason: string; date?: string }) => MutationResult;
+  updateDebtEntry: (id: string, patch: Partial<Pick<DebtEntry, 'amount' | 'direction' | 'date' | 'description' | 'partyName'>>) => Promise<MutationResult>;
+  deleteDebtEntry: (id: string) => Promise<MutationResult>;
+  settleDebtEntry: (id: string, input: {
+    amount: number;
+    method: Payment['method'];
+    date?: string;
+    notes?: string;
+    sourceType?: AccountSourceType;
+    sourceId?: string;
+  }) => Promise<MutationResult>;
+  addAdjustment: (input: { quantity: number; unitCost: number; reason: string; date?: string }) => Promise<MutationResult>;
+  updateSupply: (
+    id: string,
+    patch: Partial<
+      Pick<
+        SupplyTransaction,
+        'quantity' | 'unitPrice' | 'qualityTier' | 'milkShift' | 'notes' | 'date' | 'sampleQty' | 'fatPct'
+      >
+    >,
+  ) => Promise<MutationResult>;
+  updateSale: (
+    id: string,
+    patch: Partial<Pick<SaleTransaction, 'quantity' | 'unitPrice' | 'notes' | 'date' | 'dueDate'>>,
+  ) => Promise<MutationResult>;
+  deleteSupply: (id: string) => Promise<MutationResult>;
+  deleteSale: (id: string) => Promise<MutationResult>;
+  deletePayment: (id: string) => Promise<MutationResult>;
+  deleteAdjustment: (id: string) => Promise<MutationResult>;
 
   // v3.0 — الخزن والبنوك
-  addVault: (input: Omit<CashVault, 'id' | 'code' | 'createdAt'>) => MutationResult;
-  addBank: (input: Omit<BankAccount, 'id' | 'code' | 'createdAt'>) => MutationResult;
+  addVault: (input: Omit<CashVault, 'id' | 'code' | 'createdAt'>) => Promise<MutationResult>;
+  addBank: (input: Omit<BankAccount, 'id' | 'code' | 'createdAt'>) => Promise<MutationResult>;
   /** ينشئ خزنة رئيسية إذا لم يوجد أي حساب — لتفعيل المصاريف والمدفوعات */
-  setupMainVault: (input: { openingBalance: number; name?: string }) => MutationResult;
+  setupMainVault: (input: { openingBalance: number; name?: string }) => Promise<MutationResult>;
   /** ضبط الرصيد الافتتاحي لخزنة أو بنك (لبدء التشغيل من رصيد قائم) */
   setAccountOpeningBalance: (input: {
     type: AccountSourceType;
     id: string;
     openingBalance: number;
     note?: string;
-  }) => MutationResult;
+  }) => Promise<MutationResult>;
   /** ضبط رصيد الحليب الافتتاحي للدورة النشطة (مثلاً متبقي 30/5) */
   setSessionOpeningStock: (input: {
     quantity: number;
     unitCost: number;
     note?: string;
-  }) => MutationResult;
+  }) => Promise<MutationResult>;
   recordTransfer: (input: {
     fromType: AccountSourceType;
     fromId: string;
@@ -202,7 +243,7 @@ interface ErpState {
     date?: string;
     referenceDoc?: string;
     notes?: string;
-  }) => MutationResult;
+  }) => Promise<MutationResult>;
 
   // v3.0 — المصاريف
   recordExpense: (input: {
@@ -213,18 +254,34 @@ interface ErpState {
     paidFromId: string;
     date?: string;
     invoiceRef?: string;
-  }) => MutationResult;
+  }) => Promise<MutationResult>;
+  updateExpense: (id: string, patch: Partial<Pick<Expense, 'categoryId' | 'amount' | 'description' | 'date' | 'invoiceRef'>>) => Promise<MutationResult>;
+  deleteExpense: (id: string) => Promise<MutationResult>;
+  addExpenseCategory: (input: { name: string; group: ExpenseGroup; budgetMonthly?: number; isRecurring?: boolean }) => Promise<MutationResult>;
+  updateExpenseCategory: (id: string, patch: Partial<ExpenseCategory>) => Promise<MutationResult>;
+  deleteExpenseCategory: (id: string) => Promise<MutationResult>;
+
+  recordExternalIncome: (input: {
+    amount: number;
+    description: string;
+    destinationType: AccountSourceType;
+    destinationId: string;
+    date?: string;
+  }) => Promise<MutationResult>;
+  updateExternalIncome: (id: string, patch: Partial<Pick<ExternalIncome, 'amount' | 'description' | 'date'>>) => Promise<MutationResult>;
+  deleteExternalIncome: (id: string) => Promise<MutationResult>;
 
   // v3.0 — الموظفون والرواتب
   addEmployee: (input: Omit<Employee, 'id' | 'code' | 'createdAt'>) => Promise<MutationResult>;
   updateEmployee: (id: string, patch: Partial<Employee>) => Promise<MutationResult>;
+  deleteEmployee: (id: string) => Promise<MutationResult>;
   createPayrollBatch: (input: {
     label: string;
     payrollType: PayrollBatch['payrollType'];
     periodFrom: string;
     periodTo: string;
-  }) => MutationResult;
-  payPayrollBatch: (batchId: string, source: { type: AccountSourceType; id: string }) => MutationResult;
+  }) => Promise<MutationResult>;
+  payPayrollBatch: (batchId: string, source: { type: AccountSourceType; id: string }) => Promise<MutationResult>;
 
   // settings & demo
   updateSettings: (patch: Partial<AppSettings>) => Promise<MutationResult>;
@@ -253,6 +310,7 @@ interface ErpState {
     employees: Employee[];
     payrollBatches: PayrollBatch[];
     auditLogs: AuditLog[];
+    externalIncomes: ExternalIncome[];
   }>) => void;
 }
 
@@ -283,7 +341,41 @@ function freshSession(ref: Date = new Date()): Session {
   };
 }
 
-function nextRef(prefix: string, existing: { ref: string }[], year = 2026): string {
+function sessionFromCycle(year: number, month0: number, cycleNumber: 1 | 2): Session {
+  const w = cycleOfMonth(year, month0, cycleNumber);
+  return {
+    id: cycleSessionId(year, month0, cycleNumber),
+    label: w.label,
+    periodFrom: fmtLocalDate(w.from),
+    periodTo: fmtLocalDate(w.to),
+    status: 'open',
+    cycleNumber,
+    openingStock: 0,
+    openingAvgCost: 0,
+    openingPayables: 0,
+    openingReceivables: 0,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+async function mutateWithDb(
+  update: () => void,
+  ops: { table: string; rows?: Record<string, unknown>[]; deletes?: string[] }[],
+): Promise<MutationResult> {
+  if (isSupabaseConfigured()) {
+    try {
+      const { persistMutation } = await import('@/lib/supabase/live-db');
+      await persistMutation(ops, update);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'فشل الحفظ في قاعدة البيانات' };
+    }
+  }
+  update();
+  return { ok: true };
+}
+
+function nextRef(prefix: string, existing: { ref: string }[], year = new Date().getFullYear()): string {
   const max = existing
     .map((e) => {
       const m = e.ref.match(/(\d+)$/);
@@ -302,6 +394,30 @@ function requireOpenSession(state: ErpState): MutationResult & { session?: Sessi
   if (!session) return { ok: false, error: 'لا توجد دورة نشطة.' };
   if (session.status === 'archived') return { ok: false, error: 'الدورة مؤرشفة — لا يمكن تسجيل عمليات جديدة.' };
   return { ok: true, session };
+}
+
+function farmerDeleteBlock(state: ErpState, id: string): string | null {
+  if (state.supplies.some((s) => s.farmerId === id)) return 'يوجد استلام مرتبط بهذا الفلاح.';
+  if (state.payments.some((p) => p.kind === 'farmer_payment' && p.partyId === id)) return 'يوجد مدفوعات مرتبطة.';
+  if (state.debtEntries.some((d) => d.partyKind === 'farmer' && d.partyId === id && d.amount > 0.01))
+    return 'يوجد ديون قائمة — سدّدها أو احذفها أولاً.';
+  return null;
+}
+
+function customerDeleteBlock(state: ErpState, id: string): string | null {
+  if (state.sales.some((s) => s.customerId === id)) return 'يوجد مبيعات مرتبطة بهذا العميل.';
+  if (state.payments.some((p) => p.kind === 'customer_payment' && p.partyId === id)) return 'يوجد تحصيلات مرتبطة.';
+  if (state.debtEntries.some((d) => d.partyKind === 'customer' && d.partyId === id && d.amount > 0.01))
+    return 'يوجد ديون قائمة — سدّدها أو احذفها أولاً.';
+  return null;
+}
+
+function employeeDeleteBlock(state: ErpState, id: string): string | null {
+  if (state.payments.some((p) => p.kind === 'employee_advance' && p.partyId === id)) return 'يوجد سلف مرتبطة.';
+  if (state.payrollBatches.some((b) => b.lines.some((l) => l.employeeId === id))) return 'يوجد سجلات رواتب مرتبطة.';
+  if (state.debtEntries.some((d) => d.partyKind === 'employee' && d.partyId === id && d.amount > 0.01))
+    return 'يوجد ديون قائمة — سدّدها أو احذفها أولاً.';
+  return null;
 }
 
 function makeAudit(
@@ -353,35 +469,94 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       employees: [],
       payrollBatches: [],
       auditLogs: [],
+      externalIncomes: [],
 
       login: (user) => set({ auth: { ...DEFAULT_USER, ...user } }),
       logout: () => set({ auth: null }),
 
-      setActiveSession: (id) => set({ activeSessionId: id }),
+      setActiveSession: async (id) => {
+        const state = get();
+        if (!state.sessions.some((s) => s.id === id)) {
+          return { ok: false, error: 'الدورة غير موجودة.' };
+        }
+        if (isSupabaseConfigured()) {
+          try {
+            const { applyLocalDbWrite } = await import('@/lib/supabase/live-db');
+            const { persistAppSettings } = await import('@/lib/supabase/repository');
+            await persistAppSettings({ activeSessionId: id, settings: state.settings });
+            applyLocalDbWrite(() => set({ activeSessionId: id }));
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : 'فشل حفظ الدورة النشطة' };
+          }
+          return { ok: true, id };
+        }
+        set({ activeSessionId: id });
+        return { ok: true, id };
+      },
 
-      closeActiveSession: () => {
+      createSessionForCycle: async (input) => {
+        const state = get();
+        const month0 = input.month;
+        if (month0 < 0 || month0 > 11) return { ok: false, error: 'الشهر غير صالح.' };
+        const session = sessionFromCycle(input.year, month0, input.cycleNumber);
+        if (state.sessions.some((s) => s.id === session.id)) {
+          return { ok: false, error: 'هذه الدورة موجودة — اخترها من القائمة.' };
+        }
+        const audit = makeAudit(state, 'session', session.id, 'create', `إنشاء دورة: ${session.label}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              sessions: [...s.sessions, session].sort((a, b) => a.periodFrom.localeCompare(b.periodFrom)),
+              activeSessionId: session.id,
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'sessions', rows: [session as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id: session.id } : res;
+      },
+
+      closeActiveSession: async () => {
         const state = get();
         const active = state.sessions.find((s) => s.id === state.activeSessionId);
         if (!active) return { ok: false, error: 'لا توجد فترة نشطة.' };
         if (active.status === 'archived') return { ok: false, error: 'الفترة مؤرشفة بالفعل.' };
 
         const inv = buildInventoryLedger(state.supplies, state.sales, state.adjustments, state.sessions);
-        const summary = computeSessionSummary(active, state as any, inv);
+        const erpSnapshot: ErpData = {
+          sessions: state.sessions,
+          activeSessionId: state.activeSessionId,
+          farmers: state.farmers,
+          customers: state.customers,
+          employees: state.employees,
+          supplies: state.supplies,
+          sales: state.sales,
+          payments: state.payments,
+          debtEntries: state.debtEntries,
+          adjustments: state.adjustments,
+          expenses: state.expenses,
+          payrollBatches: state.payrollBatches,
+          vaults: state.vaults,
+          banks: state.banks,
+          cashMovements: state.cashMovements,
+          externalIncomes: state.externalIncomes,
+          settings: state.settings,
+        };
+        const summary = computeSessionSummary(active, erpSnapshot, inv);
+        const carrySnapshot = buildSessionCarryForwardSnapshot(erpSnapshot, active, inv.currentStock);
 
-        const farmerStats = state.farmers.map((f) => computeFarmerStats(f, state.supplies, state.payments, state.debtEntries));
         const sessionFarmerStats = state.farmers.map((f) =>
-          computeFarmerSessionStats(f, active.id, state.supplies, state.payments),
+          computeFarmerSessionStats(f, active, state.supplies, state.payments, state.debtEntries),
         );
         const customerStats = state.customers.map((c) =>
           computeCustomerStats(c, state.sales, state.payments, state.debtEntries),
         );
-        const payables = round(farmerStats.reduce((s, f) => s + Math.max(0, f.creditBalance), 0));
-        const receivables = round(customerStats.reduce((s, c) => s + Math.max(0, c.outstanding), 0));
+        const payables = carrySnapshot.totals.payables;
+        const receivables = carrySnapshot.totals.receivables;
 
         const archived: Session = {
           ...active,
           status: 'archived',
-          closedAt: new Date().toISOString(),
+          closedAt: carrySnapshot.closedAt,
           archive: {
             summary: {
               supply: { transactions: summary.supplyCount, qty: summary.supplyQty, cost: summary.supplyCost },
@@ -401,7 +576,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
             },
             balancesSnapshot: {
               farmers: sessionFarmerStats
-                .filter((f) => f.supplyCount > 0 || f.paymentCount > 0)
+                .filter((f) => f.supplyCount > 0 || f.paymentCount > 0 || f.carriedForward > 0.01)
                 .map((f) => ({
                   id: f.farmerId,
                   name: f.fullName,
@@ -413,22 +588,23 @@ export const useErpStore = create<ErpState>()((set, get) => ({
               customers: customerStats
                 .filter((c) => Math.abs(c.outstanding) > 0.01)
                 .map((c) => ({ id: c.id, name: c.entityName, balance: c.outstanding })),
+              employees: carrySnapshot.employees,
+              external: carrySnapshot.external,
             },
             carryForward: {
-              openingStock: round(inv.currentStock),
+              openingStock: carrySnapshot.totals.openingStock,
               payables,
               receivables,
             },
           },
         };
 
-        // الدورة التالية: اليوم التالي لنهاية الدورة الحالية يقع ضمن الدورة نصف الشهرية التالية
         const dayAfter = new Date(active.periodTo + 'T00:00:00');
         dayAfter.setDate(dayAfter.getDate() + 1);
         const w = cycleForDate(dayAfter);
         const newId = cycleSessionId(w.year, w.month, w.cycleNumber);
-        const carriedStock = round(inv.currentStock);
-        const next: Session = {
+        const carriedStock = carrySnapshot.totals.openingStock;
+        const nextPayload: Session = {
           id: newId,
           label: w.label,
           periodFrom: fmtLocalDate(w.from),
@@ -439,6 +615,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           openingAvgCost: round(inv.currentWac, 3),
           openingPayables: payables,
           openingReceivables: receivables,
+          carryForwardBalances: carrySnapshot,
           createdAt: new Date().toISOString(),
         };
 
@@ -447,50 +624,72 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           'session',
           active.id,
           'close',
-          `إغلاق الدورة «${active.label}» — مبيعات ${formatMoney(round(summary.salesRevenue), { decimals: 0 })}، ربح ${formatMoney(round(summary.grossProfit), { decimals: 0 })}، مخزون مرحّل ${formatLiters(carriedStock, 0, false)}`,
+          `إغلاق الدورة «${active.label}» — مبيعات ${formatMoney(round(summary.salesRevenue), { decimals: 0 })}، ربح ${formatMoney(round(summary.grossProfit), { decimals: 0 })}، مخزون مرحّل ${formatLiters(carriedStock, 0, false)}، ديون مرحّلة ${formatMoney(payables + receivables, { decimals: 0 })}`,
         );
 
         const archivedSessions = state.sessions.map((s) => (s.id === active.id ? archived : s));
-        const hasNext = archivedSessions.some((s) => s.id === newId);
-        set({
-          sessions: hasNext ? archivedSessions : [...archivedSessions, next],
-          activeSessionId: newId,
-          auditLogs: [audit, ...state.auditLogs],
-        });
-        return { ok: true, id: newId };
+        const existingNextIdx = archivedSessions.findIndex((s) => s.id === newId);
+        const sessionRows: Session[] =
+          existingNextIdx >= 0
+            ? archivedSessions.map((s, i) => (i === existingNextIdx ? { ...s, ...nextPayload, createdAt: s.createdAt } : s))
+            : [...archivedSessions, nextPayload];
+        const rowsToPersist = existingNextIdx >= 0 ? [archived, sessionRows[existingNextIdx]!] : [archived, nextPayload];
+
+        const res = await mutateWithDb(
+          () =>
+            set({
+              sessions: sessionRows,
+              activeSessionId: newId,
+              auditLogs: [audit, ...state.auditLogs],
+            }),
+          [
+            { table: 'sessions', rows: rowsToPersist as unknown as Record<string, unknown>[] },
+            { table: 'audit_logs', rows: [audit as unknown as Record<string, unknown>] },
+          ],
+        );
+        if (res.ok && isSupabaseConfigured()) {
+          try {
+            const { persistAppSettings } = await import('@/lib/supabase/repository');
+            await persistAppSettings({ activeSessionId: newId, settings: state.settings });
+          } catch {
+            return { ok: false, error: 'تم الإغلاق محلياً لكن فشل حفظ الدورة النشطة في السحابة.' };
+          }
+        }
+        return res.ok ? { ok: true, id: newId } : res;
       },
 
       addFarmer: async (input) => {
         const state = get();
+        const { openingBalance, ...farmerInput } = input;
         const code = nextPartyCode('F', state.farmers);
         const farmer: Farmer = {
-          ...input,
+          ...farmerInput,
           id: uid('farmer-'),
           code,
-          onboardingDate: input.onboardingDate.slice(0, 10),
+          onboardingDate: farmerInput.onboardingDate.slice(0, 10),
           createdAt: new Date().toISOString(),
         };
         const audit = makeAudit(state, 'farmer', farmer.id, 'create', `إضافة فلاح: ${farmer.fullName}`);
-        if (isSupabaseConfigured()) {
-          try {
-            const { persistMutation } = await import('@/lib/supabase/live-db');
-            await persistMutation(
-              [{ table: 'farmers', rows: [farmer as unknown as Record<string, unknown>] }],
-              () =>
-                set((s) => ({
-                  farmers: [farmer, ...s.farmers],
-                  auditLogs: [audit, ...s.auditLogs],
-                })),
-            );
-          } catch (e) {
-            return { ok: false, error: e instanceof Error ? e.message : 'فشل حفظ الفلاح في قاعدة البيانات' };
-          }
-          return { ok: true, id: farmer.id };
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              farmers: [farmer, ...s.farmers],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'farmers', rows: [farmer as unknown as Record<string, unknown>] }],
+        );
+        if (!res.ok) return res;
+        if (openingBalance && openingBalance.amount > 0) {
+          const debtRes = await get().recordDebtEntry({
+            partyKind: 'farmer',
+            partyId: farmer.id,
+            amount: openingBalance.amount,
+            direction: openingBalance.direction,
+            description: 'رصيد افتتاحي',
+            date: `${farmer.onboardingDate}T12:00:00.000Z`,
+          });
+          if (!debtRes.ok) return debtRes;
         }
-        set({
-          farmers: [farmer, ...state.farmers],
-          auditLogs: [audit, ...state.auditLogs],
-        });
         return { ok: true, id: farmer.id };
       },
       updateFarmer: async (id, patch) => {
@@ -516,6 +715,24 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         }
         set((s) => ({ farmers: s.farmers.map((f) => (f.id === id ? updated : f)) }));
         return { ok: true, id };
+      },
+
+      deleteFarmer: async (id) => {
+        const state = get();
+        const existing = state.farmers.find((f) => f.id === id);
+        if (!existing) return { ok: false, error: 'الفلاح غير موجود.' };
+        const block = farmerDeleteBlock(state, id);
+        if (block) return { ok: false, error: block };
+        const audit = makeAudit(state, 'farmer', id, 'delete', `حذف فلاح: ${existing.fullName}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              farmers: s.farmers.filter((f) => f.id !== id),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'farmers', deletes: [id] }],
+        );
+        return res.ok ? { ok: true, id } : res;
       },
 
       addCustomer: async (input) => {
@@ -568,7 +785,25 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         return { ok: true, id };
       },
 
-      recordSupply: (input) => {
+      deleteCustomer: async (id) => {
+        const state = get();
+        const existing = state.customers.find((c) => c.id === id);
+        if (!existing) return { ok: false, error: 'العميل غير موجود.' };
+        const block = customerDeleteBlock(state, id);
+        if (block) return { ok: false, error: block };
+        const audit = makeAudit(state, 'customer', id, 'delete', `حذف عميل: ${existing.entityName}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              customers: s.customers.filter((c) => c.id !== id),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'customers', deletes: [id] }],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      recordSupply: async (input) => {
         const state = get();
         const gate = requireOpenSession(state);
         if (!gate.ok) return gate;
@@ -617,12 +852,12 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           createdBy: state.auth?.name,
         };
 
-        let payments = state.payments;
-        let cashMovements = state.cashMovements;
+        let payment: Payment | null = null;
+        let movement: CashMovement | null = null;
 
         if (ip) {
           const payId = uid('pay-');
-          const payment: Payment = {
+          payment = {
             id: payId,
             ref: nextRef('PAY', state.payments.filter((p) => p.kind === 'farmer_payment')),
             kind: 'farmer_payment',
@@ -633,13 +868,13 @@ export const useErpStore = create<ErpState>()((set, get) => ({
             method: ip.method,
             paidFromType: ip.sourceType,
             paidFromId: ip.sourceId,
-            reference: ip.reference,
+            reference: ip.reference ?? tx.ref,
             notes: 'دفع فوري عند استلام الحليب',
             settlementComplete: ip.settlementComplete ?? (ip.amount >= total - 0.01),
             createdAt: new Date().toISOString(),
             createdBy: state.auth?.name,
           };
-          const movement: CashMovement = {
+          movement = {
             id: uid('cm-'),
             ref: nextRef('CM', state.cashMovements),
             movementType: 'farmer_payout',
@@ -654,15 +889,29 @@ export const useErpStore = create<ErpState>()((set, get) => ({
             date,
             createdAt: new Date().toISOString(),
           };
-          payments = [payment, ...payments];
-          cashMovements = [movement, ...cashMovements];
         }
 
-        set({ supplies: [tx, ...state.supplies], payments, cashMovements });
-        return { ok: true, id: tx.id };
+        const audit = makeAudit(state, 'supply', tx.id, 'create', `استلام من ${farmer.fullName} — ${formatLiters(tx.quantity, 0, false)}`);
+        const dbOps: { table: string; rows: Record<string, unknown>[] }[] = [
+          { table: 'supplies', rows: [tx as unknown as Record<string, unknown>] },
+        ];
+        if (payment) dbOps.push({ table: 'payments', rows: [payment as unknown as Record<string, unknown>] });
+        if (movement) dbOps.push({ table: 'cash_movements', rows: [movement as unknown as Record<string, unknown>] });
+
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              supplies: [tx, ...s.supplies],
+              payments: payment ? [payment, ...s.payments] : s.payments,
+              cashMovements: movement ? [movement, ...s.cashMovements] : s.cashMovements,
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          dbOps,
+        );
+        return res.ok ? { ok: true, id: tx.id } : res;
       },
 
-      recordSale: (input) => {
+      recordSale: async (input) => {
         const state = get();
         const gate = requireOpenSession(state);
         if (!gate.ok) return gate;
@@ -671,7 +920,6 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         const customer = state.customers.find((c) => c.id === input.customerId);
         if (!customer) return { ok: false, error: 'العميل غير موجود.' };
         if (customer.onHold) return { ok: false, error: 'حساب العميل مجمّد — لا يمكن البيع له.' };
-        // RULE_INV_001 — منع البيع إذا تجاوزت الكمية المخزون المتاح
         const stock = currentStockOf(state);
         if (input.quantity > stock + 0.001) {
           return {
@@ -697,11 +945,19 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           createdAt: new Date().toISOString(),
           createdBy: state.auth?.name,
         };
-        set({ sales: [tx, ...state.sales] });
-        return { ok: true, id: tx.id };
+        const audit = makeAudit(state, 'sale', tx.id, 'create', `بيع لـ ${customer.entityName} — ${formatLiters(tx.quantity, 0, false)}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              sales: [tx, ...s.sales],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'sales', rows: [tx as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id: tx.id } : res;
       },
 
-      recordFarmerPayment: (input) => {
+      recordFarmerPayment: async (input) => {
         const state = get();
         const gate = requireOpenSession(state);
         if (!gate.ok) return gate;
@@ -754,18 +1010,25 @@ export const useErpStore = create<ErpState>()((set, get) => ({
             }
           : null;
 
-        set({
-          payments: [tx, ...state.payments],
-          cashMovements: movement ? [movement, ...state.cashMovements] : state.cashMovements,
-          auditLogs: [
-            makeAudit(state, 'payment', tx.id, 'pay', `دفعة للفلاح ${farmer?.fullName ?? ''}: ${formatMoney(amount, { decimals: 0 })}`),
-            ...state.auditLogs,
-          ],
-        });
-        return { ok: true, id: tx.id };
+        const audit = makeAudit(state, 'payment', tx.id, 'pay', `دفعة للفلاح ${farmer?.fullName ?? ''}: ${formatMoney(amount, { decimals: 0 })}`);
+        const dbOps: { table: string; rows: Record<string, unknown>[] }[] = [
+          { table: 'payments', rows: [tx as unknown as Record<string, unknown>] },
+        ];
+        if (movement) dbOps.push({ table: 'cash_movements', rows: [movement as unknown as Record<string, unknown>] });
+
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              payments: [tx, ...s.payments],
+              cashMovements: movement ? [movement, ...s.cashMovements] : s.cashMovements,
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          dbOps,
+        );
+        return res.ok ? { ok: true, id: tx.id } : res;
       },
 
-      recordCustomerPayment: (input) => {
+      recordCustomerPayment: async (input) => {
         const state = get();
         const gate = requireOpenSession(state);
         if (!gate.ok) return gate;
@@ -811,18 +1074,25 @@ export const useErpStore = create<ErpState>()((set, get) => ({
             }
           : null;
 
-        set({
-          payments: [tx, ...state.payments],
-          cashMovements: movement ? [movement, ...state.cashMovements] : state.cashMovements,
-          auditLogs: [
-            makeAudit(state, 'payment', tx.id, 'pay', `تحصيل من العميل ${customer?.entityName ?? ''}: ${formatMoney(amount, { decimals: 0 })}`),
-            ...state.auditLogs,
-          ],
-        });
-        return { ok: true, id: tx.id };
+        const audit = makeAudit(state, 'payment', tx.id, 'pay', `تحصيل من العميل ${customer?.entityName ?? ''}: ${formatMoney(amount, { decimals: 0 })}`);
+        const dbOps: { table: string; rows: Record<string, unknown>[] }[] = [
+          { table: 'payments', rows: [tx as unknown as Record<string, unknown>] },
+        ];
+        if (movement) dbOps.push({ table: 'cash_movements', rows: [movement as unknown as Record<string, unknown>] });
+
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              payments: [tx, ...s.payments],
+              cashMovements: movement ? [movement, ...s.cashMovements] : s.cashMovements,
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          dbOps,
+        );
+        return res.ok ? { ok: true, id: tx.id } : res;
       },
 
-      recordEmployeeAdvance: (input) => {
+      recordEmployeeAdvance: async (input) => {
         const state = get();
         const gate = requireOpenSession(state);
         if (!gate.ok) return gate;
@@ -868,15 +1138,20 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           createdAt: new Date().toISOString(),
         };
 
-        set({
-          payments: [tx, ...state.payments],
-          cashMovements: [movement, ...state.cashMovements],
-          auditLogs: [
-            makeAudit(state, 'payment', tx.id, 'pay', `سلفة للموظف ${employee.fullName}: ${formatMoney(amount, { decimals: 0 })}`),
-            ...state.auditLogs,
+        const audit = makeAudit(state, 'payment', tx.id, 'pay', `سلفة للموظف ${employee.fullName}: ${formatMoney(amount, { decimals: 0 })}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              payments: [tx, ...s.payments],
+              cashMovements: [movement, ...s.cashMovements],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [
+            { table: 'payments', rows: [tx as unknown as Record<string, unknown>] },
+            { table: 'cash_movements', rows: [movement as unknown as Record<string, unknown>] },
           ],
-        });
-        return { ok: true, id: tx.id };
+        );
+        return res.ok ? { ok: true, id: tx.id } : res;
       },
 
       recordDebtEntry: async (input) => {
@@ -885,17 +1160,23 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         if (!gate.ok) return gate;
         if (input.amount <= 0) return { ok: false, error: 'المبلغ يجب أن يكون أكبر من صفر.' };
 
-        let partyName = '';
-        if (input.partyKind === 'farmer') {
-          const farmer = state.farmers.find((f) => f.id === input.partyId);
+        const direction = input.direction ?? defaultDebtDirection(input.partyKind);
+        let partyName = input.partyName?.trim() ?? '';
+        let partyId = input.partyId;
+
+        if (input.partyKind === 'external') {
+          if (!partyName) return { ok: false, error: 'أدخل اسم الطرف الخارجي.' };
+          partyId = partyId ?? uid('ext-');
+        } else if (input.partyKind === 'farmer') {
+          const farmer = state.farmers.find((f) => f.id === partyId);
           if (!farmer) return { ok: false, error: 'الفلاح غير موجود.' };
           partyName = farmer.fullName;
         } else if (input.partyKind === 'customer') {
-          const customer = state.customers.find((c) => c.id === input.partyId);
+          const customer = state.customers.find((c) => c.id === partyId);
           if (!customer) return { ok: false, error: 'العميل غير موجود.' };
           partyName = customer.entityName;
         } else {
-          const employee = state.employees.find((e) => e.id === input.partyId);
+          const employee = state.employees.find((e) => e.id === partyId);
           if (!employee) return { ok: false, error: 'الموظف غير موجود.' };
           partyName = employee.fullName;
         }
@@ -908,15 +1189,23 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           sessionId: state.activeSessionId,
           date: dateRaw.slice(0, 10),
           partyKind: input.partyKind,
-          partyId: input.partyId,
+          partyId,
+          partyName: input.partyKind === 'external' ? partyName : undefined,
           amount,
+          direction,
           description: input.description?.trim() || undefined,
           createdAt: new Date().toISOString(),
           createdBy: state.auth?.name,
         };
 
         const kindLabel =
-          input.partyKind === 'farmer' ? 'فلاح' : input.partyKind === 'customer' ? 'عميل' : 'موظف';
+          input.partyKind === 'farmer'
+            ? 'فلاح'
+            : input.partyKind === 'customer'
+              ? 'عميل'
+              : input.partyKind === 'employee'
+                ? 'موظف'
+                : 'خارجي';
         const audit = makeAudit(
           state,
           'debt',
@@ -925,29 +1214,165 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           `تسجيل دين — ${kindLabel} ${partyName}: ${formatMoney(amount, { decimals: 0 })}${entry.description ? ` (${entry.description})` : ''}`,
         );
 
-        const apply = () =>
-          set((s) => ({
-            debtEntries: [entry, ...s.debtEntries],
-            auditLogs: [audit, ...s.auditLogs],
-          }));
-
-        if (isSupabaseConfigured()) {
-          try {
-            const { persistMutation } = await import('@/lib/supabase/live-db');
-            await persistMutation(
-              [{ table: 'debt_entries', rows: [entry as unknown as Record<string, unknown>] }],
-              apply,
-            );
-          } catch (e) {
-            return { ok: false, error: e instanceof Error ? e.message : 'فشل تسجيل الدين' };
-          }
-          return { ok: true, id: entry.id };
-        }
-        apply();
-        return { ok: true, id: entry.id };
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              debtEntries: [entry, ...s.debtEntries],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'debt_entries', rows: [entry as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id: entry.id } : res;
       },
 
-      addAdjustment: (input) => {
+      updateDebtEntry: async (id, patch) => {
+        const state = get();
+        const existing = state.debtEntries.find((d) => d.id === id);
+        if (!existing) return { ok: false, error: 'سجل الدين غير موجود.' };
+        const updated: DebtEntry = {
+          ...existing,
+          ...patch,
+          amount: patch.amount != null ? round(patch.amount) : existing.amount,
+          date: patch.date ? patch.date.slice(0, 10) : existing.date,
+          partyName: patch.partyName?.trim() || existing.partyName,
+        };
+        if (updated.amount <= 0) return { ok: false, error: 'المبلغ يجب أن يكون أكبر من صفر.' };
+        const settled = existing.settledAmount ?? 0;
+        const minAmount = settled > 0.01 ? settled : 0;
+        if (updated.amount < minAmount - 0.01) {
+          return { ok: false, error: `لا يمكن أن يقل المبلغ عن المُسَدَّد (${formatMoney(minAmount, { decimals: 0 })}).` };
+        }
+        const audit = makeAudit(state, 'debt', id, 'update', `تعديل دين ${existing.ref}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              debtEntries: s.debtEntries.map((d) => (d.id === id ? updated : d)),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'debt_entries', rows: [updated as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      settleDebtEntry: async (id, input) => {
+        const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
+
+        const entry = state.debtEntries.find((d) => d.id === id);
+        if (!entry) return { ok: false, error: 'سجل الدين غير موجود.' };
+        if (isDebtFullySettled(entry)) return { ok: false, error: 'هذا الدين مُسَدَّد بالكامل.' };
+
+        const remaining = debtRemainingAmount(entry);
+        const amount = round(input.amount);
+        if (amount <= 0) return { ok: false, error: 'المبلغ يجب أن يكون أكبر من صفر.' };
+        if (amount > remaining + 0.01) {
+          return { ok: false, error: `المتبقي على الدين ${formatMoney(remaining, { decimals: 0 })}.` };
+        }
+
+        const useSource = Boolean(input.sourceType && input.sourceId);
+        const cashOut = debtSettlementIsCashOut(entry);
+        if (useSource && cashOut) {
+          const bal = accountBalance(input.sourceType!, input.sourceId!, state.vaults, state.banks, state.cashMovements);
+          if (amount > bal + 0.001) {
+            return { ok: false, error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي.` };
+          }
+        }
+
+        const date = input.date ?? new Date().toISOString();
+        const partyLabel =
+          entry.partyKind === 'external'
+            ? entry.partyName ?? 'طرف خارجي'
+            : entry.partyKind === 'farmer'
+              ? state.farmers.find((f) => f.id === entry.partyId)?.fullName ?? 'فلاح'
+              : entry.partyKind === 'customer'
+                ? state.customers.find((c) => c.id === entry.partyId)?.entityName ?? 'عميل'
+                : state.employees.find((e) => e.id === entry.partyId)?.fullName ?? 'موظف';
+
+        const newSettled = round((entry.settledAmount ?? 0) + amount);
+        const newAmount = round(Math.max(0, entry.amount - amount));
+        const fullySettled = newAmount <= 0.01;
+        const updatedEntry: DebtEntry = {
+          ...entry,
+          amount: newAmount,
+          settledAmount: newSettled,
+          settledAt: fullySettled ? new Date().toISOString() : entry.settledAt,
+        };
+
+        const noteSuffix = input.notes?.trim() ? ` — ${input.notes.trim()}` : '';
+        const settlementNote = `تسوية دين ${entry.ref}${noteSuffix}`;
+
+        const dbRows: { table: string; rows: Record<string, unknown>[] }[] = [
+          { table: 'debt_entries', rows: [updatedEntry as unknown as Record<string, unknown>] },
+        ];
+
+        let movement: CashMovement | null = null;
+
+        if (useSource) {
+          const movementType =
+            entry.partyKind === 'farmer' && cashOut
+              ? 'farmer_payout'
+              : entry.partyKind === 'customer' && !cashOut
+                ? 'sale_payment'
+                : cashOut
+                  ? 'expense'
+                  : 'income';
+          movement = {
+            id: uid('cm-'),
+            ref: nextRef('CM', state.cashMovements),
+            movementType,
+            sourceType: input.sourceType!,
+            sourceId: input.sourceId!,
+            amount,
+            direction: cashOut ? 'out' : 'in',
+            referenceType: 'debt',
+            referenceId: entry.id,
+            description: `${settlementNote} — ${partyLabel}`,
+            sessionId: state.activeSessionId,
+            date,
+            createdAt: new Date().toISOString(),
+            createdBy: state.auth?.name,
+          };
+          dbRows.push({ table: 'cash_movements', rows: [movement as unknown as Record<string, unknown>] });
+        }
+
+        const audit = makeAudit(
+          state,
+          'debt',
+          entry.id,
+          'update',
+          `${settlementNote}: ${formatMoney(amount, { decimals: 0 })} — ${partyLabel}`,
+        );
+
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              debtEntries: s.debtEntries.map((d) => (d.id === id ? updatedEntry : d)),
+              cashMovements: movement ? [movement, ...s.cashMovements] : s.cashMovements,
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          dbRows,
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      deleteDebtEntry: async (id) => {
+        const state = get();
+        const existing = state.debtEntries.find((d) => d.id === id);
+        if (!existing) return { ok: false, error: 'سجل الدين غير موجود.' };
+        const audit = makeAudit(state, 'debt', id, 'delete', `حذف دين ${existing.ref}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              debtEntries: s.debtEntries.filter((d) => d.id !== id),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'debt_entries', deletes: [id] }],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      addAdjustment: async (input) => {
         const state = get();
         const gate = requireOpenSession(state);
         if (!gate.ok) return gate;
@@ -962,20 +1387,212 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           reason: input.reason,
           createdAt: new Date().toISOString(),
         };
-        set({ adjustments: [tx, ...state.adjustments] });
-        return { ok: true, id: tx.id };
+        const audit = makeAudit(state, 'adjustment', tx.id, 'create', `تسوية مخزون: ${tx.reason}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              adjustments: [tx, ...s.adjustments],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'inventory_adjustments', rows: [tx as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id: tx.id } : res;
+      },
+
+      deleteSupply: async (id) => {
+        const state = get();
+        const tx = state.supplies.find((s) => s.id === id);
+        if (!tx) return { ok: false, error: 'عملية الاستلام غير موجودة.' };
+        const linkedPayments = state.payments.filter(
+          (p) => p.kind === 'farmer_payment' && p.partyId === tx.farmerId && p.reference === tx.ref,
+        );
+        const paymentIds = linkedPayments.map((p) => p.id);
+        const cmIds = state.cashMovements
+          .filter((m) => m.referenceType === 'payment' && m.referenceId && paymentIds.includes(m.referenceId))
+          .map((m) => m.id);
+        const audit = makeAudit(state, 'supply', id, 'delete', `حذف استلام ${tx.ref}`);
+        return mutateWithDb(
+          () =>
+            set((s) => ({
+              supplies: s.supplies.filter((x) => x.id !== id),
+              payments: s.payments.filter((p) => !paymentIds.includes(p.id)),
+              cashMovements: s.cashMovements.filter((m) => !cmIds.includes(m.id)),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [
+            { table: 'supplies', deletes: [id] },
+            ...(paymentIds.length ? [{ table: 'payments', deletes: paymentIds }] : []),
+            ...(cmIds.length ? [{ table: 'cash_movements', deletes: cmIds }] : []),
+          ],
+        ).then((r) => (r.ok ? { ok: true, id } : r));
+      },
+
+      deleteSale: async (id) => {
+        const state = get();
+        const tx = state.sales.find((s) => s.id === id);
+        if (!tx) return { ok: false, error: 'عملية البيع غير موجودة.' };
+        const audit = makeAudit(state, 'sale', id, 'delete', `حذف بيع ${tx.ref}`);
+        return mutateWithDb(
+          () =>
+            set((s) => ({
+              sales: s.sales.filter((x) => x.id !== id),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'sales', deletes: [id] }],
+        ).then((r) => (r.ok ? { ok: true, id } : r));
+      },
+
+      updateSupply: async (id, patch) => {
+        const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
+        const existing = state.supplies.find((s) => s.id === id);
+        if (!existing) return { ok: false, error: 'عملية الاستلام غير موجودة.' };
+        const hasLinkedPay = state.payments.some(
+          (p) => p.kind === 'farmer_payment' && p.reference === existing.ref,
+        );
+        if (hasLinkedPay) {
+          return { ok: false, error: 'لا يمكن تعديل استلام مرتبط بدفع فوري — احذفه وأعد التسجيل.' };
+        }
+
+        const sampleQty = round(Math.max(0, patch.sampleQty ?? existing.sampleQty ?? 0));
+        const quantity = round(patch.quantity ?? existing.quantity);
+        const unitPrice = round(patch.unitPrice ?? existing.unitPrice, 3);
+        if (quantity <= 0) return { ok: false, error: 'الكمية يجب أن تكون أكبر من صفر.' };
+        if (unitPrice <= 0) return { ok: false, error: 'سعر الشراء يجب أن يكون أكبر من صفر.' };
+        if (sampleQty > quantity) return { ok: false, error: 'كمية العينة لا يمكن أن تتجاوز الكمية الكلية.' };
+
+        if (quantity < existing.quantity) {
+          const delta = existing.quantity - quantity;
+          const stock = currentStockOf(state);
+          if (delta > stock + 0.001) {
+            return {
+              ok: false,
+              error: `لا يمكن تقليل الكمية — المخزون المتاح (${formatLiters(Math.floor(stock), 0, false)}) لا يكفي.`,
+            };
+          }
+        }
+
+        const billableQty = round(quantity - sampleQty);
+        const updated: SupplyTransaction = {
+          ...existing,
+          ...patch,
+          quantity,
+          unitPrice,
+          sampleQty: sampleQty > 0 ? sampleQty : undefined,
+          total: round(billableQty * unitPrice),
+          date: patch.date ?? existing.date,
+        };
+        const audit = makeAudit(state, 'supply', id, 'update', `تعديل استلام ${existing.ref}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              supplies: s.supplies.map((x) => (x.id === id ? updated : x)),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'supplies', rows: [updated as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      updateSale: async (id, patch) => {
+        const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
+        const existing = state.sales.find((s) => s.id === id);
+        if (!existing) return { ok: false, error: 'عملية البيع غير موجودة.' };
+
+        const quantity = round(patch.quantity ?? existing.quantity);
+        const unitPrice = round(patch.unitPrice ?? existing.unitPrice, 3);
+        if (quantity <= 0) return { ok: false, error: 'الكمية يجب أن تكون أكبر من صفر.' };
+        if (unitPrice <= 0) return { ok: false, error: 'سعر البيع يجب أن يكون أكبر من صفر.' };
+
+        if (quantity > existing.quantity) {
+          const extra = quantity - existing.quantity;
+          const stock = currentStockOf(state);
+          if (extra > stock + 0.001) {
+            return {
+              ok: false,
+              error: `الكمية الإضافية (${formatLiters(extra, 0, false)}) تتجاوز المخزون (${formatLiters(Math.floor(stock), 0, false)}).`,
+            };
+          }
+        }
+
+        const updated: SaleTransaction = {
+          ...existing,
+          ...patch,
+          quantity,
+          unitPrice,
+          total: round(quantity * unitPrice),
+          date: patch.date ?? existing.date,
+          dueDate: patch.dueDate ?? existing.dueDate,
+        };
+        const audit = makeAudit(state, 'sale', id, 'update', `تعديل بيع ${existing.ref}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              sales: s.sales.map((x) => (x.id === id ? updated : x)),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'sales', rows: [updated as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      deletePayment: async (id) => {
+        const state = get();
+        const tx = state.payments.find((p) => p.id === id);
+        if (!tx) return { ok: false, error: 'الدفعة غير موجودة.' };
+        const cmIds = state.cashMovements
+          .filter((m) => m.referenceType === 'payment' && m.referenceId === id)
+          .map((m) => m.id);
+        const audit = makeAudit(state, 'payment', id, 'delete', `حذف دفعة ${tx.ref}`);
+        return mutateWithDb(
+          () =>
+            set((s) => ({
+              payments: s.payments.filter((p) => p.id !== id),
+              cashMovements: s.cashMovements.filter(
+                (m) => !(m.referenceType === 'payment' && m.referenceId === id),
+              ),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [
+            { table: 'payments', deletes: [id] },
+            ...(cmIds.length ? [{ table: 'cash_movements', deletes: cmIds }] : []),
+          ],
+        ).then((r) => (r.ok ? { ok: true, id } : r));
+      },
+
+      deleteAdjustment: async (id) => {
+        const state = get();
+        const tx = state.adjustments.find((a) => a.id === id);
+        if (!tx) return { ok: false, error: 'التسوية غير موجودة.' };
+        const audit = makeAudit(state, 'adjustment', id, 'delete', `حذف تسوية ${tx.ref}`);
+        return mutateWithDb(
+          () =>
+            set((s) => ({
+              adjustments: s.adjustments.filter((a) => a.id !== id),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'inventory_adjustments', deletes: [id] }],
+        ).then((r) => (r.ok ? { ok: true, id } : r));
       },
 
       // ── v3.0: الخزن والبنوك ──────────────────────────────
-      addVault: (input) => {
+      addVault: async (input) => {
         const state = get();
         const code = `V-${String(state.vaults.length + 1).padStart(2, '0')}`;
         const vault: CashVault = { ...input, id: uid('vault-'), code, createdAt: new Date().toISOString() };
-        set({
-          vaults: [vault, ...state.vaults],
-          auditLogs: [makeAudit(state, 'vault', vault.id, 'create', `إنشاء خزنة: ${vault.name}`), ...state.auditLogs],
-        });
-        return { ok: true, id: vault.id };
+        const audit = makeAudit(state, 'vault', vault.id, 'create', `إنشاء خزنة: ${vault.name}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              vaults: [vault, ...s.vaults],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'cash_vaults', rows: [vault as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id: vault.id } : res;
       },
       updateVault: async (id, patch) => {
         const state = get();
@@ -983,38 +1600,31 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         if (!existing) return { ok: false, error: 'الخزنة غير موجودة.' };
         const updated = { ...existing, ...patch };
         const audit = makeAudit(state, 'vault', id, 'update', 'تعديل بيانات خزنة');
-        if (isSupabaseConfigured()) {
-          try {
-            const { persistMutation } = await import('@/lib/supabase/live-db');
-            await persistMutation(
-              [{ table: 'cash_vaults', rows: [updated as unknown as Record<string, unknown>] }],
-              () =>
-                set((s) => ({
-                  vaults: s.vaults.map((v) => (v.id === id ? updated : v)),
-                  auditLogs: [audit, ...s.auditLogs],
-                })),
-            );
-          } catch (e) {
-            return { ok: false, error: e instanceof Error ? e.message : 'فشل تحديث الخزنة' };
-          }
-          return { ok: true, id };
-        }
-        set((s) => ({
-          vaults: s.vaults.map((v) => (v.id === id ? updated : v)),
-          auditLogs: [audit, ...s.auditLogs],
-        }));
-        return { ok: true, id };
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              vaults: s.vaults.map((v) => (v.id === id ? updated : v)),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'cash_vaults', rows: [updated as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id } : res;
       },
 
-      addBank: (input) => {
+      addBank: async (input) => {
         const state = get();
         const code = `B-${String(state.banks.length + 1).padStart(2, '0')}`;
         const bank: BankAccount = { ...input, id: uid('bank-'), code, createdAt: new Date().toISOString() };
-        set({
-          banks: [bank, ...state.banks],
-          auditLogs: [makeAudit(state, 'bank', bank.id, 'create', `إنشاء حساب بنكي: ${bank.bankName}`), ...state.auditLogs],
-        });
-        return { ok: true, id: bank.id };
+        const audit = makeAudit(state, 'bank', bank.id, 'create', `إنشاء حساب بنكي: ${bank.bankName}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              banks: [bank, ...s.banks],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'bank_accounts', rows: [bank as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id: bank.id } : res;
       },
       updateBank: async (id, patch) => {
         const state = get();
@@ -1022,30 +1632,18 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         if (!existing) return { ok: false, error: 'الحساب البنكي غير موجود.' };
         const updated = { ...existing, ...patch };
         const audit = makeAudit(state, 'bank', id, 'update', 'تعديل بيانات بنك');
-        if (isSupabaseConfigured()) {
-          try {
-            const { persistMutation } = await import('@/lib/supabase/live-db');
-            await persistMutation(
-              [{ table: 'bank_accounts', rows: [updated as unknown as Record<string, unknown>] }],
-              () =>
-                set((s) => ({
-                  banks: s.banks.map((b) => (b.id === id ? updated : b)),
-                  auditLogs: [audit, ...s.auditLogs],
-                })),
-            );
-          } catch (e) {
-            return { ok: false, error: e instanceof Error ? e.message : 'فشل تحديث البنك' };
-          }
-          return { ok: true, id };
-        }
-        set((s) => ({
-          banks: s.banks.map((b) => (b.id === id ? updated : b)),
-          auditLogs: [audit, ...s.auditLogs],
-        }));
-        return { ok: true, id };
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              banks: s.banks.map((b) => (b.id === id ? updated : b)),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'bank_accounts', rows: [updated as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id } : res;
       },
 
-      setupMainVault: (input) => {
+      setupMainVault: async (input) => {
         const state = get();
         if (state.vaults.length + state.banks.length > 0) {
           const existing = state.vaults.find((v) => v.isActive) ?? state.banks.find((b) => b.isActive);
@@ -1064,63 +1662,71 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           minThreshold: 0,
           createdAt: new Date().toISOString(),
         };
-        set({
-          vaults: [vault, ...state.vaults],
-          auditLogs: [
-            makeAudit(
-              state,
-              'vault',
-              vault.id,
-              'create',
-              `إعداد خزنة: ${vault.name} — رصيد افتتاحي ${formatMoney(vault.openingBalance, { decimals: 0 })}`,
-            ),
-            ...state.auditLogs,
-          ],
-        });
-        return { ok: true, id: vault.id };
+        const audit = makeAudit(
+          state,
+          'vault',
+          vault.id,
+          'create',
+          `إعداد خزنة: ${vault.name} — رصيد افتتاحي ${formatMoney(vault.openingBalance, { decimals: 0 })}`,
+        );
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              vaults: [vault, ...s.vaults],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'cash_vaults', rows: [vault as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id: vault.id } : res;
       },
 
-      setAccountOpeningBalance: (input) => {
+      setAccountOpeningBalance: async (input) => {
         const state = get();
         if (input.openingBalance < 0) return { ok: false, error: 'الرصيد الافتتاحي لا يمكن أن يكون سالباً.' };
         const amount = round(input.openingBalance);
         if (input.type === 'vault') {
           const vault = state.vaults.find((v) => v.id === input.id);
           if (!vault) return { ok: false, error: 'الخزنة غير موجودة.' };
-          set({
-            vaults: state.vaults.map((v) => (v.id === input.id ? { ...v, openingBalance: amount } : v)),
-            auditLogs: [
-              makeAudit(
-                state,
-                'vault',
-                input.id,
-                'update',
-                `ضبط رصيد افتتاحي — ${vault.name}: ${formatMoney(amount, { decimals: 0 })}${input.note ? ` (${input.note})` : ''}`,
-              ),
-              ...state.auditLogs,
-            ],
-          });
-          return { ok: true, id: input.id };
+          const updated = { ...vault, openingBalance: amount };
+          const audit = makeAudit(
+            state,
+            'vault',
+            input.id,
+            'update',
+            `ضبط رصيد افتتاحي — ${vault.name}: ${formatMoney(amount, { decimals: 0 })}${input.note ? ` (${input.note})` : ''}`,
+          );
+          const res = await mutateWithDb(
+            () =>
+              set((s) => ({
+                vaults: s.vaults.map((v) => (v.id === input.id ? updated : v)),
+                auditLogs: [audit, ...s.auditLogs],
+              })),
+            [{ table: 'cash_vaults', rows: [updated as unknown as Record<string, unknown>] }],
+          );
+          return res.ok ? { ok: true, id: input.id } : res;
         }
         const bank = state.banks.find((b) => b.id === input.id);
         if (!bank) return { ok: false, error: 'الحساب البنكي غير موجود.' };
-        set({
-          banks: state.banks.map((b) => (b.id === input.id ? { ...b, openingBalance: amount } : b)),
-          auditLogs: [
-            makeAudit(
-              state,
-              'bank',
-              input.id,
-              'update',
-              `ضبط رصيد افتتاحي — ${bank.bankName}: ${formatMoney(amount, { decimals: 0 })}${input.note ? ` (${input.note})` : ''}`,
-            ),
-            ...state.auditLogs,
-          ],
-        });
-        return { ok: true, id: input.id };
+        const updated = { ...bank, openingBalance: amount };
+        const audit = makeAudit(
+          state,
+          'bank',
+          input.id,
+          'update',
+          `ضبط رصيد افتتاحي — ${bank.bankName}: ${formatMoney(amount, { decimals: 0 })}${input.note ? ` (${input.note})` : ''}`,
+        );
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              banks: s.banks.map((b) => (b.id === input.id ? updated : b)),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'bank_accounts', rows: [updated as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id: input.id } : res;
       },
 
-      setSessionOpeningStock: (input) => {
+      setSessionOpeningStock: async (input) => {
         const state = get();
         const gate = requireOpenSession(state);
         if (!gate.ok || !gate.session) return gate;
@@ -1141,18 +1747,13 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           state.sessions,
         ).currentStock;
 
-        const sessions = state.sessions.map((s) =>
-          s.id === session.id ? { ...s, openingStock: qty, openingAvgCost: cost } : s,
-        );
-
-        const ledgerOpeningOnly =
-          session.id === earliest?.id && !hasMovements;
-
-        let adjustments = state.adjustments;
+        const updatedSession = { ...session, openingStock: qty, openingAvgCost: cost };
+        const ledgerOpeningOnly = session.id === earliest?.id && !hasMovements;
+        let newAdj: InventoryAdjustment | null = null;
         if (!ledgerOpeningOnly) {
           const delta = round(qty - stockBefore);
           if (Math.abs(delta) > 0.001) {
-            const adj: InventoryAdjustment = {
+            newAdj = {
               id: uid('adj-'),
               ref: nextRef('ADJ', state.adjustments),
               sessionId: session.id,
@@ -1162,28 +1763,34 @@ export const useErpStore = create<ErpState>()((set, get) => ({
               reason: input.note?.trim() || 'رصيد افتتاحي للدورة — متبقي من الدورة السابقة',
               createdAt: new Date().toISOString(),
             };
-            adjustments = [adj, ...adjustments];
           }
         }
 
-        set({
-          sessions,
-          adjustments,
-          auditLogs: [
-            makeAudit(
-              state,
-              'session',
-              session.id,
-              'update',
-              `ضبط مخزون افتتاحي للدورة «${session.label}»: ${formatLiters(qty, 0, false)} بمتوسط ${formatPricePerLiter(cost, 3)}`,
-            ),
-            ...state.auditLogs,
-          ],
-        });
-        return { ok: true, id: session.id };
+        const audit = makeAudit(
+          state,
+          'session',
+          session.id,
+          'update',
+          `ضبط مخزون افتتاحي للدورة «${session.label}»: ${formatLiters(qty, 0, false)} بمتوسط ${formatPricePerLiter(cost, 3)}`,
+        );
+        const dbOps: { table: string; rows: Record<string, unknown>[] }[] = [
+          { table: 'sessions', rows: [updatedSession as unknown as Record<string, unknown>] },
+        ];
+        if (newAdj) dbOps.push({ table: 'inventory_adjustments', rows: [newAdj as unknown as Record<string, unknown>] });
+
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              sessions: s.sessions.map((x) => (x.id === session.id ? updatedSession : x)),
+              adjustments: newAdj ? [newAdj, ...s.adjustments] : s.adjustments,
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          dbOps,
+        );
+        return res.ok ? { ok: true, id: session.id } : res;
       },
 
-      recordTransfer: (input) => {
+      recordTransfer: async (input) => {
         const state = get();
         const gate = requireOpenSession(state);
         if (!gate.ok) return gate;
@@ -1240,16 +1847,24 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           date,
           createdAt: new Date().toISOString(),
         };
-        set({
-          transfers: [transfer, ...state.transfers],
-          cashMovements: [inn, out, ...state.cashMovements],
-          auditLogs: [makeAudit(state, 'transfer', id, 'transfer', `تحويل ${formatMoney(amount, { decimals: 0 })} بين الحسابات`), ...state.auditLogs],
-        });
-        return { ok: true, id };
+        const audit = makeAudit(state, 'transfer', id, 'transfer', `تحويل ${formatMoney(amount, { decimals: 0 })} بين الحسابات`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              transfers: [transfer, ...s.transfers],
+              cashMovements: [inn, out, ...s.cashMovements],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [
+            { table: 'cash_transfers', rows: [transfer as unknown as Record<string, unknown>] },
+            { table: 'cash_movements', rows: [out, inn] as unknown as Record<string, unknown>[] },
+          ],
+        );
+        return res.ok ? { ok: true, id } : res;
       },
 
       // ── v3.0: المصاريف ───────────────────────────────────
-      recordExpense: (input) => {
+      recordExpense: async (input) => {
         const state = get();
         const gate = requireOpenSession(state);
         if (!gate.ok) return gate;
@@ -1292,12 +1907,215 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           date,
           createdAt: new Date().toISOString(),
         };
-        set({
-          expenses: [expense, ...state.expenses],
-          cashMovements: [cm, ...state.cashMovements],
-          auditLogs: [makeAudit(state, 'expense', id, 'create', `مصروف ${cat.name}: ${formatMoney(amount, { decimals: 0 })}`), ...state.auditLogs],
-        });
-        return { ok: true, id };
+        const audit = makeAudit(state, 'expense', id, 'create', `مصروف ${cat.name}: ${formatMoney(amount, { decimals: 0 })}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              expenses: [expense, ...s.expenses],
+              cashMovements: [cm, ...s.cashMovements],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [
+            { table: 'expenses', rows: [expense as unknown as Record<string, unknown>] },
+            { table: 'cash_movements', rows: [cm as unknown as Record<string, unknown>] },
+          ],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      updateExpense: async (id, patch) => {
+        const state = get();
+        const existing = state.expenses.find((e) => e.id === id);
+        if (!existing) return { ok: false, error: 'المصروف غير موجود.' };
+        const updated: Expense = {
+          ...existing,
+          ...patch,
+          amount: patch.amount != null ? round(patch.amount) : existing.amount,
+        };
+        if (updated.amount <= 0) return { ok: false, error: 'المبلغ غير صالح.' };
+        const cm = state.cashMovements.find((m) => m.referenceId === id && m.referenceType === 'expense');
+        const updatedCm = cm
+          ? { ...cm, amount: updated.amount, description: updated.description, date: updated.date }
+          : null;
+        const audit = makeAudit(state, 'expense', id, 'update', `تعديل مصروف ${existing.ref}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              expenses: s.expenses.map((e) => (e.id === id ? updated : e)),
+              cashMovements: updatedCm
+                ? s.cashMovements.map((m) => (m.id === updatedCm.id ? updatedCm : m))
+                : s.cashMovements,
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [
+            { table: 'expenses', rows: [updated as unknown as Record<string, unknown>] },
+            ...(updatedCm ? [{ table: 'cash_movements', rows: [updatedCm as unknown as Record<string, unknown>] }] : []),
+          ],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      deleteExpense: async (id) => {
+        const state = get();
+        const existing = state.expenses.find((e) => e.id === id);
+        if (!existing) return { ok: false, error: 'المصروف غير موجود.' };
+        const cmIds = state.cashMovements.filter((m) => m.referenceId === id).map((m) => m.id);
+        const audit = makeAudit(state, 'expense', id, 'delete', `حذف مصروف ${existing.ref}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              expenses: s.expenses.filter((e) => e.id !== id),
+              cashMovements: s.cashMovements.filter((m) => m.referenceId !== id),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [
+            { table: 'expenses', deletes: [id] },
+            ...(cmIds.length ? [{ table: 'cash_movements', deletes: cmIds }] : []),
+          ],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      addExpenseCategory: async (input) => {
+        const cat: ExpenseCategory = {
+          id: uid('cat-'),
+          name: input.name.trim(),
+          group: input.group,
+          budgetMonthly: input.budgetMonthly,
+          isRecurring: input.isRecurring ?? false,
+        };
+        if (!cat.name) return { ok: false, error: 'أدخل اسم التصنيف.' };
+        const res = await mutateWithDb(
+          () => set((s) => ({ expenseCategories: [...s.expenseCategories, cat] })),
+          [{ table: 'expense_categories', rows: [cat as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id: cat.id } : res;
+      },
+
+      updateExpenseCategory: async (id, patch) => {
+        const state = get();
+        const existing = state.expenseCategories.find((c) => c.id === id);
+        if (!existing) return { ok: false, error: 'التصنيف غير موجود.' };
+        const updated = { ...existing, ...patch };
+        const res = await mutateWithDb(
+          () => set((s) => ({ expenseCategories: s.expenseCategories.map((c) => (c.id === id ? updated : c)) })),
+          [{ table: 'expense_categories', rows: [updated as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      deleteExpenseCategory: async (id) => {
+        const state = get();
+        if (state.expenses.some((e) => e.categoryId === id))
+          return { ok: false, error: 'لا يمكن حذف تصنيف مرتبط بمصاريف.' };
+        const res = await mutateWithDb(
+          () => set((s) => ({ expenseCategories: s.expenseCategories.filter((c) => c.id !== id) })),
+          [{ table: 'expense_categories', deletes: [id] }],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      recordExternalIncome: async (input) => {
+        const state = get();
+        const gate = requireOpenSession(state);
+        if (!gate.ok) return gate;
+        if (input.amount <= 0) return { ok: false, error: 'المبلغ يجب أن يكون أكبر من صفر.' };
+        if (!input.description.trim()) return { ok: false, error: 'أدخل وصف المدخول.' };
+        const date = input.date ?? new Date().toISOString();
+        const id = uid('inc-');
+        const amount = round(input.amount);
+        const income: ExternalIncome = {
+          id,
+          ref: nextRef('INC', state.externalIncomes),
+          sessionId: state.activeSessionId,
+          date: date.slice(0, 10),
+          amount,
+          description: input.description.trim(),
+          destinationType: input.destinationType,
+          destinationId: input.destinationId,
+          createdAt: new Date().toISOString(),
+          createdBy: state.auth?.name,
+        };
+        const cm: CashMovement = {
+          id: uid('cm-'),
+          ref: nextRef('CM', state.cashMovements),
+          movementType: 'income',
+          sourceType: input.destinationType,
+          sourceId: input.destinationId,
+          amount,
+          direction: 'in',
+          referenceType: 'external_income',
+          referenceId: id,
+          description: input.description.trim(),
+          sessionId: state.activeSessionId,
+          date,
+          createdAt: new Date().toISOString(),
+          createdBy: state.auth?.name,
+        };
+        const audit = makeAudit(state, 'income', id, 'create', `مدخول خارجي: ${formatMoney(amount, { decimals: 0 })}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              externalIncomes: [income, ...s.externalIncomes],
+              cashMovements: [cm, ...s.cashMovements],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [
+            { table: 'external_incomes', rows: [income as unknown as Record<string, unknown>] },
+            { table: 'cash_movements', rows: [cm as unknown as Record<string, unknown>] },
+          ],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      updateExternalIncome: async (id, patch) => {
+        const state = get();
+        const existing = state.externalIncomes.find((i) => i.id === id);
+        if (!existing) return { ok: false, error: 'المدخول غير موجود.' };
+        const updated: ExternalIncome = {
+          ...existing,
+          ...patch,
+          amount: patch.amount != null ? round(patch.amount) : existing.amount,
+          date: patch.date ? patch.date.slice(0, 10) : existing.date,
+          description: patch.description?.trim() ?? existing.description,
+        };
+        const cm = state.cashMovements.find((m) => m.referenceId === id && m.referenceType === 'external_income');
+        const updatedCm = cm ? { ...cm, amount: updated.amount, description: updated.description, date: updated.date } : null;
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              externalIncomes: s.externalIncomes.map((i) => (i.id === id ? updated : i)),
+              cashMovements: updatedCm
+                ? s.cashMovements.map((m) => (m.id === updatedCm.id ? updatedCm : m))
+                : s.cashMovements,
+            })),
+          [
+            { table: 'external_incomes', rows: [updated as unknown as Record<string, unknown>] },
+            ...(updatedCm ? [{ table: 'cash_movements', rows: [updatedCm as unknown as Record<string, unknown>] }] : []),
+          ],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      deleteExternalIncome: async (id) => {
+        const state = get();
+        const existing = state.externalIncomes.find((i) => i.id === id);
+        if (!existing) return { ok: false, error: 'المدخول غير موجود.' };
+        const cmIds = state.cashMovements.filter((m) => m.referenceId === id).map((m) => m.id);
+        const audit = makeAudit(state, 'income', id, 'delete', `حذف مدخول ${existing.ref}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              externalIncomes: s.externalIncomes.filter((i) => i.id !== id),
+              cashMovements: s.cashMovements.filter((m) => m.referenceId !== id),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [
+            { table: 'external_incomes', deletes: [id] },
+            ...(cmIds.length ? [{ table: 'cash_movements', deletes: cmIds }] : []),
+          ],
+        );
+        return res.ok ? { ok: true, id } : res;
       },
 
       // ── v3.0: الموظفون والرواتب ──────────────────────────
@@ -1367,7 +2185,25 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         return { ok: true, id };
       },
 
-      createPayrollBatch: (input) => {
+      deleteEmployee: async (id) => {
+        const state = get();
+        const existing = state.employees.find((e) => e.id === id);
+        if (!existing) return { ok: false, error: 'الموظف غير موجود.' };
+        const block = employeeDeleteBlock(state, id);
+        if (block) return { ok: false, error: block };
+        const audit = makeAudit(state, 'employee', id, 'delete', `حذف موظف: ${existing.fullName}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              employees: s.employees.filter((e) => e.id !== id),
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'employees', deletes: [id] }],
+        );
+        return res.ok ? { ok: true, id } : res;
+      },
+
+      createPayrollBatch: async (input) => {
         const state = get();
         const gate = requireOpenSession(state);
         if (!gate.ok) return gate;
@@ -1407,14 +2243,19 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           createdBy: state.auth?.name,
           createdAt: new Date().toISOString(),
         };
-        set({
-          payrollBatches: [batch, ...state.payrollBatches],
-          auditLogs: [makeAudit(state, 'payroll', id, 'create', `إنشاء كشف رواتب: ${input.label}`), ...state.auditLogs],
-        });
-        return { ok: true, id };
+        const audit = makeAudit(state, 'payroll', id, 'create', `إنشاء كشف رواتب: ${input.label}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              payrollBatches: [batch, ...s.payrollBatches],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [{ table: 'payroll_batches', rows: [batch as unknown as Record<string, unknown>] }],
+        );
+        return res.ok ? { ok: true, id } : res;
       },
 
-      payPayrollBatch: (batchId, source) => {
+      payPayrollBatch: async (batchId, source) => {
         const state = get();
         const gate = requireOpenSession(state);
         if (!gate.ok) return gate;
@@ -1425,6 +2266,13 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         if (batch.totalAmount > bal + 0.001)
           return { ok: false, error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي لصرف الرواتب.` };
         const date = new Date().toISOString();
+        const updatedBatch: PayrollBatch = {
+          ...batch,
+          status: 'paid',
+          paidFromType: source.type,
+          paidFromId: source.id,
+          paidAt: date,
+        };
         const cm: CashMovement = {
           id: uid('cm-'),
           ref: nextRef('CM', state.cashMovements),
@@ -1440,14 +2288,20 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           date,
           createdAt: date,
         };
-        set({
-          payrollBatches: state.payrollBatches.map((b) =>
-            b.id === batchId ? { ...b, status: 'paid', paidFromType: source.type, paidFromId: source.id, paidAt: date } : b,
-          ),
-          cashMovements: [cm, ...state.cashMovements],
-          auditLogs: [makeAudit(state, 'payroll', batchId, 'pay', `صرف رواتب ${formatMoney(batch.totalAmount, { decimals: 0 })}`), ...state.auditLogs],
-        });
-        return { ok: true, id: batchId };
+        const audit = makeAudit(state, 'payroll', batchId, 'pay', `صرف رواتب ${formatMoney(batch.totalAmount, { decimals: 0 })}`);
+        const res = await mutateWithDb(
+          () =>
+            set((s) => ({
+              payrollBatches: s.payrollBatches.map((b) => (b.id === batchId ? updatedBatch : b)),
+              cashMovements: [cm, ...s.cashMovements],
+              auditLogs: [audit, ...s.auditLogs],
+            })),
+          [
+            { table: 'payroll_batches', rows: [updatedBatch as unknown as Record<string, unknown>] },
+            { table: 'cash_movements', rows: [cm as unknown as Record<string, unknown>] },
+          ],
+        );
+        return res.ok ? { ok: true, id: batchId } : res;
       },
 
       updateSettings: async (patch) => {
@@ -1491,6 +2345,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           employees: freshV3.employees,
           payrollBatches: freshV3.payrollBatches,
           auditLogs: freshV3.auditLogs,
+          externalIncomes: [],
         });
       },
 
@@ -1516,6 +2371,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           employees: blank.employees,
           payrollBatches: blank.payrollBatches,
           auditLogs: blank.auditLogs,
+          externalIncomes: [],
         });
       },
 

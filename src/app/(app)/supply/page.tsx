@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowDownToLine, Droplets, Lock, Banknote, Tractor, Receipt, Wallet, Sun, Moon } from 'lucide-react';
+import { ArrowDownToLine, Droplets, Lock, Banknote, Tractor, Receipt, Wallet, Sun, Moon, Pencil } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,9 @@ import { COPY, MILK_SHIFT_LABELS, QUALITY_LABELS, QUALITY_VARIANT, PAYMENT_METHO
 import type { MilkShift, PaymentMethod, QualityTier } from '@/lib/domain/types';
 import { formatShortDate } from '@/lib/utils';
 import { formatLiters, formatMoney } from '@/lib/format-currency';
+import { RowDeleteButton } from '@/components/shared/row-delete-button';
+import { SupplyEditDialog } from '@/components/supply/supply-edit-dialog';
+import type { SupplyTransaction } from '@/lib/domain/types';
 
 const C = COPY.collection;
 
@@ -39,7 +42,9 @@ export default function SupplyPage() {
   const data = useErpData();
   const d = useDerived();
   const recordSupply = useErpStore((s) => s.recordSupply);
+  const deleteSupply = useErpStore((s) => s.deleteSupply);
   const canSupply = usePermission('supply.record');
+  const [editSupply, setEditSupply] = useState<SupplyTransaction | null>(null);
 
   const sessionLocked = d.activeSession?.status === 'archived';
   const activeFarmers = useMemo(
@@ -112,8 +117,9 @@ export default function SupplyPage() {
       if (payVal > sourceBalance + 0.001) return toast.error('رصيد الحساب لا يكفي.');
     }
 
-    const hour = milkShift === 'evening' ? 17 : 6;
-    const res = recordSupply({
+    void (async () => {
+      const hour = milkShift === 'evening' ? 17 : 6;
+      const res = await recordSupply({
       farmerId,
       quantity: qty,
       unitPrice: price,
@@ -131,17 +137,18 @@ export default function SupplyPage() {
             settlementComplete: settleFull,
           }
         : undefined,
-    });
-    if (res.ok) {
-      toast.success(C.success, {
-        description: payNow
-          ? `${MILK_SHIFT_LABELS[milkShift]} · ${formatLiters(qty, 0, false)} + دفع فوري ${formatMoney(payVal, { decimals: 0 })}`
-          : `${MILK_SHIFT_LABELS[milkShift]} · ${formatLiters(qty, 0, false)} — ${selectedFarmer?.fullName}`,
       });
-      reset();
-    } else {
-      toast.error(res.error ?? 'تعذّر التسجيل');
-    }
+      if (res.ok) {
+        toast.success(C.success, {
+          description: payNow
+            ? `${MILK_SHIFT_LABELS[milkShift]} · ${formatLiters(qty, 0, false)} + دفع فوري ${formatMoney(payVal, { decimals: 0 })}`
+            : `${MILK_SHIFT_LABELS[milkShift]} · ${formatLiters(qty, 0, false)} — ${selectedFarmer?.fullName}`,
+        });
+        reset();
+      } else {
+        toast.error(res.error ?? 'تعذّر التسجيل');
+      }
+    })();
   }
 
   const sessionSupplies = useMemo(
@@ -347,6 +354,7 @@ export default function SupplyPage() {
                     <TableHead className="text-center">الجودة</TableHead>
                     <TableHead className="text-left">الكمية</TableHead>
                     <TableHead className="text-left">الإجمالي</TableHead>
+                    <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -374,6 +382,22 @@ export default function SupplyPage() {
                         <TableCell className="text-left">
                           <Money value={s.total} className="text-[13px] font-semibold" />
                         </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-1">
+                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditSupply(s)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <RowDeleteButton
+                              label={s.ref}
+                              onConfirm={async () => {
+                                const res = await deleteSupply(s.id);
+                                if (res.ok) toast.success('تم حذف الاستلام');
+                                else toast.error(res.error ?? 'تعذّر الحذف');
+                                return res;
+                              }}
+                            />
+                          </div>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -385,6 +409,7 @@ export default function SupplyPage() {
           </CardContent>
         </Card>
       </div>
+      <SupplyEditDialog open={!!editSupply} onOpenChange={(o) => !o && setEditSupply(null)} supply={editSupply} />
     </div>
   );
 }

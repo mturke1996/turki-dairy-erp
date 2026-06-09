@@ -33,12 +33,12 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
   const signed = direction === 'decrease' ? -qtyAbs : qtyAbs;
   const projected = currentStock + signed;
 
-  function submit() {
+  async function submit() {
     if (qtyAbs <= 0) return toast.error('أدخل كمية التسوية.');
     if (direction === 'decrease' && qtyAbs > currentStock + 0.001) {
       return toast.error('كمية النقص تتجاوز المخزون المتاح.');
     }
-    const res = addAdjustment({
+    const res = await addAdjustment({
       quantity: signed,
       unitCost: Number(unitCost) || wac,
       reason: reason.trim(),

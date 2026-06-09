@@ -37,9 +37,9 @@ export function OpeningBalanceDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   accounts: AccountRow[];
-  onSave: (rows: { type: AccountSourceType; id: string; openingBalance: number }[]) => void;
-  onAddVault: (input: { name: string; openingBalance: number }) => { ok: boolean; error?: string };
-  onAddBank: (input: { bankName: string; accountNumber: string; accountHolder: string; openingBalance: number }) => { ok: boolean; error?: string };
+  onSave: (rows: { type: AccountSourceType; id: string; openingBalance: number }[]) => void | Promise<void>;
+  onAddVault: (input: { name: string; openingBalance: number }) => Promise<{ ok: boolean; error?: string }>;
+  onAddBank: (input: { bankName: string; accountNumber: string; accountHolder: string; openingBalance: number }) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [note, setNote] = useState('متبقي حتى 30/5 — بداية التسجيل 1/6');
@@ -80,20 +80,25 @@ export function OpeningBalanceDialog({
     const bal = Number(newOpening) || 0;
     if (bal <= 0) return toast.error('أدخل رصيداً افتتاحياً أكبر من صفر');
     setBusy(true);
-    const res =
-      mode === 'new-vault'
-        ? onAddVault({ name: vaultName.trim() || 'الخزنة الرئيسية', openingBalance: bal })
-        : onAddBank({
-            bankName: bankName.trim() || 'مصرف',
-            accountNumber: bankNumber.trim() || '0000',
-            accountHolder: bankHolder.trim() || 'مصنع التركي',
-            openingBalance: bal,
-          });
-    setBusy(false);
-    if (!res.ok) return toast.error(res.error ?? 'تعذّرت الإضافة');
-    toast.success('تم إنشاء الحساب', { description: moneyText(bal, 0) });
-    setNewOpening('');
-    setMode('existing');
+    void (async () => {
+      try {
+        const res =
+          mode === 'new-vault'
+            ? await onAddVault({ name: vaultName.trim() || 'الخزنة الرئيسية', openingBalance: bal })
+            : await onAddBank({
+                bankName: bankName.trim() || 'مصرف',
+                accountNumber: bankNumber.trim() || '0000',
+                accountHolder: bankHolder.trim() || 'مصنع التركي',
+                openingBalance: bal,
+              });
+        if (!res.ok) return toast.error(res.error ?? 'تعذّرت الإضافة');
+        toast.success('تم إنشاء الحساب', { description: moneyText(bal, 0) });
+        setNewOpening('');
+        setMode('existing');
+      } finally {
+        setBusy(false);
+      }
+    })();
   }
 
   return (

@@ -1,6 +1,7 @@
 'use client';
 
 import { CalendarRange } from 'lucide-react';
+import { toast } from 'sonner';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { sessionDisplayLabel } from '@/lib/domain/cycle';
 import {
@@ -22,7 +23,15 @@ export function SessionSwitcher() {
   const active = ordered.find((s) => s.id === activeSessionId);
 
   return (
-    <Select value={activeSessionId} onValueChange={setActiveSession}>
+    <Select
+      value={activeSessionId}
+      onValueChange={(id) => {
+        void (async () => {
+          const res = await setActiveSession(id);
+          if (!res.ok) toast.error(res.error ?? 'تعذّر تبديل الدورة');
+        })();
+      }}
+    >
       <SelectTrigger
         className={cn(
           'h-9 shrink-0 gap-1.5 bg-card px-2 sm:px-3',

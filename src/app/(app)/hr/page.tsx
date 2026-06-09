@@ -408,8 +408,8 @@ function HrContent() {
         open={batchOpen}
         onOpenChange={setBatchOpen}
         count={active.length}
-        onSubmit={(input) => {
-          const res = createPayrollBatch(input);
+        onSubmit={async (input) => {
+          const res = await createPayrollBatch(input);
           if (res.ok) {
             toast.success('تم إنشاء كشف الرواتب');
             setBatchOpen(false);
@@ -422,8 +422,8 @@ function HrContent() {
         onClose={() => setPayTarget(null)}
         vaults={vaults}
         banks={banks}
-        onPay={(batchId, source) => {
-          const res = payPayrollBatch(batchId, source);
+        onPay={async (batchId, source) => {
+          const res = await payPayrollBatch(batchId, source);
           if (res.ok) {
             toast.success('تم صرف الرواتب');
             setPayTarget(null);

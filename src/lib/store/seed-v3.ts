@@ -37,6 +37,13 @@ export const DEFAULT_EXPENSE_CATEGORIES: ExpenseCategory[] = [
   { id: 'cat-comm', name: 'اتصالات وإنترنت', group: 'admin', budgetMonthly: 800, isRecurring: true },
   { id: 'cat-gov', name: 'رسوم وتراخيص', group: 'admin', isRecurring: false },
   { id: 'cat-salary', name: 'رواتب وأجور', group: 'labor', isRecurring: true },
+  { id: 'cat-daily', name: 'مصاريف يومية', group: 'daily_life', isRecurring: true },
+  { id: 'cat-barn', name: 'مصاريف الحوش', group: 'barn', isRecurring: true },
+  { id: 'cat-osama', name: 'مصاريف أسامة', group: 'personal', isRecurring: true },
+  { id: 'cat-oweis', name: 'مصاريف أويس', group: 'personal', isRecurring: true },
+  { id: 'cat-factory-daily', name: 'مصاريف مصنعية يومية', group: 'factory', isRecurring: true },
+  { id: 'cat-factory-maint', name: 'صيانة المصنع', group: 'factory', isRecurring: false },
+  { id: 'cat-household', name: 'مصاريف منزلية', group: 'daily_life', isRecurring: true },
 ];
 
 export function emptyV3(): SeedV3 {

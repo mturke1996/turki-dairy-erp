@@ -29,6 +29,8 @@ const KIND_LABEL: Record<TransactionKind, string> = {
   adjustment: 'تسوية',
   expense: 'مصروف',
   payroll: 'رواتب',
+  debt: 'دين / تسوية',
+  external_income: 'مدخول خارجي',
 };
 
 export default function ReportsPage() {

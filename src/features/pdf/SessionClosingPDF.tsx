@@ -50,6 +50,7 @@ export type SessionClosingProps = {
   carryForward: { openingStock: number; payables: number; receivables: number };
   farmerBalances?: { name: string; balance: number }[];
   customerBalances?: { name: string; balance: number }[];
+  employeeBalances?: { name: string; balance: number }[];
 };
 
 function Stat({ title, value, sub, color = PDF.primary }: any) {
@@ -62,7 +63,7 @@ function Stat({ title, value, sub, color = PDF.primary }: any) {
   );
 }
 
-export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], customerBalances = [] }: SessionClosingProps) {
+export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], customerBalances = [], employeeBalances = [] }: SessionClosingProps) {
   return (
     <ReportShell
       title="تقرير إغلاق فترة"
@@ -125,6 +126,22 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
         </>
       )}
 
+      {employeeBalances.length > 0 && (
+        <>
+          <Text style={s.section}>{ar('سلف الموظفين المُرحّلة')}</Text>
+          <View style={s.head}>
+            <Text style={[s.th, { flex: 3, textAlign: 'right' }]}>{ar('الموظف')}</Text>
+            <Text style={[s.th, { flex: 1.4, textAlign: 'left' }]}>{ar('الرصيد (د.ل)')}</Text>
+          </View>
+          {employeeBalances.slice(0, 12).map((b, i) => (
+            <View key={i} style={[s.row, i % 2 === 1 && s.rowAlt]}>
+              <Text style={[s.td, { flex: 3, textAlign: 'right' }]}>{ar(b.name)}</Text>
+              <Text style={[s.td, { flex: 1.4, textAlign: 'left', fontWeight: 'bold' }]}>{ar(pdfFmtNum(b.balance))}</Text>
+            </View>
+          ))}
+        </>
+      )}
+
       {/* المرحّل للفترة القادمة */}
       <View style={s.carry} wrap={false}>
         <View style={s.carryCell}>
@@ -136,7 +153,7 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
           <Text style={s.carryValue} dir="ltr">{ar(pdfFmtMoneyLibyan(carryForward.payables, 0))}</Text>
         </View>
         <View style={s.carryCell}>
-          <Text style={s.carryLabel}>{ar('ديون العملاء')}</Text>
+          <Text style={s.carryLabel}>{ar('ديون لنا')}</Text>
           <Text style={s.carryValue} dir="ltr">{ar(pdfFmtMoneyLibyan(carryForward.receivables, 0))}</Text>
         </View>
       </View>

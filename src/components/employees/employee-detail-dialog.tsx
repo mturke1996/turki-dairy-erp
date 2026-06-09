@@ -23,6 +23,8 @@ import {
 } from '@/lib/domain/constants';
 import type { EmployeeStats } from '@/lib/domain/calculations';
 import { formatShortDate } from '@/lib/utils';
+import { RowDeleteButton } from '@/components/shared/row-delete-button';
+import { PartyDeleteButton } from '@/components/shared/party-delete-button';
 import { toast } from 'sonner';
 
 const STATUS_VARIANT = { active: 'success', on_leave: 'warning', terminated: 'neutral' } as const;
@@ -50,6 +52,8 @@ export function EmployeeDetailDialog({
   const vaults = useErpStore((s) => s.vaults);
   const banks = useErpStore((s) => s.banks);
   const updateEmployee = useErpStore((s) => s.updateEmployee);
+  const deleteEmployee = useErpStore((s) => s.deleteEmployee);
+  const deletePayment = useErpStore((s) => s.deletePayment);
   const recordEmployeeAdvance = useErpStore((s) => s.recordEmployeeAdvance);
   const canPay = usePermission('payroll.pay');
 
@@ -135,6 +139,14 @@ export function EmployeeDetailDialog({
               <Pencil className="h-4 w-4" />
               تعديل
             </Button>
+            <PartyDeleteButton
+              label={`الموظف ${employee.fullName}`}
+              onConfirm={async () => {
+                const res = await deleteEmployee(raw.id);
+                if (res.ok) onOpenChange(false);
+                return res;
+              }}
+            />
             {canPay && employee.status === 'active' ? (
               <Button size="sm" onClick={() => setAdvanceOpen(true)}>
                 <Banknote className="h-4 w-4" />
@@ -206,6 +218,7 @@ export function EmployeeDetailDialog({
                       <TableHead className="text-left">المبلغ</TableHead>
                       <TableHead>الطريقة</TableHead>
                       <TableHead>ملاحظات</TableHead>
+                      <TableHead />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -215,6 +228,17 @@ export function EmployeeDetailDialog({
                         <TableCell className="text-left"><Money value={p.amount} decimals={0} className="font-semibold" /></TableCell>
                         <TableCell className="text-[12px]">{PAYMENT_METHOD_LABELS[p.method]}</TableCell>
                         <TableCell className="text-[12px] text-muted-foreground">{p.notes ?? '—'}</TableCell>
+                        <TableCell>
+                          <RowDeleteButton
+                            label={p.ref}
+                            onConfirm={async () => {
+                              const res = await deletePayment(p.id);
+                              if (res.ok) toast.success('تم حذف السلفة');
+                              else toast.error(res.error ?? 'تعذّر الحذف');
+                              return res;
+                            }}
+                          />
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -249,11 +273,13 @@ export function EmployeeDetailDialog({
         vaults={vaults}
         banks={banks}
         onSubmit={(input) => {
-          const res = recordEmployeeAdvance(input);
-          if (res.ok) {
-            toast.success('تم تسجيل الدين');
-            setAdvanceOpen(false);
-          } else toast.error(res.error ?? 'تعذّر التسجيل');
+          void (async () => {
+            const res = await recordEmployeeAdvance(input);
+            if (res.ok) {
+              toast.success('تم تسجيل الدين');
+              setAdvanceOpen(false);
+            } else toast.error(res.error ?? 'تعذّر التسجيل');
+          })();
         }}
       />
     </>

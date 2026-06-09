@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Search,
   Tractor,
   Building2,
   Users,
+  Globe,
   Scale,
   ArrowDownLeft,
   ArrowUpRight,
@@ -23,15 +24,20 @@ import { FarmerDetailDialog } from '@/components/farmers/farmer-detail-dialog';
 import { CustomerDetailDialog } from '@/components/customers/customer-detail-dialog';
 import { EmployeeDetailDialog } from '@/components/employees/employee-detail-dialog';
 import { DebtFormDialog } from '@/components/debts/debt-form-dialog';
-import { useDerived } from '@/lib/store/use-derived';
+import { DebtEntriesTable } from '@/components/debts/debt-entries-table';
+import { useDerived, useErpData } from '@/lib/store/use-derived';
 import { DEBT_PARTY_LABELS } from '@/lib/domain/constants';
+import { DEBT_DIRECTION_LABELS, debtRemainingAmount, resolveDebtDirection } from '@/lib/domain/debt';
+import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
+import { DebtsRegisterPDF } from '@/features/pdf/DebtsRegisterPDF';
 import type { DebtPartyKind, DebtLedgerRow } from '@/lib/domain/calculations';
 import { cn } from '@/lib/utils';
+import { round } from '@/lib/domain/inventory';
 
 type FilterKind = 'all' | DebtPartyKind;
 
-const KIND_ICON = { farmer: Tractor, customer: Building2, employee: Users } as const;
-const KIND_VARIANT = { farmer: 'warning', customer: 'info', employee: 'neutral' } as const;
+const KIND_ICON = { farmer: Tractor, customer: Building2, employee: Users, external: Globe } as const;
+const KIND_VARIANT = { farmer: 'warning', customer: 'info', employee: 'neutral', external: 'neutral' } as const;
 
 function BalanceOverview({
   payables,
@@ -161,12 +167,14 @@ function DebtSection({
 
 export default function DebtsPage() {
   const d = useDerived();
+  const data = useErpData();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKind>('all');
   const [addOpen, setAddOpen] = useState(false);
   const [farmerId, setFarmerId] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const entriesRef = useRef<HTMLDivElement>(null);
 
   const payables = useMemo(
     () => d.debts.rows.filter((r) => r.direction === 'payable').sort((a, b) => b.balance - a.balance),
@@ -197,11 +205,43 @@ export default function DebtsPage() {
       farmer: d.debts.rows.filter((r) => r.kind === 'farmer').length,
       customer: d.debts.rows.filter((r) => r.kind === 'customer').length,
       employee: d.debts.rows.filter((r) => r.kind === 'employee').length,
+      external: d.debts.rows.filter((r) => r.kind === 'external').length,
     }),
     [d.debts.rows],
   );
 
+  const debtPdfRows = useMemo(
+    () =>
+      d.debts.entries.map((e) => {
+        const dir = resolveDebtDirection(e);
+        const remaining = debtRemainingAmount(e);
+        const original = round((e.amount ?? 0) + (e.settledAmount ?? 0));
+        let partyLabel = e.partyName ?? '—';
+        if (e.partyKind === 'farmer') partyLabel = data.farmers.find((f) => f.id === e.partyId)?.fullName ?? partyLabel;
+        else if (e.partyKind === 'customer') partyLabel = data.customers.find((c) => c.id === e.partyId)?.entityName ?? partyLabel;
+        else if (e.partyKind === 'employee') partyLabel = data.employees.find((x) => x.id === e.partyId)?.fullName ?? partyLabel;
+        return {
+          ref: e.ref,
+          date: e.date,
+          partyLabel,
+          partyKindLabel: DEBT_PARTY_LABELS[e.partyKind],
+          directionLabel: DEBT_DIRECTION_LABELS[dir],
+          originalAmount: original,
+          remaining,
+          settled: e.settledAmount ?? 0,
+          description: e.description,
+        };
+      }),
+    [d.debts.entries, data.farmers, data.customers, data.employees],
+  );
+
   function openRow(row: DebtLedgerRow) {
+    if (row.kind === 'external') {
+      setFilter('external');
+      setQuery(row.name);
+      entriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     if (row.kind === 'farmer') setFarmerId(row.id);
     else if (row.kind === 'customer') setCustomerId(row.id);
     else setEmployeeId(row.id);
@@ -212,12 +252,29 @@ export default function DebtsPage() {
       <PageHeader
         eyebrow="المالية"
         title="الديون"
-        description="مركز موحّد لكل الديون — فلاحون، عملاء، موظفون. سجّل ديناً جديداً أو اضغط أي طرف للتفاصيل والسداد."
+        description="مركز موحّد لكل الديون — سجّل ديناً جديداً، أو «تسوية» لدين قائم من الجدول، أو اضغط أي طرف للتفاصيل."
         actions={
-          <Button type="button" className="w-full sm:w-auto" onClick={() => setAddOpen(true)}>
-            <Plus className="h-4 w-4" />
-            تسجيل دين
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <TurkiPdfToolbar
+              fileName="سجل-الديون"
+              label="PDF"
+              variant="secondary"
+              disabled={debtPdfRows.length === 0}
+              render={async () => (
+                <DebtsRegisterPDF
+                  sessionLabel={d.activeSession?.label}
+                  totalPayables={d.debts.totalPayables}
+                  totalReceivables={d.debts.totalReceivables}
+                  netPosition={d.debts.netPosition}
+                  rows={debtPdfRows}
+                />
+              )}
+            />
+            <Button type="button" className="w-full sm:w-auto" onClick={() => setAddOpen(true)}>
+              <Plus className="h-4 w-4" />
+              تسجيل دين
+            </Button>
+          </div>
         }
       />
 
@@ -266,7 +323,7 @@ export default function DebtsPage() {
           </div>
 
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 no-scrollbar">
-            {(['all', 'farmer', 'customer', 'employee'] as FilterKind[]).map((k) => (
+            {(['all', 'farmer', 'customer', 'employee', 'external'] as FilterKind[]).map((k) => (
               <button
                 key={k}
                 type="button"
@@ -348,6 +405,18 @@ export default function DebtsPage() {
           )}
         </CardContent>
       </Card>
+
+      {d.debts.entries.length > 0 ? (
+        <Card ref={entriesRef}>
+          <CardHeader>
+            <CardTitle className="text-[15px]">سجل الديون المسجّلة</CardTitle>
+            <CardDescription>تعديل، تسوية، أو حذف أي دين يدوي — زر «تسوية» يسدّد الدين ويربط الخزينة</CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <DebtEntriesTable entries={d.debts.entries} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <DebtFormDialog open={addOpen} onOpenChange={setAddOpen} />
       <FarmerDetailDialog farmerId={farmerId} open={!!farmerId} onOpenChange={(o) => !o && setFarmerId(null)} />

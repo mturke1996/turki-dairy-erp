@@ -12,7 +12,10 @@
 
 import type {
   AccountKey,
+  CashMovement,
+  DebtEntry,
   Expense,
+  ExternalIncome,
   InventoryAdjustment,
   JournalEntry,
   JournalLine,
@@ -21,6 +24,7 @@ import type {
   SaleTransaction,
   SupplyTransaction,
 } from './types';
+import { debtRemainingAmount, resolveDebtDirection } from './debt';
 import { round } from './inventory';
 
 function line(account: AccountKey, debit: number, credit: number): JournalLine {
@@ -73,6 +77,18 @@ export function journalForPayment(p: Payment): JournalEntry | null {
       sourceId: p.id,
       description: 'دفع مستحقات لفلاح',
       lines: [line('farmer_payable', p.amount, 0), line('cash', 0, p.amount)],
+    };
+  }
+  if (p.kind === 'employee_advance') {
+    return {
+      id: `JE-${p.id}`,
+      ref: p.ref,
+      date: p.date,
+      sessionId: p.sessionId,
+      kind: 'employee_advance',
+      sourceId: p.id,
+      description: 'سلفة موظف',
+      lines: [line('other_receivable', p.amount, 0), line('cash', 0, p.amount)],
     };
   }
   return {
@@ -137,6 +153,76 @@ export function journalForAdjustment(a: InventoryAdjustment): JournalEntry {
     sourceId: a.id,
     description: a.reason,
     lines: [line('operating_expense', value, 0), line('inventory', 0, value)],
+  };
+}
+
+function receivableAccount(d: DebtEntry): AccountKey {
+  if (d.partyKind === 'customer') return 'customer_receivable';
+  return 'other_receivable';
+}
+
+function payableAccount(d: DebtEntry): AccountKey {
+  if (d.partyKind === 'farmer') return 'farmer_payable';
+  return 'other_payable';
+}
+
+/** قيد تسجيل دين يدوي (رصيد افتتاحي أو مستقل). */
+export function journalForDebtEntry(d: DebtEntry): JournalEntry | null {
+  const amount = debtRemainingAmount(d);
+  if (amount <= 0.01) return null;
+  const dir = resolveDebtDirection(d);
+  const lines: JournalLine[] =
+    dir === 'payable'
+      ? [line('opening_equity', amount, 0), line(payableAccount(d), 0, amount)]
+      : [line(receivableAccount(d), amount, 0), line('opening_equity', 0, amount)];
+  return {
+    id: `JE-${d.id}`,
+    ref: d.ref,
+    date: d.date,
+    sessionId: d.sessionId,
+    kind: 'debt',
+    sourceId: d.id,
+    description: d.description ?? 'دين مسجّل',
+    lines,
+  };
+}
+
+/** قيد مدخول خارج الخدمة. */
+export function journalForExternalIncome(inc: ExternalIncome): JournalEntry {
+  return {
+    id: `JE-${inc.id}`,
+    ref: inc.ref,
+    date: inc.date,
+    sessionId: inc.sessionId,
+    kind: 'external_income',
+    sourceId: inc.id,
+    description: inc.description,
+    lines: [line('cash', inc.amount, 0), line('revenue', 0, inc.amount)],
+  };
+}
+
+/** قيد تسوية دين مرتبط بحركة نقدية. */
+export function journalForDebtSettlement(cm: CashMovement, debt: DebtEntry | undefined): JournalEntry | null {
+  if (cm.referenceType !== 'debt' || !debt) return null;
+  const amount = cm.amount;
+  const dir = resolveDebtDirection(debt);
+  const lines: JournalLine[] =
+    cm.direction === 'out'
+      ? dir === 'payable'
+        ? [line(payableAccount(debt), amount, 0), line('cash', 0, amount)]
+        : [line('cash', amount, 0), line(receivableAccount(debt), 0, amount)]
+      : dir === 'receivable'
+        ? [line('cash', amount, 0), line(receivableAccount(debt), 0, amount)]
+        : [line(payableAccount(debt), amount, 0), line('cash', 0, amount)];
+  return {
+    id: `JE-${cm.id}`,
+    ref: cm.ref,
+    date: cm.date,
+    sessionId: cm.sessionId,
+    kind: 'debt',
+    sourceId: debt.id,
+    description: cm.description,
+    lines,
   };
 }
 

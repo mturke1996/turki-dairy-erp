@@ -64,6 +64,7 @@ function snapshotFromStore(): ErpSnapshot {
     employees: s.employees,
     payrollBatches: s.payrollBatches,
     auditLogs: s.auditLogs,
+    externalIncomes: s.externalIncomes,
     settings: s.settings,
   };
 }
@@ -383,11 +384,12 @@ export function applyLocalDbWrite(update: () => void) {
 
 /** كتابة DB أولاً ثم تحديث الواجهة — للإضافة/التعديل الفوري بين الأجهزة */
 export async function persistMutation(
-  ops: { table: string; rows: Record<string, unknown>[] }[],
+  ops: { table: string; rows?: Record<string, unknown>[]; deletes?: string[] }[],
   update: () => void,
 ): Promise<void> {
   for (const op of ops) {
-    if (op.rows.length) await upsertRows(op.table, op.rows);
+    if (op.rows?.length) await upsertRows(op.table, op.rows);
+    if (op.deletes?.length) await deleteRows(op.table, op.deletes);
   }
   applyLocalDbWrite(update);
 }

@@ -7,7 +7,10 @@ import {
   buildTrialBalance,
   computePnL,
   journalForAdjustment,
+  journalForDebtEntry,
+  journalForDebtSettlement,
   journalForExpense,
+  journalForExternalIncome,
   journalForPayment,
   journalForPayroll,
   journalForSale,
@@ -15,6 +18,7 @@ import {
 } from './accounting';
 import { buildInventoryLedger, round, type InventoryResult } from './inventory';
 import { computeTreasury } from './treasury';
+import { debtBalanceContribution, resolveDebtDirection } from './debt';
 import type {
   BankAccount,
   CashMovement,
@@ -24,6 +28,7 @@ import type {
   DebtPartyKind,
   Employee,
   Expense,
+  ExternalIncome,
   Farmer,
   InventoryAdjustment,
   JournalEntry,
@@ -31,6 +36,7 @@ import type {
   PayrollBatch,
   SaleTransaction,
   Session,
+  SessionCarryForwardBalances,
   SupplyTransaction,
   SystemAlert,
 } from './types';
@@ -51,6 +57,7 @@ export interface ErpData {
   vaults: CashVault[];
   banks: BankAccount[];
   cashMovements: CashMovement[];
+  externalIncomes?: ExternalIncome[];
   settings: { minStockThreshold: number; defaultBuyPrice: number; defaultSellPrice: number };
 }
 
@@ -106,10 +113,13 @@ export interface DebtSummary {
   farmerPayables: number;
   customerReceivables: number;
   employeeAdvances: number;
+  externalPayables: number;
+  externalReceivables: number;
   totalPayables: number;
   totalReceivables: number;
   netPosition: number;
   rows: DebtLedgerRow[];
+  entries: DebtEntry[];
 }
 
 export interface AgingBuckets {
@@ -134,7 +144,9 @@ export function computeFarmerStats(
   const fs = supplies.filter((s) => s.farmerId === farmer.id);
   const ps = payments.filter((p) => p.kind === 'farmer_payment' && p.partyId === farmer.id);
   const manualDebt = sum(
-    debtEntries.filter((d) => d.partyKind === 'farmer' && d.partyId === farmer.id).map((d) => d.amount),
+    debtEntries
+      .filter((d) => d.partyKind === 'farmer' && d.partyId === farmer.id)
+      .map((d) => debtBalanceContribution(d)),
   );
   const totalSupplyValue = sum(fs.map((s) => s.total));
   const totalSupplied = sum(fs.map((s) => s.quantity));
@@ -164,6 +176,8 @@ export interface FarmerSessionStats {
   sessionId: string;
   fullName: string;
   code: string;
+  /** رصيد مُرحّل من الدورة السابقة */
+  carriedForward: number;
   suppliedQty: number;
   sampleQty: number;
   billableQty: number;
@@ -175,25 +189,48 @@ export interface FarmerSessionStats {
   paymentCount: number;
 }
 
+type SessionScope = Pick<Session, 'id' | 'carryForwardBalances'>;
+
+function sessionScope(session: SessionScope | string): SessionScope {
+  return typeof session === 'string' ? { id: session } : session;
+}
+
+function carriedFarmerBalance(session: SessionScope, farmerId: string): number {
+  return round(session.carryForwardBalances?.farmers.find((f) => f.id === farmerId)?.balance ?? 0);
+}
+
+function carriedCustomerBalance(session: SessionScope, customerId: string): number {
+  return round(session.carryForwardBalances?.customers.find((c) => c.id === customerId)?.balance ?? 0);
+}
+
 export function computeFarmerSessionStats(
   farmer: Farmer,
-  sessionId: string,
+  session: SessionScope | string,
   supplies: SupplyTransaction[],
   payments: Payment[],
+  debtEntries: DebtEntry[] = [],
 ): FarmerSessionStats {
+  const scope = sessionScope(session);
+  const sessionId = scope.id;
+  const carried = carriedFarmerBalance(scope, farmer.id);
   const fs = supplies.filter((s) => s.farmerId === farmer.id && s.sessionId === sessionId);
   const ps = payments.filter(
     (p) => p.kind === 'farmer_payment' && p.partyId === farmer.id && p.sessionId === sessionId,
+  );
+  const manualDebt = sum(
+    debtEntries
+      .filter((d) => d.partyKind === 'farmer' && d.partyId === farmer.id && d.sessionId === sessionId)
+      .map((d) => debtBalanceContribution(d)),
   );
   const suppliedQty = sum(fs.map((s) => s.quantity));
   const sampleQty = sum(fs.map((s) => s.sampleQty ?? 0));
   const billableQty = round(suppliedQty - sampleQty);
   const suppliedValue = sum(fs.map((s) => s.total));
   const paidAmount = sum(ps.map((p) => p.amount));
-  const balance = round(Math.max(0, suppliedValue - paidAmount));
+  const balance = round(Math.max(0, carried + suppliedValue - paidAmount + manualDebt));
 
   let status: FarmerSessionStats['status'] = 'none';
-  if (suppliedValue > 0.01) {
+  if (suppliedValue > 0.01 || carried > 0.01) {
     if (balance <= 0.01 || ps.some((p) => p.settlementComplete)) status = 'paid';
     else if (paidAmount > 0.01) status = 'partial';
     else status = 'pending';
@@ -204,6 +241,7 @@ export function computeFarmerSessionStats(
     sessionId,
     fullName: farmer.fullName,
     code: farmer.code,
+    carriedForward: carried,
     suppliedQty: round(suppliedQty),
     sampleQty: round(sampleQty),
     billableQty,
@@ -216,11 +254,152 @@ export function computeFarmerSessionStats(
   };
 }
 
-export function allFarmerSessionStats(data: ErpData, sessionId: string): FarmerSessionStats[] {
+export function allFarmerSessionStats(data: ErpData, session: SessionScope | string): FarmerSessionStats[] {
+  const scope = sessionScope(session);
   return data.farmers
-    .map((f) => computeFarmerSessionStats(f, sessionId, data.supplies, data.payments))
-    .filter((s) => s.supplyCount > 0 || s.paymentCount > 0)
+    .map((f) => computeFarmerSessionStats(f, scope, data.supplies, data.payments, data.debtEntries ?? []))
+    .filter((s) => s.supplyCount > 0 || s.paymentCount > 0 || s.carriedForward > 0.01)
     .sort((a, b) => b.balance - a.balance);
+}
+
+/** إحصاءات عميل ضمن دورة — للتسوية وترحيل الذمم. */
+export interface CustomerSessionStats {
+  customerId: string;
+  sessionId: string;
+  entityName: string;
+  code: string;
+  carriedForward: number;
+  soldQty: number;
+  soldValue: number;
+  receivedAmount: number;
+  balance: number;
+  status: 'pending' | 'partial' | 'paid' | 'none';
+  saleCount: number;
+  paymentCount: number;
+}
+
+export function computeCustomerSessionStats(
+  customer: Customer,
+  session: SessionScope | string,
+  sales: SaleTransaction[],
+  payments: Payment[],
+  debtEntries: DebtEntry[] = [],
+): CustomerSessionStats {
+  const scope = sessionScope(session);
+  const sessionId = scope.id;
+  const carried = carriedCustomerBalance(scope, customer.id);
+  const ss = sales.filter((s) => s.customerId === customer.id && s.sessionId === sessionId);
+  const ps = payments.filter(
+    (p) => p.kind === 'customer_payment' && p.partyId === customer.id && p.sessionId === sessionId,
+  );
+  const manualDebt = sum(
+    debtEntries
+      .filter((d) => d.partyKind === 'customer' && d.partyId === customer.id && d.sessionId === sessionId)
+      .map((d) => debtBalanceContribution(d)),
+  );
+  const soldQty = sum(ss.map((s) => s.quantity));
+  const soldValue = sum(ss.map((s) => s.total));
+  const receivedAmount = sum(ps.map((p) => p.amount));
+  const balance = round(Math.max(0, carried + soldValue - receivedAmount + manualDebt));
+
+  let status: CustomerSessionStats['status'] = 'none';
+  if (soldValue > 0.01 || carried > 0.01) {
+    if (balance <= 0.01) status = 'paid';
+    else if (receivedAmount > 0.01) status = 'partial';
+    else status = 'pending';
+  }
+
+  return {
+    customerId: customer.id,
+    sessionId,
+    entityName: customer.entityName,
+    code: customer.code,
+    carriedForward: carried,
+    soldQty: round(soldQty),
+    soldValue: round(soldValue),
+    receivedAmount: round(receivedAmount),
+    balance,
+    status,
+    saleCount: ss.length,
+    paymentCount: ps.length,
+  };
+}
+
+export function allCustomerSessionStats(data: ErpData, session: SessionScope | string): CustomerSessionStats[] {
+  const scope = sessionScope(session);
+  return data.customers
+    .map((c) => computeCustomerSessionStats(c, scope, data.sales, data.payments, data.debtEntries ?? []))
+    .filter((s) => s.saleCount > 0 || s.paymentCount > 0 || s.carriedForward > 0.01)
+    .sort((a, b) => b.balance - a.balance);
+}
+
+/** لقطة أرصدة للترحيل عند إغلاق الدورة. */
+export function buildSessionCarryForwardSnapshot(
+  data: ErpData,
+  closingSession: Session,
+  closingStock: number,
+): SessionCarryForwardBalances {
+  const farmers = data.farmers
+    .map((f) => ({
+      id: f.id,
+      name: f.fullName,
+      balance: round(Math.max(0, computeFarmerStats(f, data.supplies, data.payments, data.debtEntries).creditBalance)),
+    }))
+    .filter((f) => f.balance > 0.01);
+
+  const customers = data.customers
+    .map((c) => ({
+      id: c.id,
+      name: c.entityName,
+      balance: round(Math.max(0, computeCustomerStats(c, data.sales, data.payments, data.debtEntries).outstanding)),
+    }))
+    .filter((c) => c.balance > 0.01);
+
+  const employees = data.employees
+    .map((e) => ({
+      id: e.id,
+      name: e.fullName,
+      balance: round(Math.max(0, computeEmployeeAdvanceBalance(e.id, data.payments, data.payrollBatches, data.debtEntries))),
+    }))
+    .filter((e) => e.balance > 0.01);
+
+  const externalAgg = new Map<string, { id: string; name: string; balance: number; direction: 'payable' | 'receivable' }>();
+  for (const d of data.debtEntries.filter((e) => e.partyKind === 'external')) {
+    const remaining = debtBalanceContribution(d);
+    if (Math.abs(remaining) <= 0.01) continue;
+    const key = d.partyId ?? d.id;
+    const name = d.partyName?.trim() || 'طرف خارجي';
+    const dir = resolveDebtDirection(d);
+    const abs = round(Math.abs(remaining));
+    const prev = externalAgg.get(key);
+    if (prev) {
+      prev.balance = round(prev.balance + abs);
+    } else {
+      externalAgg.set(key, { id: key, name, balance: abs, direction: dir });
+    }
+  }
+  const external = [...externalAgg.values()].filter((e) => e.balance > 0.01);
+
+  const farmerPayables = round(sum(farmers.map((f) => f.balance)));
+  const customerReceivables = round(sum(customers.map((c) => c.balance)));
+  const employeeReceivables = round(sum(employees.map((e) => e.balance)));
+  const externalPayables = round(sum(external.filter((e) => e.direction === 'payable').map((e) => e.balance)));
+  const externalReceivables = round(sum(external.filter((e) => e.direction === 'receivable').map((e) => e.balance)));
+
+  return {
+    fromSessionId: closingSession.id,
+    fromSessionLabel: closingSession.label,
+    closedAt: new Date().toISOString(),
+    farmers,
+    customers,
+    employees,
+    external,
+    totals: {
+      openingStock: round(closingStock),
+      payables: round(farmerPayables + externalPayables),
+      receivables: round(customerReceivables + employeeReceivables + externalReceivables),
+    },
+  };
 }
 
 // ============================================================
@@ -263,7 +442,9 @@ export function computeCustomerStats(
   const cs = sales.filter((s) => s.customerId === customer.id);
   const ps = payments.filter((p) => p.kind === 'customer_payment' && p.partyId === customer.id);
   const manualDebt = sum(
-    debtEntries.filter((d) => d.partyKind === 'customer' && d.partyId === customer.id).map((d) => d.amount),
+    debtEntries
+      .filter((d) => d.partyKind === 'customer' && d.partyId === customer.id)
+      .map((d) => debtBalanceContribution(d)),
   );
   const totalRevenue = sum(cs.map((s) => s.total));
   const totalPurchased = sum(cs.map((s) => s.quantity));
@@ -305,7 +486,9 @@ export function computeEmployeeAdvanceBalance(
     payments.filter((p) => p.kind === 'employee_advance' && p.partyId === employeeId).map((p) => p.amount),
   );
   const manualDebt = sum(
-    debtEntries.filter((d) => d.partyKind === 'employee' && d.partyId === employeeId).map((d) => d.amount),
+    debtEntries
+      .filter((d) => d.partyKind === 'employee' && d.partyId === employeeId)
+      .map((d) => debtBalanceContribution(d)),
   );
   const recovered = sum(
     payrollBatches
@@ -363,64 +546,106 @@ export function buildDebtSummary(
   farmers: FarmerStats[],
   customers: CustomerStats[],
   employees: EmployeeStats[],
+  debtEntries: DebtEntry[] = [],
 ): DebtSummary {
   const farmerPayables = round(sum(farmers.map((f) => Math.max(0, f.creditBalance))));
+  const farmerReceivables = round(sum(farmers.map((f) => Math.max(0, -f.creditBalance))));
   const customerReceivables = round(sum(customers.map((c) => Math.max(0, c.outstanding))));
+  const customerPayables = round(sum(customers.map((c) => Math.max(0, -c.outstanding))));
   const employeeAdvances = round(sum(employees.map((e) => Math.max(0, e.advanceBalance))));
+  const employeePayables = round(sum(employees.map((e) => Math.max(0, -e.advanceBalance))));
+
+  // تجميع الديون الخارجية حسب الطرف
+  const externalAgg = new Map<string, { name: string; balance: number }>();
+  for (const d of debtEntries.filter((e) => e.partyKind === 'external')) {
+    const key = d.partyId ?? d.id;
+    const name = d.partyName?.trim() || 'طرف خارجي';
+    const prev = externalAgg.get(key) ?? { name, balance: 0 };
+    prev.balance += debtBalanceContribution(d);
+    externalAgg.set(key, prev);
+  }
+  let externalPayables = 0;
+  let externalReceivables = 0;
+  const externalRows: DebtLedgerRow[] = [];
+  for (const [id, { name, balance }] of externalAgg) {
+    if (Math.abs(balance) <= 0.01) continue;
+    const direction = balance >= 0 ? 'receivable' : 'payable';
+    const abs = Math.abs(balance);
+    if (direction === 'payable') externalPayables += abs;
+    else externalReceivables += abs;
+    externalRows.push({
+      id,
+      kind: 'external',
+      code: 'EXT',
+      name,
+      subtitle: 'دين خارجي',
+      balance: abs,
+      direction,
+      statusLabel: 'external',
+    });
+  }
+  externalPayables = round(externalPayables);
+  externalReceivables = round(externalReceivables);
 
   const rows: DebtLedgerRow[] = [
     ...farmers
-      .filter((f) => f.creditBalance > 0.01)
+      .filter((f) => Math.abs(f.creditBalance) > 0.01)
       .map((f) => ({
         id: f.id,
         kind: 'farmer' as const,
         code: f.code,
         name: f.fullName,
         subtitle: f.region,
-        balance: f.creditBalance,
-        direction: 'payable' as const,
+        balance: Math.abs(f.creditBalance),
+        direction: f.creditBalance >= 0 ? ('payable' as const) : ('receivable' as const),
         statusLabel: f.status,
         phone: f.phone,
       })),
     ...customers
-      .filter((c) => c.outstanding > 0.01)
+      .filter((c) => Math.abs(c.outstanding) > 0.01)
       .map((c) => ({
         id: c.id,
         kind: 'customer' as const,
         code: c.code,
         name: c.entityName,
         subtitle: c.entityType,
-        balance: c.outstanding,
-        direction: 'receivable' as const,
+        balance: Math.abs(c.outstanding),
+        direction: c.outstanding >= 0 ? ('receivable' as const) : ('payable' as const),
         statusLabel: c.onHold ? 'on_hold' : 'active',
         phone: c.phone,
       })),
     ...employees
-      .filter((e) => e.advanceBalance > 0.01)
+      .filter((e) => Math.abs(e.advanceBalance) > 0.01)
       .map((e) => ({
         id: e.id,
         kind: 'employee' as const,
         code: e.code,
         name: e.fullName,
         subtitle: e.jobTitle,
-        balance: e.advanceBalance,
-        direction: 'receivable' as const,
+        balance: Math.abs(e.advanceBalance),
+        direction: e.advanceBalance >= 0 ? ('receivable' as const) : ('payable' as const),
         statusLabel: e.status,
         phone: e.phone,
       })),
+    ...externalRows,
   ].sort((a, b) => b.balance - a.balance);
 
-  const totalPayables = farmerPayables;
-  const totalReceivables = round(customerReceivables + employeeAdvances);
+  const totalPayables = round(farmerPayables + customerPayables + employeePayables + externalPayables);
+  const totalReceivables = round(
+    farmerReceivables + customerReceivables + employeeAdvances + externalReceivables,
+  );
 
   return {
     farmerPayables,
     customerReceivables,
     employeeAdvances,
+    externalPayables,
+    externalReceivables,
     totalPayables,
     totalReceivables,
     netPosition: round(totalReceivables - totalPayables),
     rows,
+    entries: [...debtEntries].sort((a, b) => b.date.localeCompare(a.date)),
   };
 }
 
@@ -442,6 +667,17 @@ export function buildAllJournals(data: ErpData, saleCogs: Record<string, number>
     if (b.status === 'paid') entries.push(journalForPayroll(b));
   }
   for (const a of data.adjustments) entries.push(journalForAdjustment(a));
+  for (const d of data.debtEntries ?? []) {
+    const je = journalForDebtEntry(d);
+    if (je) entries.push(je);
+  }
+  for (const inc of data.externalIncomes ?? []) entries.push(journalForExternalIncome(inc));
+  const debtById = new Map((data.debtEntries ?? []).map((d) => [d.id, d]));
+  for (const cm of data.cashMovements ?? []) {
+    if (cm.referenceType !== 'debt' || !cm.referenceId) continue;
+    const je = journalForDebtSettlement(cm, debtById.get(cm.referenceId));
+    if (je) entries.push(je);
+  }
   return entries.sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -564,7 +800,7 @@ export function computeDerived(data: ErpData): DerivedData {
   const farmers = allFarmerStats(data);
   const customers = allCustomerStats(data);
   const employees = allEmployeeStats(data);
-  const debts = buildDebtSummary(farmers, customers, employees);
+  const debts = buildDebtSummary(farmers, customers, employees, data.debtEntries ?? []);
   const activeSession =
     data.sessions.find((s) => s.id === data.activeSessionId) ?? data.sessions[data.sessions.length - 1];
   const sessionSummaries = data.sessions.map((s) => computeSessionSummary(s, data, inv));

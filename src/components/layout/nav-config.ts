@@ -13,6 +13,7 @@ import {
   Users,
   History,
   Scale,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
 import type { Permission } from '@/lib/domain/constants';
@@ -71,6 +72,13 @@ export const NAV_ITEMS: NavItem[] = [
     description: 'الأرصدة والحركات والتحويلات',
     group: 'finance',
     permission: 'vaults.manage',
+  },
+  {
+    href: '/income',
+    label: 'مدخول خارج الخدمة',
+    icon: TrendingUp,
+    description: 'إيرادات خارج الاستلام والبيع → الخزينة',
+    group: 'finance',
   },
   {
     href: '/expenses',

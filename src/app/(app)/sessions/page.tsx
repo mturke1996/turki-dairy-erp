@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { CalendarRange, Lock, Archive, CheckCircle2, TrendingUp, Droplets, ShoppingCart, ArrowRight, Repeat2, GitCompareArrows } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
@@ -14,6 +14,10 @@ import { Money, Liters } from '@/components/shared/money';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { SessionClosingPDF } from '@/features/pdf/SessionClosingPDF';
 import { FarmerCycleSettlement } from '@/components/farmers/farmer-cycle-settlement';
+import { CustomerCycleSettlement } from '@/components/customers/customer-cycle-settlement';
+import { CarryForwardBanner } from '@/components/sessions/carry-forward-banner';
+import { CreateSessionDialog } from '@/components/sessions/create-session-dialog';
+import { buildSessionCarryForwardSnapshot } from '@/lib/domain/calculations';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { useCycle } from '@/lib/store/use-cycle';
@@ -30,36 +34,98 @@ export default function SessionsPage() {
   const canClose = usePermission('sessions.close');
   const cycle = useCycle();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   const active = d.activeSession;
   const summary = d.activeSummary;
+
+  const closePreview = useMemo(() => {
+    if (!active) return null;
+    return buildSessionCarryForwardSnapshot(
+      {
+        sessions: data.sessions,
+        activeSessionId: data.activeSessionId,
+        farmers: data.farmers,
+        customers: data.customers,
+        employees: data.employees,
+        supplies: data.supplies,
+        sales: data.sales,
+        payments: data.payments,
+        debtEntries: data.debtEntries,
+        adjustments: data.adjustments,
+        expenses: data.expenses,
+        payrollBatches: data.payrollBatches,
+        vaults: data.vaults,
+        banks: data.banks,
+        cashMovements: data.cashMovements,
+        externalIncomes: data.externalIncomes,
+        settings: data.settings,
+      },
+      active,
+      summary.closingStock,
+    );
+  }, [active, data, summary.closingStock]);
 
   const sortedSessions = [...data.sessions].sort((a, b) => b.periodFrom.localeCompare(a.periodFrom));
 
   function buildClosingProps(session: Session, sum: SessionSummary) {
     if (session.archive) {
+      const snap = session.archive.balancesSnapshot;
       return {
         summary: sum,
         carryForward: session.archive.carryForward,
-        farmerBalances: session.archive.balancesSnapshot.farmers.map((f) => ({ name: f.name, balance: f.balance })),
-        customerBalances: session.archive.balancesSnapshot.customers.map((c) => ({ name: c.name, balance: c.balance })),
+        farmerBalances: snap.farmers.map((f) => ({ name: f.name, balance: f.balance })),
+        customerBalances: snap.customers.map((c) => ({ name: c.name, balance: c.balance })),
+        employeeBalances: (snap.employees ?? []).map((e) => ({ name: e.name, balance: e.balance })),
       };
     }
+    const preview = buildSessionCarryForwardSnapshot(
+      {
+        sessions: data.sessions,
+        activeSessionId: data.activeSessionId,
+        farmers: data.farmers,
+        customers: data.customers,
+        employees: data.employees,
+        supplies: data.supplies,
+        sales: data.sales,
+        payments: data.payments,
+        debtEntries: data.debtEntries,
+        adjustments: data.adjustments,
+        expenses: data.expenses,
+        payrollBatches: data.payrollBatches,
+        vaults: data.vaults,
+        banks: data.banks,
+        cashMovements: data.cashMovements,
+        externalIncomes: data.externalIncomes,
+        settings: data.settings,
+      },
+      session,
+      sum.closingStock,
+    );
     return {
       summary: sum,
-      carryForward: { openingStock: sum.closingStock, payables: d.totals.payables, receivables: d.totals.receivables },
-      farmerBalances: d.farmers.filter((f) => f.creditBalance > 0.01).map((f) => ({ name: f.fullName, balance: f.creditBalance })),
-      customerBalances: d.customers.filter((c) => c.outstanding > 0.01).map((c) => ({ name: c.entityName, balance: c.outstanding })),
+      carryForward: preview.totals,
+      farmerBalances: preview.farmers.map((f) => ({ name: f.name, balance: f.balance })),
+      customerBalances: preview.customers.map((c) => ({ name: c.name, balance: c.balance })),
+      employeeBalances: preview.employees.map((e) => ({ name: e.name, balance: e.balance })),
     };
   }
 
-  function doClose() {
-    const res = closeActiveSession();
-    if (res.ok) {
-      toast.success('تم إغلاق الفترة وأرشفتها', { description: 'تم فتح فترة جديدة وترحيل الأرصدة.' });
-      setConfirmOpen(false);
-    } else {
-      toast.error(res.error ?? 'تعذّر إغلاق الفترة');
+  async function doClose() {
+    setClosing(true);
+    try {
+      const res = await closeActiveSession();
+      if (res.ok) {
+        toast.success('تم إغلاق الفترة', {
+          description: 'أُرشِفَت الدورة السابقة وفُتحت دورة جديدة مع ترحيل المخزون والأرصدة.',
+        });
+        setConfirmOpen(false);
+      } else {
+        toast.error(res.error ?? 'تعذّر إغلاق الفترة');
+      }
+    } finally {
+      setClosing(false);
     }
   }
 
@@ -69,6 +135,14 @@ export default function SessionsPage() {
         eyebrow="النظام"
         title="الدورات نصف الشهرية"
         description="الشهر دورتان (1→15 و16→نهاية الشهر) — إغلاق ذرّي، أرشفة، وترحيل المخزون والأرصدة تلقائياً."
+        actions={
+          canClose ? (
+            <Button type="button" variant="secondary" onClick={() => setCreateOpen(true)}>
+              <CalendarRange className="h-4 w-4" />
+              إنشاء دورة سابقة
+            </Button>
+          ) : undefined
+        }
       />
 
       {/* الدورة نصف الشهرية الحالية */}
@@ -191,7 +265,10 @@ export default function SessionsPage() {
         </Card>
       ) : null}
 
+      {active?.carryForwardBalances ? <CarryForwardBanner carry={active.carryForwardBalances} /> : null}
+
       {active ? <FarmerCycleSettlement session={active} readonly={active.status === 'archived'} /> : null}
+      {active ? <CustomerCycleSettlement session={active} readonly={active.status === 'archived'} /> : null}
 
       {/* كل الفترات */}
       <Card>
@@ -240,7 +317,16 @@ export default function SessionsPage() {
                   ) : null}
                   <div className="flex items-center gap-2">
                     {!isActive ? (
-                      <Button variant="ghost" size="sm" onClick={() => setActiveSession(session.id)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          void (async () => {
+                            const res = await setActiveSession(session.id);
+                            if (!res.ok) toast.error(res.error ?? 'تعذّر التفعيل');
+                          })();
+                        }}
+                      >
                         عرض
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Button>
@@ -273,25 +359,28 @@ export default function SessionsPage() {
           </DialogHeader>
           <div className="space-y-2 rounded-xl bg-canvas-sunken p-4 text-[12.5px]">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">مخزون مُرحّل للدورة التالية</span>
+              <span className="text-muted-foreground">مخزون مُرحّل</span>
               <Liters value={summary.closingStock} className="font-semibold text-meadow-700" />
             </div>
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              الحليب المتبقي ({formatNumber(summary.closingStock, 0)} لتر) يبقى في المخزون ويُفتح به الرصيد الافتتاحي للدورة الجديدة.
-            </p>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">ديون الفلاحين</span>
-              <Money value={d.totals.payables} decimals={0} className="font-semibold" />
+              <span className="text-muted-foreground">ديون علينا (فلاحون + خارجيون)</span>
+              <Money value={closePreview?.totals.payables ?? d.totals.payables} decimals={0} className="font-semibold text-rose-700" />
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">ديون العملاء</span>
-              <Money value={d.totals.receivables} decimals={0} className="font-semibold" />
+              <span className="text-muted-foreground">ديون لنا (عملاء + موظفون)</span>
+              <Money value={closePreview?.totals.receivables ?? d.totals.receivables} decimals={0} className="font-semibold text-meadow-700" />
             </div>
+            {closePreview ? (
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                سيُرحَّل: {closePreview.farmers.length} فلاح، {closePreview.customers.length} عميل،{' '}
+                {closePreview.employees.length} موظف، {closePreview.external.length} طرف خارجي
+              </p>
+            ) : null}
           </div>
           <DialogFooter>
-            <Button onClick={doClose}>
+            <Button onClick={doClose} disabled={closing}>
               <Lock className="h-4 w-4" />
-              تأكيد الإغلاق
+              {closing ? 'جارٍ الإغلاق…' : 'تأكيد الإغلاق'}
             </Button>
             <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
               إلغاء
@@ -299,6 +388,7 @@ export default function SessionsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <CreateSessionDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

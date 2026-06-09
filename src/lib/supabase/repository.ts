@@ -10,7 +10,7 @@ import { createClient } from '@/lib/client';
 import { isCloudSyncAvailable } from '@/lib/supabase/config';
 import type {
   AuditLog, BankAccount, CashMovement, CashTransfer, CashVault, Customer, Employee,
-  Expense, ExpenseCategory, Farmer, InventoryAdjustment, Payment, PayrollBatch,
+  Expense, ExpenseCategory, ExternalIncome, Farmer, InventoryAdjustment, Payment, PayrollBatch,
   SaleTransaction, Session, SupplyTransaction, AppSettings, DebtEntry,
 } from '@/lib/domain/types';
 import { fromRow, rowsFrom, toRow } from './mappers';
@@ -34,6 +34,7 @@ export interface ErpSnapshot {
   employees: Employee[];
   payrollBatches: PayrollBatch[];
   auditLogs: AuditLog[];
+  externalIncomes: ExternalIncome[];
   settings?: Partial<AppSettings>;
 }
 
@@ -73,6 +74,7 @@ const SYNC_TABLES = [
   { table: 'expenses', key: 'expenses' as const },
   { table: 'employees', key: 'employees' as const },
   { table: 'payroll_batches', key: 'payrollBatches' as const },
+  { table: 'external_incomes', key: 'externalIncomes' as const },
   { table: 'audit_logs', key: 'auditLogs' as const },
 ] as const;
 
@@ -203,7 +205,7 @@ export async function pullAll(): Promise<PullResult> {
   const [
     sessions, farmers, customers, supplies, sales, payments, debtEntries, adjustments,
     vaults, banks, cashMovements, transfers, expenseCategories, expenses,
-    employees, payrollBatches, auditLogs,
+    employees, payrollBatches, externalIncomes, auditLogs,
   ] = await Promise.all([
     select<Session>(sb, 'sessions'),
     select<Farmer>(sb, 'farmers'),
@@ -221,6 +223,7 @@ export async function pullAll(): Promise<PullResult> {
     select<Expense>(sb, 'expenses'),
     select<Employee>(sb, 'employees'),
     select<PayrollBatch>(sb, 'payroll_batches'),
+    select<ExternalIncome>(sb, 'external_incomes'),
     select<AuditLog>(sb, 'audit_logs'),
   ]);
 
@@ -255,7 +258,7 @@ export async function pullAll(): Promise<PullResult> {
   return {
     sessions, activeSessionId, farmers, customers, supplies, sales, payments, debtEntries, adjustments,
     vaults, banks, cashMovements, transfers, expenseCategories, expenses,
-    employees, payrollBatches, auditLogs, settings, syncVersion,
+    employees, payrollBatches, externalIncomes, auditLogs, settings, syncVersion,
   };
 }
 
