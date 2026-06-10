@@ -150,7 +150,7 @@ export const pdfBrandStyles = StyleSheet.create({
     flexDirection: 'row',
     direction: 'ltr',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    gap: 4,
   },
 
   infoGrid: {
@@ -158,7 +158,7 @@ export const pdfBrandStyles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 0,
-    marginBottom: 16,
+    marginBottom: 12,
     borderWidth: 0.75,
     borderColor: P.border,
     overflow: 'hidden',
@@ -166,8 +166,8 @@ export const pdfBrandStyles = StyleSheet.create({
   },
   infoCell: {
     width: '33.33%',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderBottomWidth: 0.5,
     borderLeftWidth: 0.5,
     borderColor: P.border,
@@ -330,11 +330,11 @@ export const PdfMoneyText = ({
   color?: string;
 }) => (
   <View style={pdfBrandStyles.moneyRow}>
+    <Text style={{ fontSize: MONEY_SIZE[size] * 0.82, fontWeight: 'bold', color: P.muted, lineHeight: 1.35 }}>
+      {LIBYAN_CURRENCY_LABEL}
+    </Text>
     <Text style={{ fontSize: MONEY_SIZE[size], fontWeight: 'bold', color, direction: 'ltr', lineHeight: 1.35 }}>
       {pdfFmtNum(amount, decimals)}
-    </Text>
-    <Text style={{ fontSize: MONEY_SIZE[size] * 0.82, fontWeight: 'bold', color: P.muted, marginLeft: 4, lineHeight: 1.35 }}>
-      {LIBYAN_CURRENCY_LABEL}
     </Text>
   </View>
 );

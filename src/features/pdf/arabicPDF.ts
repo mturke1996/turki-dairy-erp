@@ -26,7 +26,7 @@ export function ltrAmountCurrency(amount: number, currency = 'د.ل', decimals =
     maximumFractionDigits: decimals,
   }).format(Number.isFinite(amount) ? amount : 0);
   const curr = String(currency ?? '').trim();
-  return `${formatted}\u00A0${curr}`;
+  return `${curr}\u00A0${formatted}`;
 }
 
 export function arMoney(amount: number, currency = 'د.ل', decimals = 2): string {

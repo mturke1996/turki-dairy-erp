@@ -284,7 +284,7 @@ export const pdfBase = {
   tableRow: {
     direction: 'ltr',
     flexDirection: 'row-reverse',
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 10,
     borderBottomWidth: 0.5,
     borderBottomColor: PDF.border,
@@ -360,11 +360,11 @@ export const pdfBase = {
   },
 
   sectionTitle: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: 'bold',
     color: PDF.primary,
-    marginBottom: 10,
-    marginTop: 20,
+    marginBottom: 8,
+    marginTop: 14,
     paddingBottom: 5,
     paddingRight: 8,
     borderBottomWidth: 0.75,
@@ -382,8 +382,8 @@ export const pdfBase = {
     direction: 'rtl',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 30,
-    paddingTop: 14,
+    marginTop: 14,
+    paddingTop: 8,
     borderTopWidth: 0.5,
     borderTopColor: PDF.border,
   },
@@ -394,10 +394,10 @@ export const pdfBase = {
   },
 
   signatureLabel: {
-    fontSize: 7.5,
+    fontSize: 7,
     color: PDF.muted,
     fontWeight: 'bold',
-    marginBottom: 26,
+    marginBottom: 14,
     textAlign: 'right',
     lineHeight: 1.3,
   },

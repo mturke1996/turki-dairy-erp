@@ -16,6 +16,24 @@ function docRefId(): string {
   return `TRK-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+/** شريط التوقيع — مكوّن مستقل لدمجه مع ختام الكشوف دون إجبار صفحة جديدة */
+export function PdfSignatureStrip({ minAhead = 48 }: { minAhead?: number }) {
+  return (
+    <View style={pdfBase.signatureStrip} wrap={false} minPresenceAhead={minAhead}>
+      <View style={pdfBase.signatureCell}>
+        <Text style={pdfBase.signatureLabel}>{ar('التوقيع المعتمد')}</Text>
+        <View style={pdfBase.signatureLine} />
+        <Text style={pdfBase.signatureHint}>{ar(BRAND.fullName)}</Text>
+      </View>
+      <View style={pdfBase.signatureCell}>
+        <Text style={pdfBase.signatureLabel}>{ar('ختم المصنع')}</Text>
+        <View style={pdfBase.signatureLine} />
+        <Text style={pdfBase.signatureHint}>{ar(BRAND.contact.address)}</Text>
+      </View>
+    </View>
+  );
+}
+
 export type ReportShellMetaCell = {
   label: string;
   value?: string;
@@ -121,7 +139,9 @@ export function ReportShell({
               <View key={`sum-cell-${i}`} style={pdfBase.summaryCell}>
                 <Text style={pdfBase.summaryEyebrow}>{ar(c.label)}</Text>
                 {c.moneyAmount != null && Number.isFinite(c.moneyAmount) ? (
-                  <PdfMoneyText amount={c.moneyAmount} size="sm" />
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <PdfMoneyText amount={c.moneyAmount} size="sm" />
+                  </View>
                 ) : (
                   <Text
                     style={[
@@ -139,20 +159,7 @@ export function ReportShell({
 
         <View style={pdfBase.contentLayer}>{children}</View>
 
-        {showSignature ? (
-          <View style={pdfBase.signatureStrip} wrap={false} minPresenceAhead={90}>
-            <View style={pdfBase.signatureCell}>
-              <Text style={pdfBase.signatureLabel}>{ar('التوقيع المعتمد')}</Text>
-              <View style={pdfBase.signatureLine} />
-              <Text style={pdfBase.signatureHint}>{ar(BRAND.fullName)}</Text>
-            </View>
-            <View style={pdfBase.signatureCell}>
-              <Text style={pdfBase.signatureLabel}>{ar('ختم المصنع')}</Text>
-              <View style={pdfBase.signatureLine} />
-              <Text style={pdfBase.signatureHint}>{ar(BRAND.contact.address)}</Text>
-            </View>
-          </View>
-        ) : null}
+        {showSignature ? <PdfSignatureStrip /> : null}
 
         {showFooter ? <TurkiPdfFooter fixed={footerFixed} docRef={refId} /> : null}
 

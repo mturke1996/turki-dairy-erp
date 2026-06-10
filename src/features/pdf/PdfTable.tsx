@@ -15,7 +15,7 @@ export type PdfTableColumn = {
 
 export type PdfTableRow = Record<string, React.ReactNode>;
 
-/** مبلغ: الرقم ثم د.ل — نمط Etlala (LTR صريح، العملة بعد الرقم دائماً) */
+/** مبلغ عربي: د.ل يسار الرقم داخل جزيرة LTR (العملة «بعد» الرقم في القراءة العربية) */
 export function PdfMoneyInline({
   amount,
   decimals = 2,
@@ -32,12 +32,12 @@ export function PdfMoneyInline({
   bold?: boolean;
 }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', direction: 'ltr' }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', direction: 'ltr', gap: 3 }}>
+      <Text style={{ fontSize: Math.max(size * 0.88, 7.5), color: currencyColor, fontWeight: bold ? 'bold' : 'normal' }}>
+        {LIBYAN_CURRENCY_LABEL}
+      </Text>
       <Text style={{ fontSize: size, fontWeight: bold ? 'bold' : 'normal', color, direction: 'ltr' }}>
         {pdfFmtNum(amount, decimals)}
-      </Text>
-      <Text style={{ fontSize: Math.max(size * 0.88, 7.5), color: currencyColor, marginLeft: 3 }}>
-        {LIBYAN_CURRENCY_LABEL}
       </Text>
     </View>
   );

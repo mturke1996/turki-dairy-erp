@@ -4,7 +4,7 @@
 // Core
 export { registerPdfFonts, ensurePdfFontsLoaded, PDF_FONT_FAMILY } from './pdfFonts';
 export { ar, arMoney, arDate, arDateParts, pdfDisplayValue, ltrAmountCurrency } from './arabicPDF';
-export { ReportShell, type ReportShellMetaCell } from './ReportShell';
+export { ReportShell, PdfSignatureStrip, type ReportShellMetaCell } from './ReportShell';
 export {
   PdfTable,
   PdfSectionTitle,

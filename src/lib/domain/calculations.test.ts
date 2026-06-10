@@ -373,7 +373,6 @@ describe('computeWasteSummary and alerts', () => {
   });
 
   it('aggregates all sessions when sessionId is null', () => {
-    const otherSession: Session = { ...session, id: 'sw3', label: 'يوليو' };
     const otherLoss: InventoryAdjustment = {
       ...lossAdj,
       id: 'adj-other',

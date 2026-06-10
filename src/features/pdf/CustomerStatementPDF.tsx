@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React from 'react';
 import { Text, View, StyleSheet } from '@react-pdf/renderer';
-import { ReportShell } from './ReportShell';
+import { ReportShell, PdfSignatureStrip } from './ReportShell';
 import { ar } from './arabicPDF';
 import { PDF, pdfBase } from './pdfBase';
 import { PdfMoneyText, PdfInfoGrid, pdfFmtNum, pdfFmtDate, pdfFmtLiters, pdfFmtMoneyLibyan } from './pdfBrandKit';
@@ -17,9 +17,9 @@ const s = StyleSheet.create({
   agingLabel: { fontSize: 7, color: PDF.muted, marginBottom: 5, textAlign: 'center', lineHeight: 1.3 },
   agingValue: { fontSize: 10.5, fontWeight: 'bold', color: PDF.text, lineHeight: 1.3, direction: 'ltr' },
   balanceBox: {
-    marginTop: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderWidth: 0.75,
     borderColor: PDF.border,
     borderTopWidth: 2.5,
@@ -46,6 +46,7 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
 
   return (
     <ReportShell
+      showSignature={false}
       title="كشف حساب عميل"
       subtitle={`كشف شامل بجميع الحركات${sessionLabel ? ` — أُصدر خلال ${sessionLabel}` : ''}`}
       summaryPrimaryDateLabel="تاريخ الإصدار"
@@ -131,12 +132,13 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
         ))}
       </View>
 
-      <PdfKeepTogether minAhead={130}>
+      <PdfKeepTogether minAhead={88}>
         <View style={s.balanceBox}>
-          <Text style={{ fontSize: 9, color: PDF.muted, marginBottom: 4, lineHeight: 1.4 }}>{ar('الرصيد المستحق على العميل')}</Text>
-          <PdfMoneyText amount={customer.outstanding} size="lg" />
-          <Text style={{ fontSize: 8, color: PDF.muted, marginTop: 6, lineHeight: 1.4 }}>{ar('وفق سجلات النظام شاملاً الديون المسجّلة والتسويات')}</Text>
+          <Text style={{ fontSize: 8.5, color: PDF.muted, marginBottom: 3, lineHeight: 1.35 }}>{ar('الرصيد المستحق على العميل')}</Text>
+          <PdfMoneyText amount={customer.outstanding} size="md" />
+          <Text style={{ fontSize: 7.5, color: PDF.muted, marginTop: 4, lineHeight: 1.35 }}>{ar('وفق سجلات النظام شاملاً الديون المسجّلة والتسويات')}</Text>
         </View>
+        <PdfSignatureStrip minAhead={0} />
       </PdfKeepTogether>
     </ReportShell>
   );

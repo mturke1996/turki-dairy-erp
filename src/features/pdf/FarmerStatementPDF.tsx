@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React from 'react';
 import { Text, View, StyleSheet } from '@react-pdf/renderer';
-import { ReportShell } from './ReportShell';
+import { ReportShell, PdfSignatureStrip } from './ReportShell';
 import { ar } from './arabicPDF';
 import { PDF, pdfBase } from './pdfBase';
 import { PdfMoneyText, PdfInfoGrid, pdfFmtDate, pdfFmtLiters, pdfFmtMoneyLibyan } from './pdfBrandKit';
@@ -13,9 +13,9 @@ import type { Payment, SupplyTransaction } from '@/lib/domain/types';
 const s = StyleSheet.create({
   totalLabel: { fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen, lineHeight: 1.4 },
   balanceBox: {
-    marginTop: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderWidth: 0.75,
     borderColor: PDF.border,
     borderTopWidth: 2.5,
@@ -41,6 +41,7 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
 
   return (
     <ReportShell
+      showSignature={false}
       title="كشف حساب فلاح"
       subtitle={`كشف شامل بجميع الحركات${sessionLabel ? ` — أُصدر خلال ${sessionLabel}` : ''}`}
       summaryPrimaryDateLabel="تاريخ الإصدار"
@@ -114,14 +115,15 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
         </>
       )}
 
-      <PdfKeepTogether minAhead={130}>
+      <PdfKeepTogether minAhead={88}>
         <View style={s.balanceBox}>
-          <Text style={{ fontSize: 9, color: PDF.muted, marginBottom: 4, lineHeight: 1.4 }}>{ar('الرصيد المستحق للفلاح')}</Text>
-          <PdfMoneyText amount={farmer.creditBalance} size="lg" />
-          <Text style={{ fontSize: 8, color: PDF.muted, marginTop: 6, lineHeight: 1.4 }}>
+          <Text style={{ fontSize: 8.5, color: PDF.muted, marginBottom: 3, lineHeight: 1.35 }}>{ar('الرصيد المستحق للفلاح')}</Text>
+          <PdfMoneyText amount={farmer.creditBalance} size="md" />
+          <Text style={{ fontSize: 7.5, color: PDF.muted, marginTop: 4, lineHeight: 1.35 }}>
             {ar('وفق سجلات النظام شاملاً الأرصدة الافتتاحية والتسويات')}
           </Text>
         </View>
+        <PdfSignatureStrip minAhead={0} />
       </PdfKeepTogether>
     </ReportShell>
   );
