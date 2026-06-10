@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { journalForSupply, buildTrialBalance, computePnL, journalForDebtEntry, journalForExternalIncome, journalForPayment } from '@/lib/domain/accounting';
+import {
+  journalForSupply,
+  buildTrialBalance,
+  computePnL,
+  journalForDebtEntry,
+  journalForExternalIncome,
+  journalForPayment,
+  journalForPayroll,
+} from '@/lib/domain/accounting';
 
 describe('accounting', () => {
   it('journalForSupply balances debit and credit', () => {
@@ -74,6 +82,41 @@ describe('accounting', () => {
       destinationType: 'vault',
       destinationId: 'v1',
       createdAt: '2026-06-01',
+    });
+    const tb = buildTrialBalance([entry]);
+    expect(tb.balanced).toBe(true);
+  });
+
+  it('journalForPayroll balances gross expense, debt recovery, and cash', () => {
+    const entry = journalForPayroll({
+      id: 'pr1',
+      ref: 'PR-1',
+      label: 'يونيو',
+      payrollType: 'monthly',
+      periodFrom: '2026-06-01',
+      periodTo: '2026-06-30',
+      sessionId: 's1',
+      status: 'paid',
+      totalAmount: 2700,
+      paidAt: '2026-06-30',
+      createdAt: '2026-06-01',
+      lines: [
+        {
+          employeeId: 'e1',
+          baseSalary: 3000,
+          allowancesTotal: 0,
+          grossSalary: 3000,
+          bonusAmount: 0,
+          deductionsTotal: 300,
+          netSalary: 2700,
+          attendanceDays: 30,
+          absenceDays: 0,
+          debtBefore: 300,
+          advanceDeducted: 300,
+          debtCarriedForward: 0,
+          debtMode: 'deduct',
+        },
+      ],
     });
     const tb = buildTrialBalance([entry]);
     expect(tb.balanced).toBe(true);

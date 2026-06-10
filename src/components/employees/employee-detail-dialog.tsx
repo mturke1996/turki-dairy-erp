@@ -20,13 +20,14 @@ import {
   DEPARTMENT_LABELS,
   EMPLOYEE_STATUS_LABELS,
   PAYMENT_METHOD_LABELS,
+  PAYROLL_DEBT_MODE_LABELS,
   PAYROLL_STATUS_LABELS,
   SALARY_BASE_LABELS,
   SALARY_TYPE_LABELS,
 } from '@/lib/domain/constants';
-import { payoutSourceLabel } from '@/lib/domain/payroll';
-import type { EmployeeStats } from '@/lib/domain/calculations';
-import { isDebtFullySettled, resolveDebtDirection } from '@/lib/domain/debt';
+import { normalizePayrollLine, payoutSourceLabel } from '@/lib/domain/payroll';
+import { computeEmployeeDebtBreakdown, type EmployeeStats } from '@/lib/domain/calculations';
+import { debtRemainingAmount, isDebtFullySettled, resolveDebtDirection } from '@/lib/domain/debt';
 import { formatShortDate } from '@/lib/utils';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
 import { PartyDeleteButton } from '@/components/shared/party-delete-button';
@@ -89,17 +90,34 @@ export function EmployeeDetailDialog({
       .sort((a, b) => (b.batch.paidAt ?? b.batch.createdAt).localeCompare(a.batch.paidAt ?? a.batch.createdAt));
   }, [data.payrollBatches, employeeId]);
 
-  const registeredDebt = useMemo(
+  const debtBreakdown = useMemo(
     () =>
-      data.debtEntries.find(
-        (entry) =>
-          entry.partyKind === 'employee' &&
-          entry.partyId === employeeId &&
-          !isDebtFullySettled(entry) &&
-          resolveDebtDirection(entry) === 'receivable',
-      ) ?? null,
+      employeeId
+        ? computeEmployeeDebtBreakdown(
+            employeeId,
+            data.payments,
+            data.payrollBatches,
+            data.debtEntries,
+          )
+        : null,
+    [employeeId, data.payments, data.payrollBatches, data.debtEntries],
+  );
+
+  const registeredDebts = useMemo(
+    () =>
+      data.debtEntries
+        .filter(
+          (entry) =>
+            entry.partyKind === 'employee' &&
+            entry.partyId === employeeId &&
+            !isDebtFullySettled(entry) &&
+            resolveDebtDirection(entry) === 'receivable',
+        )
+        .sort((a, b) => a.date.localeCompare(b.date)),
     [data.debtEntries, employeeId],
   );
+
+  const primaryRegisteredDebt = registeredDebts[0] ?? null;
 
   if (!employee || !raw) {
     return (
@@ -144,9 +162,34 @@ export function EmployeeDetailDialog({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <SummaryCell label="نوع الراتب" value={SALARY_TYPE_LABELS[raw.salaryType ?? 'monthly']} />
             <SummaryCell label={SALARY_BASE_LABELS[raw.salaryType ?? 'monthly']} value={<Money value={raw.baseSalary} decimals={0} />} />
-            <SummaryCell label="الدين" value={<Money value={employee.advanceBalance} decimals={0} />} highlight={employee.advanceBalance > 0} />
+            <SummaryCell
+              label="المستحق على الموظف"
+              value={<Money value={employee.advanceBalance} decimals={0} />}
+              highlight={employee.advanceBalance > 0}
+            />
             <SummaryCell label="صرف YTD" value={<Money value={employee.ytdPaid} decimals={0} />} />
           </div>
+
+          {debtBreakdown && debtBreakdown.totalOwed > 0 ? (
+            <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-canvas-sunken/30 p-3 sm:grid-cols-4">
+              <div>
+                <p className="text-[10px] text-muted-foreground">سلف مسجّلة</p>
+                <Money value={debtBreakdown.advancesTotal} decimals={0} className="mt-0.5 text-[13px] font-semibold" />
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">مُسترد من الرواتب</p>
+                <Money value={debtBreakdown.advancesRecovered} decimals={0} className="mt-0.5 text-[13px] font-semibold text-meadow-700" />
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">ديون مسجّلة</p>
+                <Money value={debtBreakdown.registeredDebt} decimals={0} className="mt-0.5 text-[13px] font-semibold" />
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">المتبقي</p>
+                <Money value={debtBreakdown.totalOwed} decimals={0} className="mt-0.5 text-[13px] font-bold text-foreground" />
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
@@ -167,7 +210,7 @@ export function EmployeeDetailDialog({
                 سلفة
               </Button>
             ) : null}
-            {canPay && registeredDebt ? (
+            {canPay && primaryRegisteredDebt ? (
               <Button size="sm" variant="meadow" onClick={() => setSettleOpen(true)}>
                 <HandCoins className="h-4 w-4" />
                 تسوية دين
@@ -199,7 +242,8 @@ export function EmployeeDetailDialog({
           <Tabs defaultValue="payroll">
             <TabsList className="w-full justify-start">
               <TabsTrigger value="payroll">كشوف الرواتب</TabsTrigger>
-              <TabsTrigger value="advances">الديون ({advances.length})</TabsTrigger>
+              <TabsTrigger value="advances">السلف ({advances.length})</TabsTrigger>
+              <TabsTrigger value="registered-debts">ديون مسجّلة ({registeredDebts.length})</TabsTrigger>
             </TabsList>
             <TabsContent value="payroll" className="mt-3">
               {payrollHistory.length ? (
@@ -208,13 +252,16 @@ export function EmployeeDetailDialog({
                     <TableRow>
                       <TableHead>الكشف</TableHead>
                       <TableHead>الفترة</TableHead>
-                      <TableHead className="text-left">خصم دين</TableHead>
-                      <TableHead className="text-left">الصافي</TableHead>
+                      <TableHead className="text-left">الإجمالي</TableHead>
+                      <TableHead className="text-left">الدين</TableHead>
+                      <TableHead className="text-left">بعد الدين</TableHead>
                       <TableHead>الحالة</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {payrollHistory.map(({ batch, line }) => (
+                    {payrollHistory.map(({ batch, line }) => {
+                      const n = normalizePayrollLine(line);
+                      return (
                       <TableRow key={`${batch.id}-${line.employeeId}`}>
                         <TableCell>
                           <p className="text-[12.5px] font-medium">{batch.label}</p>
@@ -223,11 +270,31 @@ export function EmployeeDetailDialog({
                         <TableCell className="text-[12px] text-muted-foreground" dir="ltr">
                           {formatShortDate(batch.periodFrom)} — {formatShortDate(batch.periodTo)}
                         </TableCell>
-                        <TableCell className="text-left"><Money value={line.advanceDeducted} decimals={0} /></TableCell>
+                        <TableCell className="text-left">
+                          <Money value={n.grossSalary + n.bonusAmount} decimals={0} />
+                          {n.bonusAmount > 0 ? (
+                            <p className="text-[10px] text-meadow-700">مكافأة +{n.bonusAmount}</p>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-left">
+                          {n.debtBefore > 0 ? (
+                            <>
+                              <Money value={n.debtBefore} decimals={0} className="text-rose-700" />
+                              {n.advanceDeducted > 0 ? (
+                                <p className="text-[10px] text-muted-foreground">خصم −{n.advanceDeducted}</p>
+                              ) : n.debtCarriedForward > 0 ? (
+                                <p className="text-[10px] text-amber-700">{PAYROLL_DEBT_MODE_LABELS.carry_forward}</p>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-left"><Money value={line.netSalary} decimals={0} className="font-semibold" /></TableCell>
                         <TableCell><Badge variant={batch.status === 'paid' ? 'success' : batch.status === 'approved' ? 'info' : 'neutral'}>{PAYROLL_STATUS_LABELS[batch.status]}</Badge></TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               ) : (
@@ -269,7 +336,35 @@ export function EmployeeDetailDialog({
                   </TableBody>
                 </Table>
               ) : (
-                <EmptyState icon={Banknote} title="لا ديون مسجّلة" description="سجّل ديناً من الزر أعلاه." />
+                <EmptyState icon={Banknote} title="لا سلف مسجّلة" description="سجّل سلفة من الزر أعلاه." />
+              )}
+            </TabsContent>
+            <TabsContent value="registered-debts" className="mt-3">
+              {registeredDebts.length ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>التاريخ</TableHead>
+                      <TableHead className="text-left">المتبقي</TableHead>
+                      <TableHead>الوصف</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {registeredDebts.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell className="text-[12px]" dir="ltr">{formatShortDate(entry.date)}</TableCell>
+                        <TableCell className="text-left">
+                          <Money value={debtRemainingAmount(entry)} decimals={0} className="font-semibold" />
+                        </TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">{entry.description ?? entry.ref}</TableCell>
+                        <TableCell />
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <EmptyState icon={HandCoins} title="لا ديون مسجّلة" description="يُخصم الدين المسجّل تلقائياً عند صرف الراتب، أو يُسوّى نقداً." />
               )}
             </TabsContent>
           </Tabs>
@@ -310,7 +405,7 @@ export function EmployeeDetailDialog({
           })();
         }}
       />
-      <DebtSettleDialog open={settleOpen} onOpenChange={setSettleOpen} entry={registeredDebt} />
+      <DebtSettleDialog open={settleOpen} onOpenChange={setSettleOpen} entry={primaryRegisteredDebt} />
     </>
   );
 }

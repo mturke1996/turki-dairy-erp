@@ -13,6 +13,7 @@ import type {
   LivestockType,
   MilkShift,
   PaymentMethod,
+  PayrollDebtMode,
   PayrollStatus,
   PayrollType,
   PriceTier,
@@ -301,6 +302,11 @@ export const PAYROLL_STATUS_LABELS: Record<PayrollStatus, string> = {
   draft: 'مسودة',
   approved: 'معتمد',
   paid: 'مصروف',
+};
+
+export const PAYROLL_DEBT_MODE_LABELS: Record<PayrollDebtMode, string> = {
+  deduct: 'خصم من الراتب',
+  carry_forward: 'ترحيل للفترة القادمة',
 };
 
 export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {

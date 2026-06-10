@@ -17,6 +17,7 @@ import { EmployeeDetailDialog } from '@/components/employees/employee-detail-dia
 import { EmployeeListCard, EmployeeStatusChips } from '@/components/employees/employee-list-card';
 import { PayrollBatchCard } from '@/components/employees/payroll-batch-card';
 import { PayrollBatchDialog } from '@/components/employees/payroll-batch-dialog';
+import { PayrollBatchEditDialog } from '@/components/employees/payroll-batch-edit-dialog';
 import { PayrollPayDialog } from '@/components/employees/payroll-pay-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -31,7 +32,15 @@ import {
   SALARY_TYPE_LABELS,
 } from '@/lib/domain/constants';
 import { computeEmployeeAdvanceBalance } from '@/lib/domain/calculations';
-import { employeeMonthlyEquivalent, payoutSourceLabel } from '@/lib/domain/payroll';
+import {
+  employeeMonthlyEquivalent,
+  normalizePayrollLine,
+  payoutSourceLabel,
+  payrollBatchAdvanceDeducted,
+  payrollBatchBonusTotal,
+  payrollBatchCarriedForward,
+  payrollBatchGrossTotal,
+} from '@/lib/domain/payroll';
 import type {
   EmployeeStatus,
   PayrollBatch,
@@ -70,17 +79,22 @@ function HrContent() {
   const cashMovements = useErpStore((s) => s.cashMovements);
   const addEmployee = useErpStore((s) => s.addEmployee);
   const createPayrollBatch = useErpStore((s) => s.createPayrollBatch);
+  const updatePayrollBatchLines = useErpStore((s) => s.updatePayrollBatchLines);
   const payPayrollBatch = useErpStore((s) => s.payPayrollBatch);
   const canPay = usePermission('payroll.pay');
 
   function buildPayrollProps(b: PayrollBatch) {
     const rows: PayrollLineRow[] = b.lines.map((l) => {
       const emp = employees.find((e) => e.id === l.employeeId);
+      const n = normalizePayrollLine(l);
       return {
         name: emp?.fullName ?? 'موظف',
         jobTitle: emp?.jobTitle ?? '',
         base: l.baseSalary,
         allowances: l.allowancesTotal,
+        gross: n.grossSalary + n.bonusAmount,
+        bonus: n.bonusAmount,
+        debtBefore: n.debtBefore,
         deductions: l.deductionsTotal,
         net: l.netSalary,
       };
@@ -115,6 +129,7 @@ function HrContent() {
   const [empOpen, setEmpOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
   const [payTarget, setPayTarget] = useState<PayrollBatch | null>(null);
+  const [editTarget, setEditTarget] = useState<PayrollBatch | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | EmployeeStatus>('all');
@@ -337,6 +352,7 @@ function HrContent() {
                     vaults={vaults}
                     banks={banks}
                     canPay={canPay}
+                    onEdit={() => setEditTarget(b)}
                     onPay={() => setPayTarget(b)}
                     pdfAction={
                       <TurkiPdfToolbar
@@ -357,19 +373,25 @@ function HrContent() {
                   <TableHead>الكشف</TableHead>
                   <TableHead>النوع</TableHead>
                   <TableHead>الفترة</TableHead>
-                  <TableHead>مصدر الصرف</TableHead>
-                  <TableHead className="text-center">الموظفون</TableHead>
-                  <TableHead className="text-left">الإجمالي</TableHead>
+                  <TableHead className="text-left">الأجور</TableHead>
+                  <TableHead className="text-left">خصم دين</TableHead>
+                  <TableHead className="text-left">صافي الصرف</TableHead>
                   <TableHead>الحالة</TableHead>
                   <TableHead className="text-left">إجراء</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {batches.map((b) => (
-                  <TableRow key={b.id}>
+                {batches.map((b) => {
+                  const gross = payrollBatchGrossTotal(b.lines);
+                  const deducted = payrollBatchAdvanceDeducted(b.lines);
+                  const bonus = payrollBatchBonusTotal(b.lines);
+                  const carried = payrollBatchCarriedForward(b.lines);
+                  return (
+                  <TableRow key={b.id} className="cursor-pointer" onClick={() => setEditTarget(b)}>
                     <TableCell>
                       <p className="text-[12.5px] font-medium">{b.label}</p>
                       <p className="text-[11px] text-muted-foreground" dir="ltr">{b.ref}</p>
+                      <p className="text-[10.5px] text-muted-foreground">{b.lines.length} موظف</p>
                     </TableCell>
                     <TableCell>
                       <Badge variant="neutral" className="text-[10px]">{PAYROLL_TYPE_LABELS[b.payrollType]}</Badge>
@@ -377,15 +399,21 @@ function HrContent() {
                     <TableCell className="text-[12px] text-muted-foreground" dir="ltr">
                       {formatShortDate(b.periodFrom)} — {formatShortDate(b.periodTo)}
                     </TableCell>
-                    <TableCell className="max-w-[110px] truncate text-[11.5px] text-muted-foreground">
-                      {b.paidFromType && b.paidFromId
-                        ? payoutSourceLabel(b.paidFromType, b.paidFromId, vaults, banks)
-                        : '—'}
+                    <TableCell className="text-left">
+                      <Money value={gross} decimals={0} />
+                      {bonus > 0 ? (
+                        <p className="text-[10px] text-meadow-700">+{bonus} مكافأة</p>
+                      ) : null}
                     </TableCell>
-                    <TableCell className="text-center text-[12.5px]">{b.lines.length}</TableCell>
+                    <TableCell className="text-left">
+                      {deducted > 0 ? <Money value={deducted} decimals={0} className="text-rose-700" /> : '—'}
+                      {carried > 0 ? (
+                        <p className="text-[10px] text-amber-700">{carried} مُرحَّل</p>
+                      ) : null}
+                    </TableCell>
                     <TableCell className="text-left"><Money value={b.totalAmount} decimals={0} className="font-semibold" /></TableCell>
                     <TableCell><Badge variant={PR_STATUS_VARIANT[b.status]}>{PAYROLL_STATUS_LABELS[b.status]}</Badge></TableCell>
-                    <TableCell className="text-left">
+                    <TableCell className="text-left" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
                         <TurkiPdfToolbar
                           fileName={`كشف-رواتب-${b.label}`}
@@ -395,15 +423,21 @@ function HrContent() {
                           render={async () => <PayrollPDF {...buildPayrollProps(b)} />}
                         />
                         {b.status !== 'paid' ? (
-                          <Button size="sm" variant="outline" disabled={!canPay} onClick={() => setPayTarget(b)}>
-                            <Wallet className="h-3.5 w-3.5" />
-                            صرف
-                          </Button>
+                          <>
+                            <Button size="sm" variant="ghost" onClick={() => setEditTarget(b)}>
+                              مراجعة
+                            </Button>
+                            <Button size="sm" variant="outline" disabled={!canPay} onClick={() => setPayTarget(b)}>
+                              <Wallet className="h-3.5 w-3.5" />
+                              صرف
+                            </Button>
+                          </>
                         ) : null}
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
                 </TableBody>
               </Table>
               </div>
@@ -440,10 +474,42 @@ function HrContent() {
         onSubmit={async (input) => {
           const res = await createPayrollBatch(input);
           if (res.ok) {
-            toast.success('تم إنشاء كشف الرواتب');
+            toast.success('تم إنشاء كشف الرواتب — راجع التفاصيل قبل الصرف');
             setBatchOpen(false);
+            const fresh = useErpStore.getState().payrollBatches.find((b) => b.id === res.id);
+            if (fresh) setEditTarget(fresh);
           } else toast.error(res.error ?? 'تعذّر الإنشاء');
         }}
+      />
+
+      <PayrollBatchEditDialog
+        batch={editTarget}
+        open={!!editTarget}
+        onOpenChange={(o) => !o && setEditTarget(null)}
+        employees={rawEmployees}
+        advanceBalanceOf={(id) =>
+          computeEmployeeAdvanceBalance(id, payments, batches, debtEntries)
+        }
+        canPay={canPay}
+        onSave={async (batchId, patches) => {
+          const res = await updatePayrollBatchLines(batchId, patches);
+          if (!res.ok) {
+            toast.error(res.error ?? 'تعذّر الحفظ');
+            throw new Error(res.error);
+          }
+          const fresh = useErpStore.getState().payrollBatches.find((b) => b.id === batchId);
+          if (fresh) setEditTarget(fresh);
+        }}
+        onPay={
+          editTarget && editTarget.status !== 'paid'
+            ? () => {
+                const batchId = editTarget.id;
+                const fresh = useErpStore.getState().payrollBatches.find((b) => b.id === batchId);
+                setPayTarget(fresh ?? editTarget);
+                setEditTarget(null);
+              }
+            : undefined
+        }
       />
 
       <PayrollPayDialog

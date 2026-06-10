@@ -478,27 +478,77 @@ export function allCustomerStats(data: ErpData): CustomerStats[] {
 // ============================================================
 // الموظفون — سلف ورواتب
 // ============================================================
+
+/** مجموع المخصوم من السلف/الدين عبر كشوف الرواتب — المُصروفة فقط. */
+export function sumPayrollAdvanceRecovered(
+  employeeId: string,
+  payrollBatches: PayrollBatch[],
+  paidOnly = true,
+): number {
+  return round(
+    sum(
+      payrollBatches
+        .filter((b) => !paidOnly || b.status === 'paid')
+        .flatMap((b) => b.lines)
+        .filter((l) => l.employeeId === employeeId)
+        .map((l) => l.advanceDeducted),
+    ),
+  );
+}
+
+export interface EmployeeDebtBreakdown {
+  advancesTotal: number;
+  advancesRecovered: number;
+  advancesRemaining: number;
+  registeredDebt: number;
+  totalOwed: number;
+}
+
+/** تفصيل دين الموظف: سلف نقدية + ديون مسجّلة − ما استُرد من الراتب. */
+export function computeEmployeeDebtBreakdown(
+  employeeId: string,
+  payments: Payment[],
+  payrollBatches: PayrollBatch[],
+  debtEntries: DebtEntry[] = [],
+): EmployeeDebtBreakdown {
+  const advancesTotal = round(
+    sum(
+      payments
+        .filter((p) => p.kind === 'employee_advance' && p.partyId === employeeId)
+        .map((p) => p.amount),
+    ),
+  );
+  const advancesRecovered = sumPayrollAdvanceRecovered(employeeId, payrollBatches, true);
+  const registeredDebt = round(
+    sum(
+      debtEntries
+        .filter((d) => d.partyKind === 'employee' && d.partyId === employeeId)
+        .map((d) => Math.max(0, debtBalanceContribution(d))),
+    ),
+  );
+  const advancesRemaining = round(Math.max(0, advancesTotal - advancesRecovered));
+  const totalOwed = round(Math.max(0, advancesRemaining + registeredDebt));
+  return {
+    advancesTotal,
+    advancesRecovered,
+    advancesRemaining,
+    registeredDebt,
+    totalOwed,
+  };
+}
+
 export function computeEmployeeAdvanceBalance(
   employeeId: string,
   payments: Payment[],
   payrollBatches: PayrollBatch[],
   debtEntries: DebtEntry[] = [],
 ): number {
-  const advanced = sum(
-    payments.filter((p) => p.kind === 'employee_advance' && p.partyId === employeeId).map((p) => p.amount),
-  );
-  const manualDebt = sum(
-    debtEntries
-      .filter((d) => d.partyKind === 'employee' && d.partyId === employeeId)
-      .map((d) => debtBalanceContribution(d)),
-  );
-  const recovered = sum(
-    payrollBatches
-      .flatMap((b) => b.lines)
-      .filter((l) => l.employeeId === employeeId)
-      .map((l) => l.advanceDeducted),
-  );
-  return round(Math.max(0, advanced - recovered + manualDebt));
+  return computeEmployeeDebtBreakdown(
+    employeeId,
+    payments,
+    payrollBatches,
+    debtEntries,
+  ).totalOwed;
 }
 
 export function computeEmployeeStats(
@@ -513,14 +563,7 @@ export function computeEmployeeStats(
   const advancesTotal = round(
     sum(payments.filter((p) => p.kind === 'employee_advance' && p.partyId === employee.id).map((p) => p.amount)),
   );
-  const advancesRecovered = round(
-    sum(
-      payrollBatches
-        .flatMap((b) => b.lines)
-        .filter((l) => l.employeeId === employee.id)
-        .map((l) => l.advanceDeducted),
-    ),
-  );
+  const advancesRecovered = sumPayrollAdvanceRecovered(employee.id, payrollBatches, true);
   const advanceBalance = computeEmployeeAdvanceBalance(employee.id, payments, payrollBatches, debtEntries);
   const paidBatches = payrollBatches.filter((b) => b.status === 'paid');
   const paidLines = paidBatches.flatMap((b) => b.lines).filter((l) => l.employeeId === employee.id);

@@ -91,16 +91,22 @@ export function generateSeedV3(sessionId: string): SeedV3 {
       const absenceDays = e.status === 'on_leave' ? 6 : 0;
       const dailyRate = (e.baseSalary + allowancesTotal) / 30;
       const deductionsTotal = Math.round(absenceDays * dailyRate);
-      const netSalary = e.baseSalary + allowancesTotal - deductionsTotal;
+      const grossSalary = e.baseSalary + allowancesTotal - deductionsTotal;
+      const netSalary = grossSalary;
       return {
         employeeId: e.id,
         baseSalary: e.baseSalary,
         allowancesTotal,
+        grossSalary,
+        bonusAmount: 0,
         deductionsTotal,
         netSalary,
         attendanceDays: 30 - absenceDays,
         absenceDays,
+        debtBefore: 0,
         advanceDeducted: 0,
+        debtCarriedForward: 0,
+        debtMode: 'deduct' as const,
       };
     });
 

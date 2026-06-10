@@ -56,8 +56,26 @@ describe('payroll line calculation', () => {
       periodTo: '2026-06-30',
       advanceBalance: 500,
     });
+    expect(line.grossSalary).toBe(3600);
     expect(line.netSalary).toBe(3100);
     expect(line.advanceDeducted).toBe(500);
+    expect(line.debtBefore).toBe(500);
+  });
+
+  it('carries debt forward and pays full salary with bonus', () => {
+    const line = buildPayrollLine({
+      employee: emp({ id: 'e4', baseSalary: 2000, salaryType: 'monthly' }),
+      batchType: 'monthly',
+      periodFrom: '2026-06-01',
+      periodTo: '2026-06-30',
+      advanceBalance: 800,
+      bonusAmount: 200,
+      debtMode: 'carry_forward',
+    });
+    expect(line.netSalary).toBe(2200);
+    expect(line.advanceDeducted).toBe(0);
+    expect(line.debtCarriedForward).toBe(800);
+    expect(line.bonusAmount).toBe(200);
   });
 
   it('pays half-month at 50% of monthly package', () => {
@@ -91,6 +109,35 @@ describe('payroll line calculation', () => {
     });
     expect(line.attendanceDays).toBe(10);
     expect(line.netSalary).toBeGreaterThan(900);
+  });
+});
+
+describe('payroll batch totals', () => {
+  it('keeps gross = deducted + net for deduct mode', () => {
+    const line = buildPayrollLine({
+      employee: emp({ id: 'e5', baseSalary: 1500, salaryType: 'monthly' }),
+      batchType: 'monthly',
+      periodFrom: '2026-06-01',
+      periodTo: '2026-06-30',
+      advanceBalance: 400,
+      bonusAmount: 100,
+      debtMode: 'deduct',
+    });
+    expect(line.grossSalary + line.bonusAmount).toBe(line.advanceDeducted + line.netSalary);
+  });
+
+  it('carry forward pays full net without deducting', () => {
+    const line = buildPayrollLine({
+      employee: emp({ id: 'e6', baseSalary: 1000, salaryType: 'half_month' }),
+      batchType: 'bi_monthly',
+      periodFrom: '2026-06-01',
+      periodTo: '2026-06-15',
+      advanceBalance: 600,
+      debtMode: 'carry_forward',
+    });
+    expect(line.advanceDeducted).toBe(0);
+    expect(line.netSalary).toBe(line.grossSalary);
+    expect(line.debtCarriedForward).toBeGreaterThan(0);
   });
 });
 

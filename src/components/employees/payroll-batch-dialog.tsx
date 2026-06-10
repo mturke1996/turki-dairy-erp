@@ -21,6 +21,8 @@ import { PAYROLL_TYPE_LABELS, SALARY_TYPE_LABELS } from '@/lib/domain/constants'
 import {
   buildPayrollLine,
   parsePayoutAccountValue,
+  payrollBatchAdvanceDeducted,
+  payrollBatchGrossTotal,
   payrollBatchTotal,
   resolveSuggestedPayout,
   salaryTypeMatchesBatch,
@@ -93,6 +95,8 @@ export function PayrollBatchDialog({
   }, [eligible, payrollType, periodFrom, periodTo, today, advanceBalanceOf]);
 
   const previewTotal = payrollBatchTotal(previewLines);
+  const previewGross = payrollBatchGrossTotal(previewLines);
+  const previewDeducted = payrollBatchAdvanceDeducted(previewLines);
 
   const typeCounts = useMemo(() => {
     const counts: Record<SalaryType, number> = { monthly: 0, half_month: 0, daily: 0 };
@@ -243,9 +247,15 @@ export function PayrollBatchDialog({
             ) : previewTotal <= 0 ? (
               <p className="mt-3 text-[12px] text-muted-foreground">تحقق من الفترة — الإجمالي صفر حالياً.</p>
             ) : (
-              <p className="mt-3 text-[11.5px] text-muted-foreground">
-                صافي تقديري {moneyText(previewTotal, 0)} بعد خصم السلف والغياب.
-              </p>
+              <div className="mt-3 space-y-1 text-[11.5px] text-muted-foreground">
+                <p>إجمالي الأجور: {moneyText(previewGross, 0)}</p>
+                {previewDeducted > 0 ? (
+                  <p className="text-rose-700">خصم دين متوقّع: {moneyText(previewDeducted, 0)}</p>
+                ) : null}
+                <p className="font-medium text-foreground">
+                  صافي الصرف: {moneyText(previewTotal, 0)}
+                </p>
+              </div>
             )}
           </div>
         </div>

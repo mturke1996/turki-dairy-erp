@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeEmployeeAdvanceBalance,
+  computeEmployeeDebtBreakdown,
   computeFarmerSessionStats,
   buildSessionCarryForwardSnapshot,
   computeDerived,
@@ -8,6 +10,7 @@ import {
 import { buildInventoryLedger } from '@/lib/domain/inventory';
 import { resolveAdjustmentReasonKind } from '@/lib/domain/constants';
 import type {
+  DebtEntry,
   Expense,
   Farmer,
   InventoryAdjustment,
@@ -54,6 +57,100 @@ const sessionS2: Session = {
   },
   createdAt: '2026-06-16',
 };
+
+describe('computeEmployeeDebtBreakdown', () => {
+  const empId = 'e1';
+
+  const advancePayment = (amount: number): Payment => ({
+    id: 'pay-adv',
+    ref: 'ADV-1',
+    kind: 'employee_advance',
+    partyId: empId,
+    sessionId: 's1',
+    date: '2026-06-01',
+    amount,
+    method: 'cash',
+    createdAt: '2026-06-01',
+  });
+
+  const payrollLine = (advanceDeducted: number) => ({
+    employeeId: empId,
+    baseSalary: 1000,
+    allowancesTotal: 0,
+    grossSalary: 1000,
+    bonusAmount: 0,
+    attendanceDays: 30,
+    absenceDays: 0,
+    debtBefore: advanceDeducted,
+    advanceDeducted,
+    debtCarriedForward: 0,
+    debtMode: 'deduct' as const,
+    deductionsTotal: advanceDeducted,
+    netSalary: 1000 - advanceDeducted,
+  });
+
+  it('ignores advance deductions on draft batches', () => {
+    const batches: PayrollBatch[] = [
+      {
+        id: 'pb-draft',
+        ref: 'PR-1',
+        label: 'مسودة',
+        payrollType: 'monthly',
+        periodFrom: '2026-06-01',
+        periodTo: '2026-06-30',
+        status: 'draft',
+        sessionId: 's1',
+        lines: [payrollLine(400)],
+        totalAmount: 600,
+        createdAt: '2026-06-01',
+      },
+    ];
+    const balance = computeEmployeeAdvanceBalance(empId, [advancePayment(500)], batches, []);
+    expect(balance).toBe(500);
+  });
+
+  it('counts advance deductions only after payroll is paid', () => {
+    const batches: PayrollBatch[] = [
+      {
+        id: 'pb-paid',
+        ref: 'PR-2',
+        label: 'مصروف',
+        payrollType: 'monthly',
+        periodFrom: '2026-06-01',
+        periodTo: '2026-06-30',
+        status: 'paid',
+        sessionId: 's1',
+        lines: [payrollLine(300)],
+        totalAmount: 700,
+        paidAt: '2026-06-30',
+        createdAt: '2026-06-01',
+      },
+    ];
+    const breakdown = computeEmployeeDebtBreakdown(empId, [advancePayment(500)], batches, []);
+    expect(breakdown.advancesTotal).toBe(500);
+    expect(breakdown.advancesRecovered).toBe(300);
+    expect(breakdown.advancesRemaining).toBe(200);
+    expect(breakdown.totalOwed).toBe(200);
+  });
+
+  it('combines remaining advances with registered employee debt', () => {
+    const debt: DebtEntry = {
+      id: 'de1',
+      ref: 'DEBT-1',
+      partyKind: 'employee',
+      partyId: empId,
+      sessionId: 's1',
+      date: '2026-06-05',
+      amount: 150,
+      direction: 'receivable',
+      createdAt: '2026-06-05',
+    };
+    const breakdown = computeEmployeeDebtBreakdown(empId, [advancePayment(200)], [], [debt]);
+    expect(breakdown.advancesRemaining).toBe(200);
+    expect(breakdown.registeredDebt).toBe(150);
+    expect(breakdown.totalOwed).toBe(350);
+  });
+});
 
 describe('computeFarmerSessionStats', () => {
   it('excludes sample qty from billable value', () => {

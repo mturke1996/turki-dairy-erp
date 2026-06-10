@@ -517,16 +517,28 @@ export interface Employee {
 
 export type PayrollType = 'monthly' | 'bi_monthly' | 'daily';
 export type PayrollStatus = 'draft' | 'approved' | 'paid';
+/** deduct=خصم من الراتب، carry_forward=ترحيل للفترة القادمة مع صرف كامل */
+export type PayrollDebtMode = 'deduct' | 'carry_forward';
 
 export interface PayrollLine {
   employeeId: string;
   baseSalary: number;
   allowancesTotal: number;
+  /** إجمالي الأجر قبل المكافآت والخصوم */
+  grossSalary: number;
+  /** مكافأة/حافز لهذه الفترة */
+  bonusAmount: number;
   deductionsTotal: number;
   netSalary: number;
   attendanceDays: number;
   absenceDays: number;
+  /** رصيد الدين/السلف قبل هذا الكشف */
+  debtBefore: number;
+  /** المخصوم فعلياً من الراتب */
   advanceDeducted: number;
+  /** المُرحَّل للفترة القادمة (عند اختيار الترحيل) */
+  debtCarriedForward: number;
+  debtMode: PayrollDebtMode;
   notes?: string;
 }
 

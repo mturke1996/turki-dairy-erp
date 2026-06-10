@@ -12,6 +12,9 @@ export type PayrollLineRow = {
   jobTitle: string;
   base: number;
   allowances: number;
+  gross?: number;
+  bonus?: number;
+  debtBefore?: number;
   deductions: number;
   net: number;
 };
