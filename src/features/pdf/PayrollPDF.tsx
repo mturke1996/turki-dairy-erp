@@ -3,7 +3,7 @@ import React from 'react';
 import { Text, View } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
-import { PDF, pdfBase } from './pdfBase';
+import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
 import { PdfMoneyText } from './pdfBrandKit';
 import { PdfTh, PdfTdMoney } from './PdfTable';
 
@@ -43,7 +43,7 @@ export function PayrollPDF({ label, periodFrom, periodTo, total, statusLabel, pa
         { label: 'الحالة', value: statusLabel },
       ]}
     >
-      <View style={[pdfBase.tableHead, { marginTop: 4 }]} minPresenceAhead={40}>
+      <View style={[pdfBase.tableHead, { marginTop: 4 }]} minPresenceAhead={PDF_PAGINATION.tableHead}>
         <PdfTh flex={2.2}>الموظف</PdfTh>
         <PdfTh flex={1.3} kind="money">الأساسي</PdfTh>
         <PdfTh flex={1.3} kind="money">البدلات</PdfTh>
@@ -62,7 +62,7 @@ export function PayrollPDF({ label, periodFrom, periodTo, total, statusLabel, pa
           <PdfTdMoney flex={1.4} amount={r.net} decimals={0} bold />
         </View>
       ))}
-      <View style={pdfBase.totalRowBar} minPresenceAhead={52}>
+      <View style={pdfBase.totalRowBar} minPresenceAhead={PDF_PAGINATION.totalBar}>
         <Text style={{ fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen, lineHeight: 1.4 }}>{ar('إجمالي كشف الرواتب')}</Text>
         <PdfMoneyText amount={total} size="md" />
       </View>

@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PayoutSourceSelect, buildPayoutOptions } from '@/components/employees/payout-source-select';
-import { PAYROLL_TYPE_LABELS, SALARY_TYPE_LABELS } from '@/lib/domain/constants';
+import { PAYROLL_TYPE_LABELS, PAYROLL_TYPE_ORDER, SALARY_TYPE_LABELS } from '@/lib/domain/constants';
 import {
   buildPayrollLine,
   parsePayoutAccountValue,
@@ -107,11 +107,13 @@ export function PayrollBatchDialog({
   }, [active]);
 
   const batchSalaryLabel =
-    payrollType === 'bi_monthly'
-      ? SALARY_TYPE_LABELS.half_month
-      : payrollType === 'daily'
-        ? SALARY_TYPE_LABELS.daily
-        : SALARY_TYPE_LABELS.monthly;
+    payrollType === 'all'
+      ? 'كل الموظفين النشطين'
+      : payrollType === 'bi_monthly'
+        ? 'نصف شهر / شهري (نصف)'
+        : payrollType === 'daily'
+          ? SALARY_TYPE_LABELS.daily
+          : SALARY_TYPE_LABELS.monthly;
 
   useEffect(() => {
     if (!open) return;
@@ -157,7 +159,7 @@ export function PayrollBatchDialog({
           <DialogHeader className="space-y-1.5 text-right">
             <DialogTitle className="text-[17px] text-white">كشف رواتب جديد</DialogTitle>
             <DialogDescription className="text-[12.5px] text-white/70">
-              اختر نوع الكشف والفترة ومصدر الصرف — يُضمّ الموظفون المطابقون فقط.
+              «الكل» يحسب لكل موظف حسب نوعه والفترة — شهري ÷2 لـ15 يوم، نصف شهر كاملاً، يومي × الأيام.
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -172,13 +174,20 @@ export function PayrollBatchDialog({
             />
           </Field>
 
-          <Field label="نوع الكشف" hint="يُطابق نوع الراتب المعرّف لكل موظف">
+          <Field
+            label="نوع الكشف"
+            hint={
+              payrollType === 'all'
+                ? 'يشمل كل النشطين — كل موظف يُحسب حسب نوع راتبه وأيام الفترة.'
+                : 'يُضمّ الموظفون المطابقون لنوع الراتب فقط.'
+            }
+          >
             <Select value={payrollType} onValueChange={(v) => setPayrollType(v as PayrollType)}>
               <SelectTrigger className="h-11">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(PAYROLL_TYPE_LABELS) as PayrollType[]).map((t) => (
+                {PAYROLL_TYPE_ORDER.map((t) => (
                   <SelectItem key={t} value={t}>
                     {PAYROLL_TYPE_LABELS[t]}
                   </SelectItem>

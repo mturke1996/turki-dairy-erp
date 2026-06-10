@@ -1,30 +1,36 @@
 'use client';
 
-import { Calendar, Gift, HandCoins, Landmark, Pencil, Users, Wallet } from 'lucide-react';
+import { Calendar, ChevronLeft, Users, Wallet } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Money } from '@/components/shared/money';
 import { PAYROLL_STATUS_LABELS, PAYROLL_TYPE_LABELS } from '@/lib/domain/constants';
 import {
-  payoutSourceLabel,
-  payrollBatchAdvanceDeducted,
-  payrollBatchBonusTotal,
-  payrollBatchCarriedForward,
-  payrollBatchGrossTotal,
+  payrollBatchIsPartial,
+  payrollBatchPaidCashTotal,
+  payrollBatchProgress,
+  payrollBatchRemainingSummary,
+  payrollBatchTotal,
 } from '@/lib/domain/payroll';
 import type { BankAccount, CashVault, PayrollBatch } from '@/lib/domain/types';
 import { cn, formatShortDate } from '@/lib/utils';
 
-const STATUS_VARIANT: Record<PayrollBatch['status'], 'neutral' | 'info' | 'success'> = {
-  draft: 'neutral',
-  approved: 'info',
-  paid: 'success',
-};
+function batchStatusVariant(batch: PayrollBatch): 'neutral' | 'info' | 'success' {
+  if (batch.status === 'paid') return 'success';
+  if (payrollBatchIsPartial(batch) || batch.status === 'approved') return 'info';
+  return 'neutral';
+}
+
+function batchStatusLabel(batch: PayrollBatch): string {
+  if (batch.status === 'paid') return PAYROLL_STATUS_LABELS.paid;
+  if (payrollBatchIsPartial(batch)) return PAYROLL_STATUS_LABELS.approved;
+  return PAYROLL_STATUS_LABELS[batch.status];
+}
 
 export function PayrollBatchCard({
   batch,
-  vaults,
-  banks,
+  vaults: _vaults,
+  banks: _banks,
   canPay,
   onPay,
   onEdit,
@@ -40,115 +46,130 @@ export function PayrollBatchCard({
   pdfAction: React.ReactNode;
   className?: string;
 }) {
+  void _vaults;
+  void _banks;
   const isPaid = batch.status === 'paid';
-  const grossTotal = payrollBatchGrossTotal(batch.lines);
-  const bonusTotal = payrollBatchBonusTotal(batch.lines);
-  const advanceDeducted = payrollBatchAdvanceDeducted(batch.lines);
-  const carriedForward = payrollBatchCarriedForward(batch.lines);
-  const withDebt = batch.lines.filter((l) => (l.debtBefore ?? 0) > 0).length;
-  const withCarry = batch.lines.filter((l) => l.debtMode === 'carry_forward').length;
+  const isPartial = payrollBatchIsPartial(batch);
+  const progress = payrollBatchProgress(batch);
+  const remaining = payrollBatchTotal(batch.lines, batch.status);
+  const paidCash = payrollBatchPaidCashTotal(batch.lines, batch.status);
+  const summary = payrollBatchRemainingSummary(batch.lines, batch.status);
 
   return (
     <div
       className={cn(
         'overflow-hidden rounded-xl border border-border bg-card shadow-whisper',
-        isPaid && 'ring-1 ring-inset ring-meadow-200',
+        isPaid && 'border-meadow-200/70',
+        isPartial && 'border-sky-200/70',
         className,
       )}
     >
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
+      <button
+        type="button"
+        onClick={onEdit}
+        className="group w-full p-3.5 text-right transition-colors hover:bg-canvas-sunken/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        <div className="flex items-start gap-2.5">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] font-semibold text-foreground">{batch.label}</p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="text-sm font-semibold text-foreground">{batch.label}</p>
+              <Badge variant={batchStatusVariant(batch)} className="text-[10px]">
+                {batchStatusLabel(batch)}
+              </Badge>
+            </div>
             <p className="mt-0.5 font-mono text-[11px] text-muted-foreground" dir="ltr">{batch.ref}</p>
+            <div className="mt-1.5 flex flex-wrap gap-x-2.5 gap-y-0.5 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1" dir="ltr">
+                <Calendar className="size-3 opacity-60" />
+                {formatShortDate(batch.periodFrom)} — {formatShortDate(batch.periodTo)}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Users className="size-3 opacity-60" />
+                {batch.lines.length} موظف
+              </span>
+              <span>{PAYROLL_TYPE_LABELS[batch.payrollType]}</span>
+            </div>
           </div>
-          <Badge variant={STATUS_VARIANT[batch.status]} className="shrink-0">
-            {PAYROLL_STATUS_LABELS[batch.status]}
-          </Badge>
+          <ChevronLeft className="mt-0.5 size-4 shrink-0 text-muted-foreground/40" />
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1" dir="ltr">
-            <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" />
-            {formatShortDate(batch.periodFrom)} — {formatShortDate(batch.periodTo)}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Users className="h-3.5 w-3.5 shrink-0 opacity-70" />
-            {batch.lines.length} موظف
-          </span>
-          <span>{PAYROLL_TYPE_LABELS[batch.payrollType]}</span>
-          {batch.paidFromType && batch.paidFromId ? (
-            <span className="inline-flex max-w-[140px] items-center gap-1 truncate">
-              <Landmark className="h-3.5 w-3.5 shrink-0 opacity-70" />
-              {payoutSourceLabel(batch.paidFromType, batch.paidFromId, vaults, banks)}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div className="rounded-lg bg-canvas-sunken/60 px-2.5 py-2">
-            <p className="text-[10px] text-muted-foreground">إجمالي الأجور</p>
-            <Money value={grossTotal} decimals={0} className="mt-0.5 text-[13px] font-semibold" />
+        {!isPaid && progress.total > 0 ? (
+          <div className="mt-3" role="status" aria-label={`صُرف ${progress.paid} من ${progress.total}`}>
+            <div className="mb-1 flex items-center justify-between text-[11px]">
+              <span className="text-muted-foreground">تقدّم الصرف</span>
+              <span className="font-medium tabular-nums">{progress.paid}/{progress.total}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-canvas-sunken">
+              <div
+                className="h-full rounded-full bg-meadow-500 transition-[width] duration-200 ease-out motion-reduce:transition-none"
+                style={{ width: `${progress.percent}%` }}
+              />
+            </div>
           </div>
-          {bonusTotal > 0 ? (
-            <div className="rounded-lg border border-meadow-200/60 bg-meadow-50/40 px-2.5 py-2">
-              <p className="text-[10px] text-meadow-800">
-                <Gift className="mr-0.5 inline h-3 w-3" />
-                مكافآت
-              </p>
-              <Money value={bonusTotal} decimals={0} className="mt-0.5 text-[13px] font-semibold text-meadow-800" />
-            </div>
-          ) : null}
-          {advanceDeducted > 0 ? (
-            <div className="rounded-lg border border-rose-200/60 bg-rose-50/40 px-2.5 py-2">
-              <p className="text-[10px] text-rose-800">
-                <HandCoins className="mr-0.5 inline h-3 w-3" />
-                خصم دين
-              </p>
-              <Money value={advanceDeducted} decimals={0} className="mt-0.5 text-[13px] font-semibold text-rose-800" />
-            </div>
-          ) : null}
-          {carriedForward > 0 ? (
-            <div className="rounded-lg border border-amber-200/60 bg-amber-50/40 px-2.5 py-2">
-              <p className="text-[10px] text-amber-800">مُرحَّل</p>
-              <Money value={carriedForward} decimals={0} className="mt-0.5 text-[13px] font-semibold text-amber-800" />
-            </div>
-          ) : null}
-        </div>
+        ) : null}
 
-        <div className="mt-3 flex items-end justify-between gap-3 rounded-lg border border-navy-200/50 bg-navy-50/30 px-3 py-2.5">
-          <div>
-            <p className="text-[10.5px] font-medium text-muted-foreground">صافي الصرف من الخزينة</p>
-            <Money value={batch.totalAmount} decimals={0} className="mt-0.5 text-[18px] font-bold text-navy-900" />
-            {withDebt > 0 ? (
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                {withDebt} موظف لديهم دين
-                {withCarry > 0 ? ` · ${withCarry} بترحيل` : ''}
-              </p>
-            ) : null}
-          </div>
-          {isPaid && batch.paidAt ? (
-            <p className="text-[10.5px] text-muted-foreground" dir="ltr">
-              صُرف {formatShortDate(batch.paidAt)}
+        <div className="mt-3 rounded-lg bg-navy-50/50 px-3 py-2.5 text-right">
+          <p className="text-[11px] text-muted-foreground">
+            {isPaid ? 'إجمالي المُصروف من الخزينة' : remaining > 0 ? 'صافي المتبقي من الخزينة' : 'مكتمل'}
+          </p>
+          <Money
+            value={isPaid ? paidCash : remaining}
+            decimals={0}
+            className="mt-0.5 block text-xl font-semibold tabular-nums text-navy-900"
+          />
+          {!isPaid && remaining > 0 ? (
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              أجور{' '}
+              <Money value={summary.grossWithBonus} decimals={0} className="inline font-medium text-foreground" />
+              {summary.deducted > 0 ? (
+                <>
+                  {' '}
+                  − دين{' '}
+                  <Money value={summary.deducted} decimals={0} className="inline font-medium text-rose-700" />
+                </>
+              ) : null}
+              {summary.carried > 0 ? (
+                <span className="block text-amber-800">
+                  يُرحَّل{' '}
+                  <Money value={summary.carried} decimals={0} className="inline font-medium" />
+                  {' '}
+                  (يُصرف الأجر كاملاً)
+                </span>
+              ) : null}
+            </p>
+          ) : null}
+          {!isPaid && batch.payrollType === 'all' ? (
+            <p className="mt-1 text-[10.5px] text-muted-foreground">
+              كشف «الكل» — حسب نوع كل موظف وأيام الفترة
+            </p>
+          ) : null}
+          {!isPaid && batch.payrollType === 'bi_monthly' ? (
+            <p className="mt-1 text-[10.5px] text-muted-foreground">
+              كشف نصف شهر — نصف شهر كاملاً، شهري بنصف الراتب
+            </p>
+          ) : null}
+          {!isPaid && paidCash > 0 ? (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              صُرف سابقاً{' '}
+              <Money value={paidCash} decimals={0} className="inline font-medium text-foreground" />
             </p>
           ) : null}
         </div>
+      </button>
 
-        <div className="mt-3 flex gap-2">
-          <div className="shrink-0">{pdfAction}</div>
-          {onEdit ? (
-            <Button size="sm" variant="outline" className="min-h-9" onClick={onEdit}>
-              <Pencil className="h-3.5 w-3.5" />
-              مراجعة
-            </Button>
-          ) : null}
-          {!isPaid ? (
-            <Button size="sm" variant="outline" className="min-h-9 flex-1" disabled={!canPay} onClick={onPay}>
-              <Wallet className="h-3.5 w-3.5" />
-              صرف الرواتب
-            </Button>
-          ) : null}
-        </div>
+      <div className="flex flex-wrap gap-2 border-t border-border/80 px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0">{pdfAction}</div>
+        {!isPaid && remaining > 0 && onEdit ? (
+          <Button variant="outline" size="sm" className="min-w-0 flex-1" onClick={onEdit}>
+            مراجعة
+          </Button>
+        ) : null}
+        {!isPaid && remaining > 0 ? (
+          <Button size="sm" className="min-w-0 flex-1" disabled={!canPay} onClick={onPay}>
+            <Wallet className="size-3.5" />
+            صرف الكل
+          </Button>
+        ) : null}
       </div>
     </div>
   );

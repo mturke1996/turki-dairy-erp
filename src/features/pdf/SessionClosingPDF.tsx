@@ -3,7 +3,7 @@ import React from 'react';
 import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar, pdfDisplayValue } from './arabicPDF';
-import { PDF, pdfBase } from './pdfBase';
+import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
 import { PdfMoneyText, pdfFmtNum, pdfFmtLiters } from './pdfBrandKit';
 import { PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 import type { SessionSummary } from '@/lib/domain/calculations';
@@ -100,7 +100,7 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       {farmerBalances.length > 0 && (
         <>
           <Text style={s.section}>{ar('ديون الفلاحين')}</Text>
-          <View style={pdfBase.tableHead} minPresenceAhead={40}>
+          <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>
             <PdfTh flex={3}>الفلاح</PdfTh>
             <PdfTh flex={1.4} kind="money">الرصيد</PdfTh>
           </View>
@@ -116,7 +116,7 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       {customerBalances.length > 0 && (
         <>
           <Text style={s.section}>{ar('أرصدة العملاء المدينة')}</Text>
-          <View style={pdfBase.tableHead} minPresenceAhead={40}>
+          <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>
             <PdfTh flex={3}>العميل</PdfTh>
             <PdfTh flex={1.4} kind="money">الرصيد</PdfTh>
           </View>
@@ -132,7 +132,7 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       {employeeBalances.length > 0 && (
         <>
           <Text style={s.section}>{ar('سلف الموظفين المُرحّلة')}</Text>
-          <View style={pdfBase.tableHead} minPresenceAhead={40}>
+          <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>
             <PdfTh flex={3}>الموظف</PdfTh>
             <PdfTh flex={1.4} kind="money">الرصيد</PdfTh>
           </View>

@@ -22,6 +22,14 @@ import type { CustomerStats } from '@/lib/domain/calculations';
 import { formatShortDate, formatNumber } from '@/lib/utils';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
 import { PartyDeleteButton } from '@/components/shared/party-delete-button';
+import {
+  PROFILE_DIALOG_SHELL,
+  ProfileDialogBody,
+  ProfileDesktopTable,
+  ProfileTabsList,
+  ProfileTimelineCard,
+  ProfileTimelineList,
+} from '@/components/shared/profile-dialog';
 import { useErpStore } from '@/lib/store/use-erp-store';
 
 export function CustomerDetailDialog({
@@ -85,7 +93,10 @@ export function CustomerDetailDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className={PROFILE_DIALOG_SHELL}>
+          <ProfileDialogBody
+            header={
+              <>
           <DialogHeader>
             <div className="space-y-1 pl-8">
               <DialogTitle className="flex flex-wrap items-center gap-2">
@@ -119,7 +130,7 @@ export function CustomerDetailDialog({
                 حد الائتمان: <Money value={customer.creditLimit} decimals={0} className="inline text-[11px]" /> · الاستخدام {formatNumber(customer.creditUtilization, 0)}%
               </p>
             </div>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
               {agingCells.map((b) => (
                 <div key={b.l} className="rounded-lg bg-canvas-sunken/60 p-2 text-center">
                   <p className="text-[10px] text-muted-foreground">{b.l}</p>
@@ -163,15 +174,35 @@ export function CustomerDetailDialog({
               )}
             />
           </div>
-
-          <Tabs defaultValue="sales">
-            <TabsList>
-              <TabsTrigger value="sales">المبيعات ({sales.length})</TabsTrigger>
-              <TabsTrigger value="receipts">التحصيلات ({payments.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="sales">
+              </>
+            }
+          >
+          <Tabs defaultValue="sales" className="min-w-0">
+            <ProfileTabsList>
+              <TabsList className="h-auto w-full min-w-0 justify-start gap-1 p-1">
+                <TabsTrigger value="sales" className="shrink-0">المبيعات ({sales.length})</TabsTrigger>
+                <TabsTrigger value="receipts" className="shrink-0">التحصيلات ({payments.length})</TabsTrigger>
+              </TabsList>
+            </ProfileTabsList>
+            <TabsContent value="sales" className="mt-3 min-w-0">
+              {sales.length ? (
+                <>
+                <ProfileTimelineList>
+                  {sales.map((s) => (
+                    <ProfileTimelineCard
+                      key={`${s.id}-m`}
+                      title={formatShortDate(s.date)}
+                      subtitle={<span className="font-mono" dir="ltr">{s.ref}</span>}
+                      rows={[
+                        { label: 'الكمية', value: <Liters value={s.quantity} className="text-[12px]" /> },
+                        { label: 'الاستحقاق', value: formatShortDate(s.dueDate) },
+                      ]}
+                      amount={<Money value={s.total} decimals={0} />}
+                    />
+                  ))}
+                </ProfileTimelineList>
+                <ProfileDesktopTable>
               <div className="max-h-72 overflow-auto rounded-lg border border-border">
-                {sales.length ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -194,14 +225,40 @@ export function CustomerDetailDialog({
                       ))}
                     </TableBody>
                   </Table>
-                ) : (
-                  <EmptyState title="لا مبيعات" />
-                )}
               </div>
+                </ProfileDesktopTable>
+                </>
+              ) : (
+                <EmptyState title="لا مبيعات" />
+              )}
             </TabsContent>
-            <TabsContent value="receipts">
+            <TabsContent value="receipts" className="mt-3 min-w-0">
+              {payments.length ? (
+                <>
+                <ProfileTimelineList>
+                  {payments.map((p) => (
+                    <ProfileTimelineCard
+                      key={`${p.id}-m`}
+                      title={formatShortDate(p.date)}
+                      subtitle={<span className="font-mono" dir="ltr">{p.ref}</span>}
+                      badge={<span className="text-[11px] text-muted-foreground">{PAYMENT_METHOD_LABELS[p.method]}</span>}
+                      amount={<Money value={p.amount} decimals={0} className="text-meadow-700" />}
+                      actions={
+                        <RowDeleteButton
+                          label={p.ref}
+                          onConfirm={async () => {
+                            const res = await deletePayment(p.id);
+                            if (res.ok) toast.success('تم حذف التحصيل');
+                            else toast.error(res.error ?? 'تعذّر الحذف');
+                            return res;
+                          }}
+                        />
+                      }
+                    />
+                  ))}
+                </ProfileTimelineList>
+                <ProfileDesktopTable>
               <div className="max-h-72 overflow-auto rounded-lg border border-border">
-                {payments.length ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -234,12 +291,15 @@ export function CustomerDetailDialog({
                       ))}
                     </TableBody>
                   </Table>
-                ) : (
-                  <EmptyState title="لا تحصيلات" />
-                )}
               </div>
+                </ProfileDesktopTable>
+                </>
+              ) : (
+                <EmptyState title="لا تحصيلات" />
+              )}
             </TabsContent>
           </Tabs>
+          </ProfileDialogBody>
         </DialogContent>
       </Dialog>
 

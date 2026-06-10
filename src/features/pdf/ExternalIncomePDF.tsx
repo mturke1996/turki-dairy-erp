@@ -3,7 +3,7 @@ import React from 'react';
 import { Text, View } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
-import { PDF, pdfBase } from './pdfBase';
+import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
 import { PdfMoneyText, pdfFmtDate } from './pdfBrandKit';
 import { PdfSectionTitle, PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 
@@ -35,7 +35,7 @@ export function ExternalIncomePDF({ sessionLabel, total, rows }: ExternalIncomeP
       ]}
     >
       <PdfSectionTitle>سجل المدخولات</PdfSectionTitle>
-      <View style={pdfBase.tableHead} minPresenceAhead={40}>
+      <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>
         <PdfTh flex={1.1} kind="date">التاريخ</PdfTh>
         <PdfTh flex={1.2} kind="ref">المرجع</PdfTh>
         <PdfTh flex={2.2}>البيان</PdfTh>
@@ -54,7 +54,7 @@ export function ExternalIncomePDF({ sessionLabel, total, rows }: ExternalIncomeP
       {rows.length === 0 ? (
         <Text style={{ fontSize: 9, color: PDF.muted, textAlign: 'center', paddingVertical: 20 }}>{ar('لا توجد مدخولات')}</Text>
       ) : (
-        <View style={[pdfBase.totalRowBar, { marginTop: 8 }]} minPresenceAhead={52}>
+        <View style={[pdfBase.totalRowBar, { marginTop: 8 }]} minPresenceAhead={PDF_PAGINATION.totalBar}>
           <Text style={{ fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen, lineHeight: 1.4 }}>{ar('الإجمالي')}</Text>
           <PdfMoneyText amount={total} size="md" />
         </View>

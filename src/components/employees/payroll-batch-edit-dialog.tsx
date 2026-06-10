@@ -2,39 +2,40 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import {
-  ArrowRightLeft,
-  BadgeDollarSign,
-  Gift,
-  HandCoins,
-  Users,
-} from 'lucide-react';
+import { BadgeDollarSign, ChevronDown, Trash2, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Money, moneyText } from '@/components/shared/money';
+import { Money } from '@/components/shared/money';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PAYROLL_DEBT_MODE_LABELS, PAYROLL_STATUS_LABELS, PAYROLL_TYPE_LABELS } from '@/lib/domain/constants';
+import { PayrollLineCard } from '@/components/employees/payroll-line-card';
 import {
-  buildPayrollLine,
+  PayrollEmployeePayDialog,
+  type PayrollEmployeePayTarget,
+} from '@/components/employees/payroll-employee-pay-dialog';
+import { PAYROLL_STATUS_LABELS, PAYROLL_TYPE_LABELS } from '@/lib/domain/constants';
+import {
+  isPayrollLinePaid,
   normalizePayrollLine,
-  payrollBatchAdvanceDeducted,
-  payrollBatchBonusTotal,
-  payrollBatchCarriedForward,
-  payrollBatchGrossTotal,
-  payrollBatchTotal,
+  payrollBatchPaidCount,
+  payrollBatchProgress,
+  payrollBatchRemainingSummary,
+  resolvePayrollLinePreview,
 } from '@/lib/domain/payroll';
-import type { Employee, PayrollBatch, PayrollDebtMode } from '@/lib/domain/types';
-import { formatShortDate } from '@/lib/utils';
+import type {
+  BankAccount,
+  CashMovement,
+  CashVault,
+  Employee,
+  PayrollBatch,
+  PayrollDebtMode,
+} from '@/lib/domain/types';
+import { cn, formatShortDate } from '@/lib/utils';
 
 type LineDraft = {
   employeeId: string;
@@ -43,35 +44,36 @@ type LineDraft = {
   notes: string;
 };
 
-function SummaryPill({ label, value, tone }: { label: string; value: React.ReactNode; tone?: 'rose' | 'meadow' | 'navy' }) {
-  const toneClass =
-    tone === 'rose'
-      ? 'border-rose-200 bg-rose-50/50'
-      : tone === 'meadow'
-        ? 'border-meadow-200 bg-meadow-50/50'
-        : tone === 'navy'
-          ? 'border-navy-200 bg-navy-50/40'
-          : 'border-border bg-canvas-sunken/40';
-  return (
-    <div className={`rounded-lg border px-3 py-2 ${toneClass}`}>
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <div className="mt-0.5 text-[14px] font-semibold">{value}</div>
-    </div>
-  );
-}
+type LineFilter = 'all' | 'pending' | 'paid';
+
+const DIALOG_SHELL = cn(
+  'flex flex-col gap-0 overflow-hidden p-0',
+  'max-w-[100vw] w-[100vw] h-[100dvh] max-h-[100dvh] rounded-none border-0',
+  'left-0 top-0 translate-x-0 translate-y-0',
+  'sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[min(92dvh,760px)] sm:w-full sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border lg:max-w-3xl',
+);
 
 export function PayrollBatchEditDialog({
   batch,
   employees,
+  vaults,
+  banks,
+  cashMovements,
   advanceBalanceOf,
   open,
   onOpenChange,
   onSave,
   onPay,
+  onPayEmployee,
+  onDelete,
   canPay,
+  canDelete,
 }: {
   batch: PayrollBatch | null;
   employees: Employee[];
+  vaults: CashVault[];
+  banks: BankAccount[];
+  cashMovements: CashMovement[];
   advanceBalanceOf: (employeeId: string) => number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -85,10 +87,19 @@ export function PayrollBatchEditDialog({
     }>,
   ) => Promise<void>;
   onPay?: () => void;
+  onPayEmployee: (
+    batchId: string,
+    employeeId: string,
+    source: { type: import('@/lib/domain/types').AccountSourceType; id: string },
+  ) => Promise<{ ok: boolean; error?: string }>;
+  onDelete?: () => Promise<{ ok: boolean; error?: string }>;
   canPay: boolean;
+  canDelete?: boolean;
 }) {
   const [drafts, setDrafts] = useState<LineDraft[]>([]);
   const [busy, setBusy] = useState(false);
+  const [payTarget, setPayTarget] = useState<PayrollEmployeePayTarget | null>(null);
+  const [lineFilter, setLineFilter] = useState<LineFilter>('all');
 
   useEffect(() => {
     if (!batch || !open) return;
@@ -103,41 +114,59 @@ export function PayrollBatchEditDialog({
         };
       }),
     );
+    setPayTarget(null);
+    setLineFilter('all');
   }, [batch, open]);
 
   const previewLines = useMemo(() => {
     if (!batch) return [];
     return drafts.map((d) => {
       const employee = employees.find((e) => e.id === d.employeeId);
-      if (!employee) return normalizePayrollLine(batch.lines.find((l) => l.employeeId === d.employeeId)!);
-      return buildPayrollLine({
+      const existing = batch.lines.find((l) => l.employeeId === d.employeeId)!;
+      if (!employee) return normalizePayrollLine(existing);
+      return resolvePayrollLinePreview(
+        existing,
+        batch,
         employee,
-        batchType: batch.payrollType,
-        periodFrom: batch.periodFrom,
-        periodTo: batch.periodTo,
-        advanceBalance: advanceBalanceOf(d.employeeId),
-        bonusAmount: d.bonusAmount,
-        debtMode: d.debtMode,
-        notes: d.notes || undefined,
-      });
+        { bonusAmount: d.bonusAmount, debtMode: d.debtMode, notes: d.notes },
+        advanceBalanceOf(d.employeeId),
+      );
     });
   }, [batch, drafts, employees, advanceBalanceOf]);
 
-  const totals = useMemo(
-    () => ({
-      gross: payrollBatchGrossTotal(previewLines),
-      bonus: payrollBatchBonusTotal(previewLines),
-      deducted: payrollBatchAdvanceDeducted(previewLines),
-      carried: payrollBatchCarriedForward(previewLines),
-      net: payrollBatchTotal(previewLines),
-    }),
-    [previewLines],
-  );
+  const totals = useMemo(() => {
+    if (!batch) {
+      return { grossWithBonus: 0, bonus: 0, deducted: 0, carried: 0, net: 0 };
+    }
+    const summary = payrollBatchRemainingSummary(previewLines, batch.status);
+    return {
+      grossWithBonus: summary.grossWithBonus,
+      bonus: summary.bonus,
+      deducted: summary.deducted,
+      carried: summary.carried,
+      net: summary.net,
+    };
+  }, [previewLines, batch]);
 
   if (!batch) return null;
   const activeBatch = batch;
   const isPaid = activeBatch.status === 'paid';
   const isEditable = !isPaid;
+  const progress = payrollBatchProgress(activeBatch);
+  const paidCount = payrollBatchPaidCount(activeBatch.lines, activeBatch.status);
+  const unpaidCount = activeBatch.lines.length - paidCount;
+
+  const filteredIndices = previewLines
+    .map((line, i) => {
+      const stored = normalizePayrollLine(
+        activeBatch.lines.find((l) => l.employeeId === line.employeeId)!,
+      );
+      const linePaid = isPayrollLinePaid(stored, activeBatch.status);
+      if (lineFilter === 'pending' && linePaid) return null;
+      if (lineFilter === 'paid' && !linePaid) return null;
+      return i;
+    })
+    .filter((i): i is number => i !== null);
 
   function updateDraft(employeeId: string, patch: Partial<LineDraft>) {
     setDrafts((prev) =>
@@ -165,193 +194,301 @@ export function PayrollBatchEditDialog({
     }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl gap-0 overflow-hidden p-0">
-        <div className="border-b border-border bg-navy-900 px-6 py-5 text-white">
-          <DialogHeader className="space-y-1.5 text-right">
-            <div className="flex flex-wrap items-center gap-2">
-              <DialogTitle className="text-[17px] text-white">{activeBatch.label}</DialogTitle>
-              <Badge variant={isPaid ? 'success' : 'neutral'} className="text-[10px]">
-                {PAYROLL_STATUS_LABELS[activeBatch.status]}
-              </Badge>
-            </div>
-            <DialogDescription className="text-[12.5px] text-white/70">
-              {PAYROLL_TYPE_LABELS[activeBatch.payrollType]} · {formatShortDate(activeBatch.periodFrom)} — {formatShortDate(activeBatch.periodTo)}
-              <span className="mx-1.5">·</span>
-              <span dir="ltr" className="font-mono">{activeBatch.ref}</span>
-            </DialogDescription>
-          </DialogHeader>
-        </div>
+  async function openEmployeePay(employeeId: string) {
+    const employee = employees.find((e) => e.id === employeeId);
+    const line = previewLines.find((l) => l.employeeId === employeeId);
+    if (!employee || !line) return;
+    if (isEditable) {
+      setBusy(true);
+      try {
+        await onSave(activeBatch.id, drafts.map((d) => ({
+          employeeId: d.employeeId,
+          bonusAmount: d.bonusAmount,
+          debtMode: d.debtMode,
+          notes: d.notes || undefined,
+        })));
+      } catch {
+        return;
+      } finally {
+        setBusy(false);
+      }
+    }
+    setPayTarget({ batch: activeBatch, employee, line });
+  }
 
-        <div className="max-h-[min(72vh,640px)] space-y-4 overflow-y-auto px-6 py-5">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-            <SummaryPill label="إجمالي الأجور" value={<Money value={totals.gross} decimals={0} />} tone="navy" />
-            <SummaryPill
-              label="المكافآت"
-              value={<Money value={totals.bonus} decimals={0} />}
-              tone="meadow"
-            />
-            <SummaryPill
-              label="خصم الدين"
-              value={<Money value={totals.deducted} decimals={0} />}
-              tone="rose"
-            />
-            <SummaryPill
-              label="مُرحَّل"
-              value={<Money value={totals.carried} decimals={0} />}
-            />
-            <SummaryPill
-              label="صافي الصرف"
-              value={<Money value={totals.net} decimals={0} className="font-bold" />}
-              tone="navy"
-            />
+  const filterTabs: { key: LineFilter; label: string; count: number }[] = [
+    { key: 'all', label: 'الكل', count: activeBatch.lines.length },
+    { key: 'pending', label: 'متبقّي', count: unpaidCount },
+    { key: 'paid', label: 'مُصروف', count: paidCount },
+  ];
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className={DIALOG_SHELL}>
+          <div className="shrink-0 border-b border-border bg-navy-900 px-4 py-4 text-white sm:px-6">
+            <DialogHeader className="space-y-1.5 text-right">
+              <div className="flex flex-wrap items-center gap-2">
+                <DialogTitle className="text-[16px] leading-snug text-white sm:text-[17px]">
+                  {activeBatch.label}
+                </DialogTitle>
+                <Badge variant={isPaid ? 'success' : progress.paid > 0 ? 'info' : 'neutral'} className="text-[10px]">
+                  {isPaid
+                    ? PAYROLL_STATUS_LABELS.paid
+                    : progress.paid > 0
+                      ? PAYROLL_STATUS_LABELS.approved
+                      : PAYROLL_STATUS_LABELS.draft}
+                </Badge>
+              </div>
+              <DialogDescription className="text-[11.5px] text-white/70 sm:text-[12.5px]">
+                {PAYROLL_TYPE_LABELS[activeBatch.payrollType]}
+                <span className="mx-1.5">·</span>
+                {formatShortDate(activeBatch.periodFrom)} — {formatShortDate(activeBatch.periodTo)}
+              </DialogDescription>
+              {!isPaid && activeBatch.lines.length > 0 ? (
+                <div className="pt-2" role="status" aria-live="polite">
+                  <div className="flex items-center justify-between text-[10.5px] text-white/80">
+                    <span>تقدّم الصرف</span>
+                    <span className="tabular-nums">{progress.paid}/{progress.total}</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/15">
+                    <div
+                      className="h-full rounded-full bg-meadow-400 transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none"
+                      style={{ width: `${progress.percent}%` }}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </DialogHeader>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>الموظف</TableHead>
-                  <TableHead className="text-left">الإجمالي</TableHead>
-                  <TableHead className="text-left">الدين</TableHead>
-                  <TableHead>المكافأة</TableHead>
-                  <TableHead>معالجة الدين</TableHead>
-                  <TableHead className="text-left">بعد الدين</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {previewLines.map((line) => {
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+            {/* ملخص — بطل على الجوال */}
+            <div className="rounded-2xl bg-navy-50/50 px-4 py-3.5 ring-1 ring-navy-200/50">
+              <p className="text-[11px] font-medium text-muted-foreground">
+                {isPaid ? 'إجمالي المُصروف من الخزينة' : 'صافي المتبقي من الخزينة'}
+              </p>
+              <Money
+                value={totals.net}
+                decimals={0}
+                className="mt-1 block text-xl font-semibold tabular-nums text-navy-900 sm:text-2xl"
+              />
+              {!isPaid && totals.net > 0 ? (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                  أجور{' '}
+                  <Money value={totals.grossWithBonus} decimals={0} className="inline font-medium text-foreground" />
+                  {totals.deducted > 0 ? (
+                    <>
+                      {' '}
+                      − دين{' '}
+                      <Money value={totals.deducted} decimals={0} className="inline font-medium text-rose-700" />
+                    </>
+                  ) : null}
+                  {totals.carried > 0 ? (
+                    <span className="block text-amber-800">
+                      يُرحَّل{' '}
+                      <Money value={totals.carried} decimals={0} className="inline font-medium" />
+                      {' '}
+                      (يُصرف الأجر كاملاً — الدين لا يُخصم الآن)
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
+              {!isPaid && activeBatch.payrollType === 'all' ? (
+                <p className="mt-1 text-[10.5px] text-muted-foreground">
+                  كشف «الكل» — كل موظف يُحسب حسب نوع راتبه وأيام الفترة
+                </p>
+              ) : null}
+              {!isPaid && activeBatch.payrollType === 'bi_monthly' ? (
+                <p className="mt-1 text-[10.5px] text-muted-foreground">
+                  كشف نصف شهر — موظفو «نصف شهر» كاملاً، الشهري بنصف الراتب
+                </p>
+              ) : null}
+              <details className="group mt-3 sm:hidden">
+                <summary className="flex cursor-pointer list-none items-center gap-1 text-[12px] font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
+                  تفاصيل الملخص
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none" />
+                </summary>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-[12px]">
+                  <div className="rounded-xl bg-card px-3 py-2 ring-1 ring-border/80">
+                    <p className="text-[10px] text-muted-foreground">إجمالي المتبقي</p>
+                    <Money value={totals.grossWithBonus} decimals={0} className="font-semibold" />
+                  </div>
+                  <div className="rounded-xl bg-card px-3 py-2 ring-1 ring-border/80">
+                    <p className="text-[10px] text-muted-foreground">مكافآت</p>
+                    <Money value={totals.bonus} decimals={0} className="font-semibold text-meadow-800" />
+                  </div>
+                  <div className="rounded-xl bg-card px-3 py-2 ring-1 ring-border/80">
+                    <p className="text-[10px] text-muted-foreground">خصم دين</p>
+                    <Money value={totals.deducted} decimals={0} className="font-semibold text-rose-800" />
+                  </div>
+                  <div className="rounded-xl bg-card px-3 py-2 ring-1 ring-border/80">
+                    <p className="text-[10px] text-muted-foreground">مُرحَّل</p>
+                    <Money value={totals.carried} decimals={0} className="font-semibold text-amber-900" />
+                  </div>
+                </div>
+              </details>
+              <div className="mt-3 hidden flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted-foreground sm:flex">
+                <span>إجمالي المتبقي <Money value={totals.grossWithBonus} decimals={0} className="inline font-semibold text-foreground" /></span>
+                {totals.bonus > 0 ? <span>مكافآت <Money value={totals.bonus} decimals={0} className="inline font-semibold text-meadow-800" /></span> : null}
+                {totals.deducted > 0 ? <span>خصم <Money value={totals.deducted} decimals={0} className="inline font-semibold text-rose-800" /></span> : null}
+                {totals.carried > 0 ? <span>مُرحَّل <Money value={totals.carried} decimals={0} className="inline font-semibold text-amber-900" /></span> : null}
+              </div>
+            </div>
+
+            {/* فلتر الموظفين */}
+            {activeBatch.lines.length > 1 ? (
+              <div className="mt-4 flex gap-1.5 rounded-xl bg-canvas-sunken/50 p-1 ring-1 ring-border/80" role="tablist" aria-label="فلتر الموظفين">
+                {filterTabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={lineFilter === tab.key}
+                    onClick={() => setLineFilter(tab.key)}
+                    className={cn(
+                      'flex h-9 flex-1 items-center justify-center gap-1 rounded-lg text-xs font-medium transition-colors',
+                      lineFilter === tab.key
+                        ? 'bg-card text-foreground shadow-whisper ring-1 ring-border'
+                        : 'text-muted-foreground',
+                    )}
+                  >
+                    {tab.label}
+                    <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] tabular-nums', lineFilter === tab.key ? 'bg-navy-50 text-navy-700' : 'opacity-70')}>
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="mt-4 space-y-3">
+              {filteredIndices.length === 0 ? (
+                <p className="py-8 text-center text-[13px] text-muted-foreground" role="status">
+                  لا يوجد موظفون في هذا الفلتر
+                </p>
+              ) : (
+                filteredIndices.map((i) => {
+                  const line = previewLines[i];
                   const emp = employees.find((e) => e.id === line.employeeId);
                   const draft = drafts.find((d) => d.employeeId === line.employeeId)!;
-                  const grossWithBonus = line.grossSalary + line.bonusAmount;
-                  return (
-                    <TableRow key={line.employeeId}>
-                      <TableCell>
-                        <p className="text-[12.5px] font-medium">{emp?.fullName ?? '—'}</p>
-                        <p className="text-[10.5px] text-muted-foreground">
-                          {line.attendanceDays} يوم حضور
-                          {line.absenceDays > 0 ? ` · غياب ${line.absenceDays}` : ''}
-                        </p>
-                      </TableCell>
-                      <TableCell className="text-left">
-                        <Money value={grossWithBonus} decimals={0} className="font-medium" />
-                        {line.bonusAmount > 0 ? (
-                          <p className="text-[10px] text-meadow-700">
-                            <Gift className="mr-0.5 inline h-3 w-3" />
-                            +{moneyText(line.bonusAmount, 0)}
-                          </p>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="text-left">
-                        <Money value={line.debtBefore} decimals={0} />
-                        {line.debtCarriedForward > 0 ? (
-                          <p className="text-[10px] text-amber-700">
-                            <ArrowRightLeft className="mr-0.5 inline h-3 w-3" />
-                            يُرحَّل {moneyText(line.debtCarriedForward, 0)}
-                          </p>
-                        ) : line.advanceDeducted > 0 ? (
-                          <p className="text-[10px] text-rose-700">
-                            <HandCoins className="mr-0.5 inline h-3 w-3" />
-                            −{moneyText(line.advanceDeducted, 0)}
-                          </p>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>
-                        {isEditable ? (
-                          <Input
-                            type="number"
-                            min={0}
-                            step={1}
-                            dir="ltr"
-                            value={draft.bonusAmount || ''}
-                            onChange={(e) =>
-                              updateDraft(line.employeeId, {
-                                bonusAmount: Math.max(0, Number(e.target.value) || 0),
-                              })
-                            }
-                            className="h-9 w-24 text-left"
-                            placeholder="0"
-                          />
-                        ) : (
-                          <Money value={line.bonusAmount} decimals={0} />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {isEditable && line.debtBefore > 0 ? (
-                          <Select
-                            value={draft.debtMode}
-                            onValueChange={(v) =>
-                              updateDraft(line.employeeId, { debtMode: v as PayrollDebtMode })
-                            }
-                          >
-                            <SelectTrigger className="h-9 min-w-[148px] text-[11.5px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(Object.keys(PAYROLL_DEBT_MODE_LABELS) as PayrollDebtMode[]).map((m) => (
-                                <SelectItem key={m} value={m} className="text-[12px]">
-                                  {PAYROLL_DEBT_MODE_LABELS[m]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : line.debtBefore > 0 ? (
-                          <Badge variant="neutral" className="text-[10px]">
-                            {PAYROLL_DEBT_MODE_LABELS[line.debtMode]}
-                          </Badge>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-left">
-                        <Money value={line.netSalary} decimals={0} className="font-bold text-navy-800" />
-                      </TableCell>
-                    </TableRow>
+                  const stored = normalizePayrollLine(
+                    activeBatch.lines.find((l) => l.employeeId === line.employeeId)!,
                   );
-                })}
-              </TableBody>
-            </Table>
+                  const linePaid = isPayrollLinePaid(stored, activeBatch.status);
+                  const displayLine = linePaid ? stored : line;
+                  return (
+                    <PayrollLineCard
+                      key={line.employeeId}
+                      employee={emp}
+                      line={displayLine}
+                      batchStatus={activeBatch.status}
+                      draft={draft}
+                      isEditable={isEditable && !linePaid}
+                      canPay={canPay && !linePaid}
+                      vaults={vaults}
+                      banks={banks}
+                      onDraftChange={(patch) => updateDraft(line.employeeId, patch)}
+                      onPay={() => void openEmployeePay(line.employeeId)}
+                    />
+                  );
+                })
+              )}
+            </div>
+
+            {isEditable ? (
+              <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground" role="note">
+                <Users className="mr-1 inline h-3.5 w-3.5" />
+                صرف فردي أو جماعي — الديون تُسوّى تلقائياً مع الخزينة.
+              </p>
+            ) : null}
           </div>
 
-          {isEditable ? (
-            <p className="text-[11.5px] text-muted-foreground" role="note">
-              <Users className="mr-1 inline h-3.5 w-3.5" />
-              «ترحيل للفترة القادمة» يصرف الراتب كاملاً ويبقي الدين للنصف/الشهر التالي. «خصم من الراتب» يُسوّى الديون المسجّلة تلقائياً عند الصرف.
-            </p>
-          ) : null}
-        </div>
-
-        <DialogFooter className="border-t border-border bg-canvas-sunken/40 px-6 py-4">
-          {isEditable ? (
-            <>
-              <Button onClick={save} disabled={busy}>
-                <BadgeDollarSign className="h-4 w-4" />
-                {busy ? 'جارٍ الحفظ…' : 'حفظ التعديلات'}
-              </Button>
-              {onPay && canPay ? (
+          <div className="shrink-0 border-t border-border bg-canvas-sunken/50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              {canDelete && onDelete ? (
                 <Button
+                  type="button"
                   variant="outline"
-                  onClick={async () => {
-                    await save();
-                    onPay();
-                  }}
+                  size="sm"
+                  className="w-full text-rose-700 hover:text-rose-800 sm:me-auto sm:w-auto"
                   disabled={busy}
+                  onClick={async () => {
+                    const hasPaid = paidCount > 0;
+                    const msg = hasPaid
+                      ? 'حذف الكشف وإلغاء حركات الصرف المرتبطة؟ لا يمكن التراجع.'
+                      : 'حذف كشف الرواتب؟ لا يمكن التراجع.';
+                    if (!confirm(msg)) return;
+                    setBusy(true);
+                    try {
+                      const res = await onDelete();
+                      if (res.ok) {
+                        toast.success('تم حذف كشف الرواتب');
+                        onOpenChange(false);
+                      } else {
+                        toast.error(res.error ?? 'تعذّر الحذف');
+                      }
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
                 >
-                  حفظ وصرف
+                  <Trash2 className="h-4 w-4" />
+                  حذف الكشف
                 </Button>
+              ) : (
+                <span className="hidden sm:block" />
+              )}
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              {isEditable ? (
+                <>
+                  {onPay && canPay && unpaidCount > 0 ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      disabled={busy}
+                      onClick={async () => {
+                        await save();
+                        onPay();
+                      }}
+                    >
+                      <Wallet className="h-4 w-4" />
+                      صرف المتبقي ({unpaidCount})
+                    </Button>
+                  ) : null}
+                  <Button onClick={save} disabled={busy} size="sm" className="w-full sm:w-auto">
+                    <BadgeDollarSign className="h-4 w-4" />
+                    {busy ? 'جارٍ الحفظ…' : 'حفظ'}
+                  </Button>
+                </>
               ) : null}
-              <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                إلغاء
+              <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
+                إغلاق
               </Button>
-            </>
-          ) : (
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              إغلاق
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <PayrollEmployeePayDialog
+        target={payTarget}
+        onClose={() => setPayTarget(null)}
+        vaults={vaults}
+        banks={banks}
+        cashMovements={cashMovements}
+        onPay={async (batchId, employeeId, source) => {
+          const res = await onPayEmployee(batchId, employeeId, source);
+          if (res.ok) {
+            toast.success('تم صرف الراتب');
+            setPayTarget(null);
+          } else {
+            toast.error(res.error ?? 'تعذّر الصرف');
+            throw new Error(res.error);
+          }
+        }}
+      />
+    </>
   );
 }

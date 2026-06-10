@@ -21,6 +21,7 @@ import { resolveAdjustmentReasonKind } from './constants';
 import { adjustmentLossValueFromLedger, adjustmentOutQtyFromLedger, buildInventoryLedger, round, uniqueAdjustments, type InventoryResult } from './inventory';
 import { computeTreasury, computeAdjustedNetPosition, type AdjustedNetPosition } from './treasury';
 import { debtBalanceContribution, paymentNetOfDebtSettlement, resolveDebtDirection } from './debt';
+import { employeePeriodPackage, isPayrollLinePaid, payrollBatchSettledLines } from './payroll';
 import type {
   BankAccount,
   CashMovement,
@@ -479,7 +480,7 @@ export function allCustomerStats(data: ErpData): CustomerStats[] {
 // الموظفون — سلف ورواتب
 // ============================================================
 
-/** مجموع المخصوم من السلف/الدين عبر كشوف الرواتب — المُصروفة فقط. */
+/** مجموع المخصوم من السلف/الدين — من السطور المُصروفة فقط. */
 export function sumPayrollAdvanceRecovered(
   employeeId: string,
   payrollBatches: PayrollBatch[],
@@ -487,11 +488,15 @@ export function sumPayrollAdvanceRecovered(
 ): number {
   return round(
     sum(
-      payrollBatches
-        .filter((b) => !paidOnly || b.status === 'paid')
-        .flatMap((b) => b.lines)
-        .filter((l) => l.employeeId === employeeId)
-        .map((l) => l.advanceDeducted),
+      payrollBatches.flatMap((b) =>
+        b.lines
+          .filter(
+            (l) =>
+              l.employeeId === employeeId &&
+              (!paidOnly || isPayrollLinePaid(l, b.status)),
+          )
+          .map((l) => l.advanceDeducted),
+      ),
     ),
   );
 }
@@ -557,20 +562,20 @@ export function computeEmployeeStats(
   payrollBatches: PayrollBatch[],
   debtEntries: DebtEntry[] = [],
 ): EmployeeStats {
-  const grossSalary = round(
-    employee.baseSalary + employee.allowances.housing + employee.allowances.transport + employee.allowances.food,
-  );
+  const grossSalary = employeePeriodPackage(employee);
   const advancesTotal = round(
     sum(payments.filter((p) => p.kind === 'employee_advance' && p.partyId === employee.id).map((p) => p.amount)),
   );
   const advancesRecovered = sumPayrollAdvanceRecovered(employee.id, payrollBatches, true);
   const advanceBalance = computeEmployeeAdvanceBalance(employee.id, payments, payrollBatches, debtEntries);
-  const paidBatches = payrollBatches.filter((b) => b.status === 'paid');
-  const paidLines = paidBatches.flatMap((b) => b.lines).filter((l) => l.employeeId === employee.id);
-  const ytdPaid = round(sum(paidLines.map((l) => l.netSalary)));
-  const lastPayrollDate = paidBatches
-    .filter((b) => b.lines.some((l) => l.employeeId === employee.id))
-    .sort((a, b) => (b.paidAt ?? '').localeCompare(a.paidAt ?? ''))[0]?.paidAt;
+  const paidLines = payrollBatches.flatMap((b) =>
+    b.lines
+      .filter((l) => l.employeeId === employee.id && isPayrollLinePaid(l, b.status))
+      .map((l) => ({ line: l, paidAt: l.paidAt ?? b.paidAt ?? '' })),
+  );
+  const ytdPaid = round(sum(paidLines.map(({ line }) => line.netSalary)));
+  const lastPayrollDate = paidLines
+    .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0]?.paidAt;
   return {
     ...employee,
     grossSalary,
@@ -710,7 +715,15 @@ export function buildAllJournals(data: ErpData, saleCogs: Record<string, number>
     if (e.status === 'approved' && !isNonCashExpense(e)) entries.push(journalForExpense(e));
   }
   for (const b of data.payrollBatches) {
-    if (b.status === 'paid') entries.push(journalForPayroll(b));
+    const settled = payrollBatchSettledLines(b);
+    if (!settled.length) continue;
+    entries.push(
+      journalForPayroll({
+        ...b,
+        lines: settled,
+        totalAmount: round(sum(settled.map((l) => l.netSalary))),
+      }),
+    );
   }
   for (const a of data.adjustments) entries.push(journalForAdjustment(a));
   for (const d of data.debtEntries ?? []) {

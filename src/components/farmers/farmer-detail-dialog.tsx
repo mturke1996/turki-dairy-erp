@@ -33,6 +33,14 @@ import { formatPaymentTreasuryLabel } from '@/lib/domain/treasury-splits';
 import { formatShortDate } from '@/lib/utils';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
 import { PartyDeleteButton } from '@/components/shared/party-delete-button';
+import {
+  PROFILE_DIALOG_SHELL,
+  ProfileDialogBody,
+  ProfileDesktopTable,
+  ProfileTabsList,
+  ProfileTimelineCard,
+  ProfileTimelineList,
+} from '@/components/shared/profile-dialog';
 import { useErpStore } from '@/lib/store/use-erp-store';
 
 const STATUS_VARIANT = { active: 'success', suspended: 'warning', inactive: 'neutral' } as const;
@@ -102,7 +110,10 @@ export function FarmerDetailDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className={PROFILE_DIALOG_SHELL}>
+          <ProfileDialogBody
+            header={
+              <>
           <DialogHeader>
             <div className="flex flex-wrap items-start justify-between gap-3 pl-8">
               <div className="space-y-1">
@@ -194,15 +205,42 @@ export function FarmerDetailDialog({
             <span>الجودة: <Badge variant={QUALITY_VARIANT[farmer.qualityTier]}>{QUALITY_LABELS[farmer.qualityTier]}</Badge></span>
             <span>متوسط السعر: <Money value={farmer.avgPrice} decimals={3} muted /></span>
           </div>
-
-          <Tabs defaultValue="supplies">
-            <TabsList>
-              <TabsTrigger value="supplies">عمليات الاستلام ({supplies.length})</TabsTrigger>
-              <TabsTrigger value="payments">الدفعات ({payments.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="supplies">
+              </>
+            }
+          >
+          <Tabs defaultValue="supplies" className="min-w-0">
+            <ProfileTabsList>
+              <TabsList className="h-auto w-full min-w-0 justify-start gap-1 p-1">
+                <TabsTrigger value="supplies" className="shrink-0">عمليات الاستلام ({supplies.length})</TabsTrigger>
+                <TabsTrigger value="payments" className="shrink-0">الدفعات ({payments.length})</TabsTrigger>
+              </TabsList>
+            </ProfileTabsList>
+            <TabsContent value="supplies" className="mt-3 min-w-0">
+              {supplies.length ? (
+                <>
+                <ProfileTimelineList>
+                  {supplies.map((s) => (
+                    <ProfileTimelineCard
+                      key={`${s.id}-m`}
+                      title={formatShortDate(s.date)}
+                      badge={
+                        <div className="flex flex-col items-end gap-1">
+                          <Badge variant={(s.milkShift ?? 'morning') === 'morning' ? 'info' : 'neutral'} className="text-[10px]">
+                            {MILK_SHIFT_LABELS[s.milkShift ?? 'morning']}
+                          </Badge>
+                          <Badge variant={QUALITY_VARIANT[s.qualityTier]}>{s.qualityTier}</Badge>
+                        </div>
+                      }
+                      rows={[
+                        { label: 'الكمية', value: <Liters value={s.quantity} className="text-[12px]" /> },
+                        { label: 'السعر', value: <Money value={s.unitPrice} decimals={3} className="text-[12px]" muted /> },
+                      ]}
+                      amount={<Money value={s.total} decimals={0} />}
+                    />
+                  ))}
+                </ProfileTimelineList>
+                <ProfileDesktopTable>
               <div className="max-h-72 overflow-auto rounded-lg border border-border">
-                {supplies.length ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -231,14 +269,70 @@ export function FarmerDetailDialog({
                       ))}
                     </TableBody>
                   </Table>
-                ) : (
-                  <EmptyState title="لا عمليات استلام" />
-                )}
               </div>
+                </ProfileDesktopTable>
+                </>
+              ) : (
+                <EmptyState title="لا عمليات استلام" />
+              )}
             </TabsContent>
-            <TabsContent value="payments">
+            <TabsContent value="payments" className="mt-3 min-w-0">
+              {payments.length ? (
+                <>
+                <ProfileTimelineList>
+                  {payments.map((p) => {
+                    const paySession = data.sessions.find((s) => s.id === p.sessionId);
+                    const modifiable = canPay && paySession?.status === 'open';
+                    return (
+                      <ProfileTimelineCard
+                        key={`${p.id}-m`}
+                        title={formatShortDate(p.date)}
+                        subtitle={<span className="font-mono" dir="ltr">{p.ref}</span>}
+                        badge={<span className="text-[11px] text-muted-foreground">{PAYMENT_METHOD_LABELS[p.method]}</span>}
+                        rows={[
+                          {
+                            label: 'الحساب',
+                            value: (
+                              <span className="max-w-[160px] truncate text-left">
+                                {formatPaymentTreasuryLabel(p, data.vaults, data.banks)}
+                                {p.treasurySplits && p.treasurySplits.length >= 2 ? ' · مجزّأ' : ''}
+                              </span>
+                            ),
+                          },
+                        ]}
+                        amount={<Money value={p.amount} decimals={0} className="text-meadow-700" />}
+                        actions={
+                          modifiable ? (
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8"
+                                onClick={() => setEditPayment(p)}
+                                aria-label="تعديل الدفعة"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <RowDeleteButton
+                                label={p.ref}
+                                allowed={canPay}
+                                onConfirm={async () => {
+                                  const res = await deletePayment(p.id);
+                                  if (res.ok) toast.success('تم حذف الدفعة');
+                                  else toast.error(res.error ?? 'تعذّر الحذف');
+                                  return res;
+                                }}
+                              />
+                            </div>
+                          ) : undefined
+                        }
+                      />
+                    );
+                  })}
+                </ProfileTimelineList>
+                <ProfileDesktopTable>
               <div className="max-h-72 overflow-auto rounded-lg border border-border">
-                {payments.length ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -299,12 +393,15 @@ export function FarmerDetailDialog({
                       })}
                     </TableBody>
                   </Table>
-                ) : (
-                  <EmptyState title="لا دفعات" />
-                )}
               </div>
+                </ProfileDesktopTable>
+                </>
+              ) : (
+                <EmptyState title="لا دفعات" />
+              )}
             </TabsContent>
           </Tabs>
+          </ProfileDialogBody>
         </DialogContent>
       </Dialog>
 

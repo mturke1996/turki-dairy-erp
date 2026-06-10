@@ -3,7 +3,7 @@ import React from 'react';
 import { Text, View } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
-import { PDF, pdfBase } from './pdfBase';
+import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
 import { PdfMoneyText, pdfFmtDate } from './pdfBrandKit';
 import { PdfSectionTitle, PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 
@@ -52,7 +52,7 @@ export function DebtsRegisterPDF({
       ]}
     >
       <PdfSectionTitle>الديون المسجّلة يدوياً</PdfSectionTitle>
-      <View style={pdfBase.tableHead} minPresenceAhead={40}>
+      <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>
         <PdfTh flex={1.1} kind="date">التاريخ</PdfTh>
         <PdfTh flex={1.2} kind="ref">المرجع</PdfTh>
         <PdfTh flex={1.6}>الطرف</PdfTh>
@@ -78,7 +78,7 @@ export function DebtsRegisterPDF({
       {rows.length === 0 ? (
         <Text style={{ fontSize: 9, color: PDF.muted, textAlign: 'center', paddingVertical: 20 }}>{ar('لا توجد ديون مسجّلة')}</Text>
       ) : (
-        <View style={[pdfBase.totalRowBar, { marginTop: 8 }]} minPresenceAhead={52}>
+        <View style={[pdfBase.totalRowBar, { marginTop: 8 }]} minPresenceAhead={PDF_PAGINATION.totalBar}>
           <Text style={{ fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen, lineHeight: 1.4 }}>{ar('إجمالي المتبقي (مسجّل)')}</Text>
           <PdfMoneyText amount={sorted.reduce((sum, r) => sum + r.remaining, 0)} size="md" />
         </View>

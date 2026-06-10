@@ -490,7 +490,7 @@ export interface Expense {
 export type Department = 'operations' | 'finance' | 'logistics' | 'management';
 export type ContractType = 'permanent' | 'temporary' | 'seasonal';
 export type EmployeeStatus = 'active' | 'on_leave' | 'terminated';
-/** monthly=راتب شهري، daily=أجر يومي (baseSalary=الأجر/يوم)، half_month=نصف شهر */
+/** monthly=راتب شهري، daily=أجر يومي (baseSalary=الأجر/يوم)، half_month=أجر نصف الشهر (baseSalary+بدلات) */
 export type SalaryType = 'monthly' | 'daily' | 'half_month';
 
 export interface Employee {
@@ -515,7 +515,7 @@ export interface Employee {
   createdAt: string;
 }
 
-export type PayrollType = 'monthly' | 'bi_monthly' | 'daily';
+export type PayrollType = 'monthly' | 'bi_monthly' | 'daily' | 'all';
 export type PayrollStatus = 'draft' | 'approved' | 'paid';
 /** deduct=خصم من الراتب، carry_forward=ترحيل للفترة القادمة مع صرف كامل */
 export type PayrollDebtMode = 'deduct' | 'carry_forward';
@@ -539,6 +539,10 @@ export interface PayrollLine {
   /** المُرحَّل للفترة القادمة (عند اختيار الترحيل) */
   debtCarriedForward: number;
   debtMode: PayrollDebtMode;
+  /** تاريخ صرف هذا السطر (صرف فردي أو ضمن الكشف) */
+  paidAt?: string;
+  paidFromType?: AccountSourceType;
+  paidFromId?: string;
   notes?: string;
 }
 

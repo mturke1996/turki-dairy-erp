@@ -3,7 +3,7 @@ import React from 'react';
 import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell, PdfSignatureStrip } from './ReportShell';
 import { ar } from './arabicPDF';
-import { PDF, pdfBase } from './pdfBase';
+import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
 import { PdfMoneyText, PdfInfoGrid, pdfFmtNum, pdfFmtDate, pdfFmtLiters, pdfFmtMoneyLibyan } from './pdfBrandKit';
 import { PdfSectionTitle, PdfKeepTogether, PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 import { CUSTOMER_TYPE_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
@@ -12,14 +12,14 @@ import type { Payment, SaleTransaction } from '@/lib/domain/types';
 
 const s = StyleSheet.create({
   totalLabel: { fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen, lineHeight: 1.4 },
-  agingWrap: { direction: 'ltr', flexDirection: 'row-reverse', gap: 8, marginTop: 4 },
-  agingCell: { flex: 1, borderWidth: 0.75, borderColor: PDF.border, borderTopWidth: 2, borderTopColor: PDF.accent, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', backgroundColor: PDF.white },
+  agingWrap: { direction: 'ltr', flexDirection: 'row-reverse', gap: 6, marginTop: 2 },
+  agingCell: { flex: 1, borderWidth: 0.75, borderColor: PDF.border, borderTopWidth: 2, borderTopColor: PDF.accent, paddingVertical: 7, paddingHorizontal: 6, alignItems: 'center', backgroundColor: PDF.white },
   agingLabel: { fontSize: 7, color: PDF.muted, marginBottom: 5, textAlign: 'center', lineHeight: 1.3 },
   agingValue: { fontSize: 10.5, fontWeight: 'bold', color: PDF.text, lineHeight: 1.3, direction: 'ltr' },
   balanceBox: {
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderWidth: 0.75,
     borderColor: PDF.border,
     borderTopWidth: 2.5,
@@ -69,7 +69,7 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
       />
 
       <PdfSectionTitle>سجلّ المبيعات</PdfSectionTitle>
-      <View style={pdfBase.tableHead} minPresenceAhead={40}>
+      <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>
         <PdfTh flex={1.2} kind="date">التاريخ</PdfTh>
         <PdfTh flex={1.4} kind="ref">المرجع</PdfTh>
         <PdfTh flex={1} kind="num">الكمية (لتر)</PdfTh>
@@ -87,7 +87,7 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
           <PdfTdMoney flex={1.2} amount={sale.total} bold />
         </View>
       ))}
-      <View style={pdfBase.totalRowBar} minPresenceAhead={52}>
+      <View style={pdfBase.totalRowBar} minPresenceAhead={PDF_PAGINATION.totalBar}>
         <Text style={s.totalLabel}>{ar('إجمالي المبيعات المعروض')}</Text>
         <PdfMoneyText amount={salesTotal} size="md" />
       </View>
@@ -95,7 +95,7 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
       {sortedPayments.length > 0 && (
         <>
           <PdfSectionTitle>التحصيلات</PdfSectionTitle>
-          <View style={pdfBase.tableHead} minPresenceAhead={40}>
+          <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>
             <PdfTh flex={1.4} kind="date">التاريخ</PdfTh>
             <PdfTh flex={1.6} kind="ref">المرجع</PdfTh>
             <PdfTh flex={1.2}>الطريقة</PdfTh>
@@ -109,7 +109,7 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
               <PdfTdMoney flex={1.4} amount={p.amount} color={PDF.logoGreen} bold />
             </View>
           ))}
-          <View style={pdfBase.totalRowBar} minPresenceAhead={52}>
+          <View style={pdfBase.totalRowBar} minPresenceAhead={PDF_PAGINATION.totalBar}>
             <Text style={s.totalLabel}>{ar('إجمالي المحصّل المعروض')}</Text>
             <PdfMoneyText amount={receiptsTotal} size="md" color={PDF.logoGreen} />
           </View>
@@ -132,13 +132,13 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
         ))}
       </View>
 
-      <PdfKeepTogether minAhead={88}>
+      <PdfKeepTogether>
         <View style={s.balanceBox}>
-          <Text style={{ fontSize: 8.5, color: PDF.muted, marginBottom: 3, lineHeight: 1.35 }}>{ar('الرصيد المستحق على العميل')}</Text>
+          <Text style={{ fontSize: 8, color: PDF.muted, marginBottom: 2, lineHeight: 1.35 }}>{ar('الرصيد المستحق على العميل')}</Text>
           <PdfMoneyText amount={customer.outstanding} size="md" />
-          <Text style={{ fontSize: 7.5, color: PDF.muted, marginTop: 4, lineHeight: 1.35 }}>{ar('وفق سجلات النظام شاملاً الديون المسجّلة والتسويات')}</Text>
+          <Text style={{ fontSize: 7, color: PDF.muted, marginTop: 3, lineHeight: 1.35 }}>{ar('وفق سجلات النظام شاملاً الديون المسجّلة والتسويات')}</Text>
         </View>
-        <PdfSignatureStrip minAhead={0} />
+        <PdfSignatureStrip />
       </PdfKeepTogether>
     </ReportShell>
   );

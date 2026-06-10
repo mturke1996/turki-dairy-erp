@@ -21,10 +21,15 @@ import {
   verifyReferenceMovements,
 } from "@/lib/domain/treasury-splits";
 import {
+  allPayrollLinesPaid,
   buildPayrollLine,
   buildPayrollLines,
+  isPayrollLinePaid,
   normalizePayrollLine,
+  payrollBatchPaidCashTotal,
   payrollBatchTotal,
+  payrollBatchTotalAmount,
+  payrollBatchUnpaidTotal,
   salaryTypeMatchesBatch,
 } from "@/lib/domain/payroll";
 import { cycleForDate, cycleOfMonth } from "@/lib/domain/cycle";
@@ -60,6 +65,7 @@ import type {
   InventoryAdjustment,
   Payment,
   PayrollBatch,
+  PayrollLine,
   SaleTransaction,
   Session,
   SupplyTransaction,
@@ -450,6 +456,8 @@ interface ErpState {
     periodTo: string;
     paidFromType?: AccountSourceType;
     paidFromId?: string;
+    /** كشف لموظف واحد أو مجموعة محددة */
+    employeeIds?: string[];
   }) => Promise<MutationResult>;
   updatePayrollBatchLines: (
     batchId: string,
@@ -464,6 +472,12 @@ interface ErpState {
     batchId: string,
     source: { type: AccountSourceType; id: string },
   ) => Promise<MutationResult>;
+  payPayrollEmployeeLine: (
+    batchId: string,
+    employeeId: string,
+    source: { type: AccountSourceType; id: string },
+  ) => Promise<MutationResult>;
+  deletePayrollBatch: (batchId: string) => Promise<MutationResult>;
 
   // settings & demo
   updateSettings: (patch: Partial<AppSettings>) => Promise<MutationResult>;
@@ -4041,13 +4055,19 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const gate = requireOpenSession(state);
     if (!gate.ok) return gate;
     const active = state.employees.filter((e) => e.status === "active");
-    const eligible = active.filter((e) =>
+    let eligible = active.filter((e) =>
       salaryTypeMatchesBatch(e.salaryType, input.payrollType),
     );
+    if (input.employeeIds?.length) {
+      const idSet = new Set(input.employeeIds);
+      eligible = eligible.filter((e) => idSet.has(e.id));
+    }
     if (!eligible.length) {
       return {
         ok: false,
-        error: "لا يوجد موظفون نشطون بنوع راتب مطابق لهذا الكشف.",
+        error: input.employeeIds?.length
+          ? "الموظف غير نشط أو غير مؤهل لهذا الكشف."
+          : "لا يوجد موظفون نشطون بنوع راتب مطابق لهذا الكشف.",
       };
     }
     const advanceBalances = new Map(
@@ -4124,6 +4144,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const patchMap = new Map(linePatches.map((p) => [p.employeeId, p]));
     const lines = batch.lines.map((existing) => {
       const existingNorm = normalizePayrollLine(existing);
+      if (isPayrollLinePaid(existingNorm, batch.status)) return existingNorm;
       const patch = patchMap.get(existing.employeeId);
       const employee = state.employees.find((e) => e.id === existing.employeeId);
       if (!employee) return existingNorm;
@@ -4148,7 +4169,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const updatedBatch: PayrollBatch = {
       ...batch,
       lines,
-      totalAmount: payrollBatchTotal(lines),
+      totalAmount: payrollBatchTotalAmount(lines, batch.status),
     };
     const audit = makeAudit(
       state,
@@ -4175,6 +4196,128 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     return res.ok ? { ok: true, id: batchId } : res;
   },
 
+  payPayrollEmployeeLine: async (batchId, employeeId, source) => {
+    const state = get();
+    const gate = requireOpenSession(state);
+    if (!gate.ok) return gate;
+    const batch = state.payrollBatches.find((b) => b.id === batchId);
+    if (!batch) return { ok: false, error: "كشف الرواتب غير موجود." };
+    if (batch.status === "paid")
+      return { ok: false, error: "الكشف مكتمل الصرف." };
+
+    const employee = state.employees.find((e) => e.id === employeeId);
+    if (!employee) return { ok: false, error: "الموظف غير موجود." };
+
+    const existing = batch.lines.find((l) => l.employeeId === employeeId);
+    if (!existing) return { ok: false, error: "الموظف غير مدرج في هذا الكشف." };
+
+    const line = normalizePayrollLine(existing);
+    if (isPayrollLinePaid(line, batch.status))
+      return { ok: false, error: "راتب هذا الموظف مُصروف بالفعل." };
+
+    const payAmount = line.netSalary;
+    const bal = accountBalance(
+      source.type,
+      source.id,
+      state.vaults,
+      state.banks,
+      state.cashMovements,
+    );
+    if (payAmount > bal + 0.001)
+      return {
+        ok: false,
+        error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي.`,
+      };
+
+    const date = new Date().toISOString();
+    let debtEntries = state.debtEntries;
+    const debtUpdates: DebtEntry[] = [];
+    if (line.advanceDeducted > 0.001) {
+      const alloc = allocatePaymentToPartyDebts(
+        debtEntries,
+        "employee",
+        employeeId,
+        line.advanceDeducted,
+        ["receivable"],
+      );
+      debtEntries = alloc.entries;
+      debtUpdates.push(...alloc.updates);
+    }
+
+    const paidLine: PayrollLine = {
+      ...line,
+      paidAt: date,
+      paidFromType: source.type,
+      paidFromId: source.id,
+    };
+    const lines = batch.lines.map((l) =>
+      l.employeeId === employeeId ? paidLine : normalizePayrollLine(l),
+    );
+    const allPaid = allPayrollLinesPaid(lines, batch.status);
+    const updatedBatch: PayrollBatch = {
+      ...batch,
+      lines,
+      totalAmount: payrollBatchTotalAmount(lines, allPaid ? "paid" : batch.status),
+      status: allPaid ? "paid" : "approved",
+      paidAt: allPaid ? date : batch.paidAt,
+      paidFromType: allPaid ? source.type : batch.paidFromType,
+      paidFromId: allPaid ? source.id : batch.paidFromId,
+    };
+
+    const cm: CashMovement = {
+      id: uid("cm-"),
+      ref: nextRef("CM", state.cashMovements),
+      movementType: "salary",
+      sourceType: source.type,
+      sourceId: source.id,
+      amount: payAmount,
+      direction: "out",
+      referenceType: "payroll",
+      referenceId: `${batchId}:${employeeId}`,
+      description: `راتب ${employee.fullName} — ${batch.label}`,
+      sessionId: state.activeSessionId,
+      date,
+      createdAt: date,
+    };
+    const debtNote =
+      line.advanceDeducted > 0.001
+        ? ` · خصم دين ${formatMoney(line.advanceDeducted, { decimals: 0 })}`
+        : "";
+    const audit = makeAudit(
+      state,
+      "payroll",
+      batchId,
+      "pay",
+      `صرف راتب ${employee.fullName} ${formatMoney(payAmount, { decimals: 0 })}${debtNote}`,
+    );
+    const dbRows: { table: string; rows: Record<string, unknown>[] }[] = [
+      {
+        table: "payroll_batches",
+        rows: [updatedBatch as unknown as Record<string, unknown>],
+      },
+      { table: "cash_movements", rows: [cm as unknown as Record<string, unknown>] },
+    ];
+    if (debtUpdates.length) {
+      dbRows.push({
+        table: "debt_entries",
+        rows: debtUpdates as unknown as Record<string, unknown>[],
+      });
+    }
+    const res = await mutateWithDb(
+      () =>
+        set((s) => ({
+          payrollBatches: s.payrollBatches.map((b) =>
+            b.id === batchId ? updatedBatch : b,
+          ),
+          debtEntries,
+          cashMovements: [cm, ...s.cashMovements],
+          auditLogs: [audit, ...s.auditLogs],
+        })),
+      dbRows,
+    );
+    return res.ok ? { ok: true, id: batchId } : res;
+  },
+
   payPayrollBatch: async (batchId, source) => {
     const state = get();
     const gate = requireOpenSession(state);
@@ -4185,8 +4328,11 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       return { ok: false, error: "الكشف مصروف بالفعل." };
 
     const lines = batch.lines.map(normalizePayrollLine);
-    const payTotal = payrollBatchTotal(lines);
-    const batchToPay: PayrollBatch = { ...batch, lines, totalAmount: payTotal };
+    const unpaidLines = lines.filter((l) => !isPayrollLinePaid(l, batch.status));
+    if (!unpaidLines.length)
+      return { ok: false, error: "لا يوجد موظفون متبقون للصرف." };
+
+    const payTotal = payrollBatchUnpaidTotal(lines, batch.status);
 
     const bal = accountBalance(
       source.type,
@@ -4205,7 +4351,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     let debtEntries = state.debtEntries;
     const debtUpdateMap = new Map<string, DebtEntry>();
     let totalDebtSettled = 0;
-    for (const line of lines) {
+    for (const line of unpaidLines) {
       if (line.advanceDeducted <= 0.001) continue;
       const alloc = allocatePaymentToPartyDebts(
         debtEntries,
@@ -4220,8 +4366,20 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     }
     const debtUpdates = [...debtUpdateMap.values()];
 
+    const paidLines = lines.map((l) =>
+      isPayrollLinePaid(l, batch.status)
+        ? l
+        : {
+            ...l,
+            paidAt: date,
+            paidFromType: source.type,
+            paidFromId: source.id,
+          },
+    );
     const updatedBatch: PayrollBatch = {
-      ...batchToPay,
+      ...batch,
+      lines: paidLines,
+      totalAmount: payrollBatchPaidCashTotal(paidLines, "paid"),
       status: "paid",
       paidFromType: source.type,
       paidFromId: source.id,
@@ -4237,7 +4395,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       direction: "out",
       referenceType: "payroll",
       referenceId: batchId,
-      description: `صرف ${batchToPay.label}`,
+      description: `صرف ${batch.label}`,
       sessionId: state.activeSessionId,
       date,
       createdAt: date,
@@ -4280,6 +4438,78 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           auditLogs: [audit, ...s.auditLogs],
         })),
       dbRows,
+    );
+    return res.ok ? { ok: true, id: batchId } : res;
+  },
+
+  deletePayrollBatch: async (batchId) => {
+    const state = get();
+    const gate = requireOpenSession(state);
+    if (!gate.ok) return gate;
+    const batch = state.payrollBatches.find((b) => b.id === batchId);
+    if (!batch) return { ok: false, error: "كشف الرواتب غير موجود." };
+
+    const cmIds = state.cashMovements
+      .filter((m) => {
+        if (m.referenceType !== "payroll" || !m.referenceId) return false;
+        return (
+          m.referenceId === batchId || m.referenceId.startsWith(`${batchId}:`)
+        );
+      })
+      .map((m) => m.id);
+
+    let debtEntries = state.debtEntries;
+    const debtDbRows: { table: string; rows: Record<string, unknown>[] }[] =
+      [];
+    for (const raw of batch.lines) {
+      const line = normalizePayrollLine(raw);
+      if (!isPayrollLinePaid(line, batch.status)) continue;
+      if (line.advanceDeducted <= 0.001) continue;
+      const before = debtEntries;
+      debtEntries = reversePaymentDebtAllocation(
+        debtEntries,
+        "employee",
+        line.employeeId,
+        { debtSettledAmount: line.advanceDeducted },
+      );
+      for (const entry of debtEntries) {
+        const prev = before.find((d) => d.id === entry.id);
+        if (
+          prev &&
+          (prev.amount !== entry.amount ||
+            prev.settledAmount !== entry.settledAmount ||
+            prev.settledAt !== entry.settledAt)
+        ) {
+          debtDbRows.push({
+            table: "debt_entries",
+            rows: [entry as unknown as Record<string, unknown>],
+          });
+        }
+      }
+    }
+
+    const audit = makeAudit(
+      state,
+      "payroll",
+      batchId,
+      "delete",
+      `حذف كشف رواتب: ${batch.label}`,
+    );
+    const res = await mutateWithDb(
+      () =>
+        set((s) => ({
+          payrollBatches: s.payrollBatches.filter((b) => b.id !== batchId),
+          debtEntries,
+          cashMovements: s.cashMovements.filter((m) => !cmIds.includes(m.id)),
+          auditLogs: [audit, ...s.auditLogs],
+        })),
+      [
+        { table: "payroll_batches", deletes: [batchId] },
+        ...debtDbRows,
+        ...(cmIds.length
+          ? [{ table: "cash_movements", deletes: cmIds }]
+          : []),
+      ],
     );
     return res.ok ? { ok: true, id: batchId } : res;
   },

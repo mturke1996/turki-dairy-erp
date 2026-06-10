@@ -3,7 +3,7 @@ import React from 'react';
 import { Text, View } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
-import { PDF, pdfBase } from './pdfBase';
+import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
 import { PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 
 export type CashStatementRow = {
@@ -39,7 +39,7 @@ export function CashStatementPDF({ accountName, accountTypeLabel, opening, total
         { label: 'الرصيد الحالي', moneyAmount: closing },
       ]}
     >
-      <View style={[pdfBase.tableHead, { marginTop: 4 }]} minPresenceAhead={40}>
+      <View style={[pdfBase.tableHead, { marginTop: 4 }]} minPresenceAhead={PDF_PAGINATION.tableHead}>
         <PdfTh flex={1.1} kind="date">التاريخ</PdfTh>
         <PdfTh flex={2.6}>البيان</PdfTh>
         <PdfTh flex={1.2} kind="money">وارد</PdfTh>

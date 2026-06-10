@@ -17,7 +17,7 @@ function docRefId(): string {
 }
 
 /** شريط التوقيع — مكوّن مستقل لدمجه مع ختام الكشوف دون إجبار صفحة جديدة */
-export function PdfSignatureStrip({ minAhead = 48 }: { minAhead?: number }) {
+export function PdfSignatureStrip({ minAhead = 0 }: { minAhead?: number }) {
   return (
     <View style={pdfBase.signatureStrip} wrap={false} minPresenceAhead={minAhead}>
       <View style={pdfBase.signatureCell}>

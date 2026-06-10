@@ -3,7 +3,7 @@ import React from 'react';
 import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
-import { PDF, pdfBase } from './pdfBase';
+import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
 import { PdfMoneyText, pdfFmtNum } from './pdfBrandKit';
 import { PdfTh, PdfTd, PdfMoneyInline } from './PdfTable';
 import { ACCOUNT_LABELS } from '@/lib/domain/constants';
@@ -88,7 +88,7 @@ export function FinancialReportPDF({ trialBalance, pnl, aging, asOfLabel }: Fina
     >
       {/* ميزان المراجعة */}
       <Text style={s.section}>{ar('ميزان المراجعة')}</Text>
-      <View style={pdfBase.tableHead} minPresenceAhead={40}>
+      <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>
         <PdfTh flex={2.4}>الحساب</PdfTh>
         <PdfTh flex={1.3} kind="money">مدين</PdfTh>
         <PdfTh flex={1.3} kind="money">دائن</PdfTh>
@@ -107,7 +107,7 @@ export function FinancialReportPDF({ trialBalance, pnl, aging, asOfLabel }: Fina
           </View>
         </View>
       ))}
-      <View style={s.totalRow} minPresenceAhead={52}>
+      <View style={s.totalRow} minPresenceAhead={PDF_PAGINATION.totalBar}>
         <Text style={[s.tf, { flex: 2.4, textAlign: 'right' }]}>{ar(trialBalance.balanced ? 'الإجماليات (متوازن)' : 'الإجماليات (غير متوازن!)')}</Text>
         <Text style={[s.tf, { flex: 1.3, textAlign: 'left' }]}>{pdfFmtNum(trialBalance.totalDebit)}</Text>
         <Text style={[s.tf, { flex: 1.3, textAlign: 'left' }]}>{pdfFmtNum(trialBalance.totalCredit)}</Text>
@@ -136,7 +136,7 @@ export function FinancialReportPDF({ trialBalance, pnl, aging, asOfLabel }: Fina
         <Text style={s.pnlLabel}>{ar('تكلفة البضاعة المباعة')}</Text>
         <PdfMoneyText amount={-pnl.cogs} size="sm" color={PDF.danger} />
       </View>
-      <View style={s.pnlStrong} minPresenceAhead={48}>
+      <View style={s.pnlStrong} minPresenceAhead={PDF_PAGINATION.totalBar}>
         <Text style={{ fontSize: 10.5, fontWeight: 'bold', color: PDF.primary, lineHeight: 1.4 }}>{ar('مجمل الربح')}</Text>
         <PdfMoneyText amount={pnl.grossProfit} size="md" color={PDF.logoGreen} />
       </View>
@@ -152,7 +152,7 @@ export function FinancialReportPDF({ trialBalance, pnl, aging, asOfLabel }: Fina
         <Text style={s.pnlLabel}>{ar('الرواتب والأجور')}</Text>
         <PdfMoneyText amount={-pnl.salaries} size="sm" color={PDF.danger} />
       </View>
-      <View style={[s.pnlStrong, { marginTop: 6, borderWidth: 1, borderColor: pnl.netProfit >= 0 ? PDF.logoGreen : PDF.danger }]} minPresenceAhead={48}>
+      <View style={[s.pnlStrong, { marginTop: 6, borderWidth: 1, borderColor: pnl.netProfit >= 0 ? PDF.logoGreen : PDF.danger }]} minPresenceAhead={PDF_PAGINATION.totalBar}>
         <Text style={{ fontSize: 10.5, fontWeight: 'bold', color: PDF.primary, lineHeight: 1.4 }}>
           {ar(pnl.netProfit >= 0 ? 'صافي الربح' : 'صافي الخسارة')}
         </Text>
@@ -160,7 +160,7 @@ export function FinancialReportPDF({ trialBalance, pnl, aging, asOfLabel }: Fina
       </View>
 
       {/* أعمار الديون */}
-      <Text style={s.section} minPresenceAhead={60}>{ar('أعمار ديون العملاء')}</Text>
+      <Text style={s.section} minPresenceAhead={PDF_PAGINATION.section}>{ar('أعمار ديون العملاء')}</Text>
       <View style={pdfBase.tableHead}>
         <PdfTh flex={1} kind="num">غير مستحق</PdfTh>
         <PdfTh flex={1} kind="num">1-30</PdfTh>

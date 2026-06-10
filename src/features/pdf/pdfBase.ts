@@ -15,6 +15,13 @@ import { BRAND } from '@/lib/brand';
 
 const p = BRAND.pdfPalette;
 
+/** عتبات ترقيم الصفحات — قيم منخفضة لتفادي صفحة ثانية فارغة مع التوقيع */
+export const PDF_PAGINATION = {
+  tableHead: 28,
+  totalBar: 32,
+  section: 36,
+} as const;
+
 export const PDF = {
   primary: p.primary,
   primaryDark: p.primaryDark,
@@ -47,10 +54,10 @@ export const pdfBase = {
     lineHeight: 1.5,
     color: PDF.text,
     backgroundColor: PDF.white,
-    // الترويسة المثبتة تنتهي عند ~118pt — نبدأ المحتوى بعدها بهواء كافٍ
-    paddingTop: 134,
+    // الترويسة المثبتة تنتهي عند ~112pt — نبدأ المحتوى بعدها بهواء كافٍ
+    paddingTop: 128,
     // التذييل الجديد منخفض الارتفاع (~46pt من أسفل الورقة)
-    paddingBottom: 88,
+    paddingBottom: 82,
     paddingHorizontal: 40,
   },
 
@@ -166,7 +173,7 @@ export const pdfBase = {
     borderTopColor: PDF.accent,
     borderBottomWidth: 0.5,
     borderBottomColor: PDF.border,
-    marginBottom: 20,
+    marginBottom: 14,
   },
 
   summaryCell: {
@@ -363,8 +370,8 @@ export const pdfBase = {
     fontSize: 11,
     fontWeight: 'bold',
     color: PDF.primary,
-    marginBottom: 8,
-    marginTop: 14,
+    marginBottom: 6,
+    marginTop: 10,
     paddingBottom: 5,
     paddingRight: 8,
     borderBottomWidth: 0.75,
@@ -377,13 +384,13 @@ export const pdfBase = {
 
   caption: { fontSize: 8, color: PDF.muted, marginTop: 12, textAlign: 'center', lineHeight: 1.4 },
 
-  /* ── شريط التوقيع ── */
+  /* ── شريط التوقيع (مضغوط ليبقى في الصفحة الأولى عند توفر المكان) ── */
   signatureStrip: {
     direction: 'rtl',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 14,
-    paddingTop: 8,
+    marginTop: 8,
+    paddingTop: 4,
     borderTopWidth: 0.5,
     borderTopColor: PDF.border,
   },
@@ -394,26 +401,26 @@ export const pdfBase = {
   },
 
   signatureLabel: {
-    fontSize: 7,
+    fontSize: 6.8,
     color: PDF.muted,
     fontWeight: 'bold',
-    marginBottom: 14,
+    marginBottom: 8,
     textAlign: 'right',
-    lineHeight: 1.3,
+    lineHeight: 1.25,
   },
 
   signatureLine: {
     width: '100%',
     borderBottomWidth: 0.75,
     borderBottomColor: PDF.text,
-    marginBottom: 6,
+    marginBottom: 4,
   },
 
   signatureHint: {
-    fontSize: 7,
+    fontSize: 6.8,
     color: PDF.muted,
     textAlign: 'right',
-    lineHeight: 1.35,
+    lineHeight: 1.3,
   },
 
   docRef: {

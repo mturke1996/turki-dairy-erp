@@ -2,7 +2,7 @@
 import React from 'react';
 import { Text, View } from '@react-pdf/renderer';
 import { ar } from './arabicPDF';
-import { PDF, pdfBase } from './pdfBase';
+import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
 import { pdfFmtNum, LIBYAN_CURRENCY_LABEL } from './pdfBrandKit';
 
 export type PdfTableColumn = {
@@ -122,7 +122,7 @@ export function PdfTable({
 }) {
   return (
     <View>
-      <View style={pdfBase.tableHead} minPresenceAhead={40}>
+      <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>
         {columns.map((c) => (
           <PdfTh key={c.key} flex={c.flex} kind={c.kind ?? (c.align === 'left' ? 'money' : c.align === 'center' ? 'num' : 'text')}>
             {c.label}
@@ -151,7 +151,7 @@ export function PdfTable({
       )}
 
       {footer ? (
-        <View style={pdfBase.tableFoot} wrap={false} minPresenceAhead={52}>
+        <View style={pdfBase.tableFoot} wrap={false} minPresenceAhead={PDF_PAGINATION.totalBar}>
           {footer}
         </View>
       ) : null}
@@ -165,7 +165,7 @@ export function PdfSectionTitle({ children }: { children: string }) {
 
 export function PdfKeepTogether({
   children,
-  minAhead = 120,
+  minAhead = 0,
 }: {
   children: React.ReactNode;
   minAhead?: number;

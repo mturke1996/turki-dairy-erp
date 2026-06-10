@@ -9,6 +9,7 @@ import { Money, Liters } from '@/components/shared/money';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { useDerived } from '@/lib/store/use-derived';
 import { useCycle } from '@/lib/store/use-cycle';
+import { computeActiveMonthlyLabor } from '@/lib/domain/payroll';
 import { computeTreasury, computeExpenseTotals } from '@/lib/domain/treasury';
 import { cn } from '@/lib/utils';
 
@@ -27,10 +28,7 @@ export function DashboardV3Panels() {
   const cycle = useCycle();
 
   const activeEmployees = employees.filter((e) => e.status === 'active');
-  const monthlyLabor = activeEmployees.reduce(
-    (s, e) => s + e.baseSalary + e.allowances.housing + e.allowances.transport + e.allowances.food,
-    0,
-  );
+  const monthlyLabor = computeActiveMonthlyLabor(employees);
   const lastPaid = batches
     .filter((b) => b.status === 'paid')
     .sort((a, b) => +new Date(b.paidAt ?? 0) - +new Date(a.paidAt ?? 0))[0];

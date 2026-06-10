@@ -3,7 +3,7 @@ import React from 'react';
 import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
-import { PDF, pdfBase } from './pdfBase';
+import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
 import { pdfFmtNum, pdfFmtDate, pdfFmtLiters } from './pdfBrandKit';
 import { PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 import type { InventoryLedgerEntry } from '@/lib/domain/types';
@@ -46,7 +46,7 @@ export function DailyMovementPDF({ entries, sessionLabel, openingStock, totals }
         { label: 'الرصيد الختامي', value: pdfFmtLiters(totals.closing, 0) },
       ]}
     >
-      <View style={pdfBase.tableHead} minPresenceAhead={40}>
+      <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>
         <PdfTh flex={1.1} kind="date">التاريخ</PdfTh>
         <PdfTh flex={1.4} kind="ref">المرجع</PdfTh>
         <PdfTh flex={1.6}>البيان</PdfTh>
@@ -66,7 +66,7 @@ export function DailyMovementPDF({ entries, sessionLabel, openingStock, totals }
           <PdfTd flex={1.1} kind="num" bold>{pdfFmtNum(e.balanceAfter, 1)}</PdfTd>
         </View>
       ))}
-      <View style={s.totalRow} minPresenceAhead={52}>
+      <View style={s.totalRow} minPresenceAhead={PDF_PAGINATION.totalBar}>
         <Text style={[s.tf, { flex: 2.5, textAlign: 'right', color: PDF.logoGreen }]}>{ar('الإجماليات')}</Text>
         <Text style={[s.tf, { flex: 1.6 }]}> </Text>
         <Text style={[s.tf, { flex: 1, color: PDF.logoGreen }]}>{pdfFmtNum(totals.inQty, 0)}</Text>

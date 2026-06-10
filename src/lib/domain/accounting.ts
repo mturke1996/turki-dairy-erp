@@ -10,7 +10,10 @@
  *   تحصيل من عميل:  مدين النقدية / دائن ذمم العملاء
  */
 
-import { payrollBatchAdvanceDeducted, payrollBatchGrossTotal } from './payroll';
+import {
+  payrollBatchAdvanceDeducted,
+  payrollBatchGrossWithBonusTotal,
+} from './payroll';
 import type {
   AccountKey,
   CashMovement,
@@ -118,9 +121,11 @@ export function journalForExpense(e: Expense): JournalEntry {
 }
 
 export function journalForPayroll(batch: PayrollBatch): JournalEntry {
-  const grossExpense = payrollBatchGrossTotal(batch.lines);
+  const grossExpense = payrollBatchGrossWithBonusTotal(batch.lines);
   const debtRecovered = payrollBatchAdvanceDeducted(batch.lines);
-  const cashOut = batch.totalAmount;
+  const cashOut = round(
+    batch.lines.reduce((s, l) => s + l.netSalary, 0),
+  );
   const journalLines = [line('payroll_expense', grossExpense, 0)];
   if (debtRecovered > 0.001) {
     journalLines.push(line('other_receivable', 0, debtRecovered));

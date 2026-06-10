@@ -6,6 +6,7 @@ import { Money } from '@/components/shared/money';
 import {
   DEPARTMENT_LABELS,
   EMPLOYEE_STATUS_LABELS,
+  SALARY_BASE_LABELS,
   SALARY_TYPE_LABELS,
 } from '@/lib/domain/constants';
 import type { Department, EmployeeStatus, SalaryType } from '@/lib/domain/types';
@@ -103,8 +104,10 @@ export function EmployeeListCard({
 
       <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-canvas-sunken/60 p-2.5">
         <div>
-          <p className="text-[10.5px] font-medium text-muted-foreground">الأجر</p>
-          <Money value={employee.grossSalary} decimals={0} className="mt-0.5 text-[14px] font-semibold" />
+          <p className="text-[10.5px] font-medium text-muted-foreground">
+            {SALARY_BASE_LABELS[employee.salaryType]}
+          </p>
+          <Money value={employee.grossSalary} decimals={0} className="mt-0.5 text-sm font-semibold tabular-nums" />
         </div>
         <div className="border-s border-border/80 ps-2.5">
           <p className="text-[10.5px] font-medium text-muted-foreground">الدين</p>

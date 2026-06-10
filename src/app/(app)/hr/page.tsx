@@ -33,13 +33,17 @@ import {
 } from '@/lib/domain/constants';
 import { computeEmployeeAdvanceBalance } from '@/lib/domain/calculations';
 import {
-  employeeMonthlyEquivalent,
+  computeMonthlyLaborBreakdown,
+  employeePeriodPackage,
   normalizePayrollLine,
   payoutSourceLabel,
   payrollBatchAdvanceDeducted,
   payrollBatchBonusTotal,
   payrollBatchCarriedForward,
   payrollBatchGrossTotal,
+  payrollBatchIsPartial,
+  payrollBatchPaidCount,
+  payrollBatchTotal,
 } from '@/lib/domain/payroll';
 import type {
   EmployeeStatus,
@@ -81,7 +85,34 @@ function HrContent() {
   const createPayrollBatch = useErpStore((s) => s.createPayrollBatch);
   const updatePayrollBatchLines = useErpStore((s) => s.updatePayrollBatchLines);
   const payPayrollBatch = useErpStore((s) => s.payPayrollBatch);
+  const payPayrollEmployeeLine = useErpStore((s) => s.payPayrollEmployeeLine);
+  const deletePayrollBatch = useErpStore((s) => s.deletePayrollBatch);
   const canPay = usePermission('payroll.pay');
+  const canDeleteAdmin = usePermission('transactions.delete');
+
+  function canDeleteBatch(batch: PayrollBatch) {
+    return canDeleteAdmin || (canPay && batch.status !== 'paid');
+  }
+
+  async function handleDeleteBatch(batch: PayrollBatch, opts?: { skipConfirm?: boolean }) {
+    if (!opts?.skipConfirm) {
+      const hasPaid =
+        batch.status === 'paid' || payrollBatchPaidCount(batch.lines, batch.status) > 0;
+      const msg = hasPaid
+        ? `حذف «${batch.label}» وإلغاء حركات الصرف المرتبطة؟ لا يمكن التراجع.`
+        : `حذف كشف «${batch.label}»؟ لا يمكن التراجع.`;
+      if (!confirm(msg)) return { ok: false as const };
+    }
+    const res = await deletePayrollBatch(batch.id);
+    if (res.ok) {
+      toast.success('تم حذف كشف الرواتب');
+      if (editTarget?.id === batch.id) setEditTarget(null);
+      if (payTarget?.id === batch.id) setPayTarget(null);
+    } else {
+      toast.error(res.error ?? 'تعذّر الحذف');
+    }
+    return res;
+  }
 
   function buildPayrollProps(b: PayrollBatch) {
     const rows: PayrollLineRow[] = b.lines.map((l) => {
@@ -116,10 +147,8 @@ function HrContent() {
   }
 
   const active = employees.filter((e) => e.status === 'active');
-  const monthlyLabor = useMemo(
-    () => active.reduce((s, e) => s + employeeMonthlyEquivalent(e), 0),
-    [active],
-  );
+  const laborBreakdown = useMemo(() => computeMonthlyLaborBreakdown(rawEmployees), [rawEmployees]);
+  const monthlyLabor = laborBreakdown.total;
   const lastPaid = useMemo(
     () => batches.filter((b) => b.status === 'paid').sort((a, b) => +new Date(b.paidAt ?? 0) - +new Date(a.paidAt ?? 0))[0],
     [batches],
@@ -164,7 +193,7 @@ function HrContent() {
       <PageHeader
         eyebrow="المالية"
         title="الموظفون والرواتب"
-        description="إدارة الكوادر — أنواع الراتب (شهري / يومي / نصف شهر) وربط الصرف بالخزينة."
+        description="إدارة الكوادر والرواتب — صرف فردي أو جماعي مربوط بالخزينة والديون."
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Button variant="outline" className="w-full sm:w-auto" onClick={() => setEmpOpen(true)}>
@@ -181,32 +210,52 @@ function HrContent() {
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatTile label="النشطون" value={active.length} icon={UserCheck} tone="meadow" hint={`${employees.length} إجمالي`} />
-        <StatTile label="كلفة شهرية" value={<Money value={monthlyLabor} decimals={0} />} icon={Users} tone="navy" hint="رواتب النشطين" />
+        <StatTile
+          label="كلفة شهرية"
+          value={<Money value={monthlyLabor} decimals={0} />}
+          icon={Users}
+          tone="navy"
+          hint={
+            laborBreakdown.allHalfMonth
+              ? `نصف شهر ${laborBreakdown.halfMonthPerPay.toLocaleString('ar-LY')} × 2`
+              : laborBreakdown.halfMonthPerPay > 0
+                ? `نصف شهر ${laborBreakdown.halfMonthPerPay.toLocaleString('ar-LY')} × 2 + آخرون`
+                : `${active.length} نشط`
+          }
+        />
         <StatTile label="آخر صرف" value={lastPaid ? <Money value={lastPaid.totalAmount} decimals={0} /> : '—'} icon={CalendarClock} tone="sun" hint={lastPaid?.paidAt ? formatShortDate(lastPaid.paidAt) : 'لم يُصرف'} />
         <StatTile label="إجمالي المصروف" value={<Money value={totalPaid} decimals={0} />} icon={Wallet} tone="neutral" hint="كل الكشوف" />
       </div>
 
       {/* تبويب جوال — الكوادر / كشوف الرواتب */}
-      <div className="flex gap-2 rounded-xl border border-border bg-canvas-sunken/40 p-1 md:hidden">
+      <div className="flex gap-1.5 rounded-xl border border-border bg-canvas-sunken/40 p-1 md:hidden" role="tablist" aria-label="أقسام الموارد البشرية">
         {(
           [
-            { key: 'staff' as const, label: 'الكوادر', count: employees.length },
-            { key: 'payroll' as const, label: 'كشوف الرواتب', count: batches.length },
+            { key: 'staff' as const, label: 'الكوادر', count: employees.length, icon: Users },
+            { key: 'payroll' as const, label: 'الرواتب', count: batches.length, icon: BadgeDollarSign },
           ] as const
         ).map((tab) => (
           <button
             key={tab.key}
             type="button"
+            role="tab"
+            aria-selected={mobileSection === tab.key}
             onClick={() => setMobileSection(tab.key)}
             className={cn(
-              'flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-[13px] font-semibold transition-colors',
+              'flex h-11 min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-sm font-medium transition-colors',
               mobileSection === tab.key
                 ? 'bg-card text-foreground shadow-whisper ring-1 ring-border'
-                : 'text-muted-foreground',
+                : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            {tab.label}
-            <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] tabular-nums', mobileSection === tab.key ? 'bg-navy-50 text-navy-700' : 'bg-transparent')}>
+            <tab.icon className="size-4 shrink-0" strokeWidth={2} />
+            <span className="truncate">{tab.label}</span>
+            <span
+              className={cn(
+                'shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-medium tabular-nums leading-none',
+                mobileSection === tab.key ? 'bg-navy-50 text-navy-700' : 'bg-border/50 text-muted-foreground',
+              )}
+            >
               {tab.count}
             </span>
           </button>
@@ -214,12 +263,12 @@ function HrContent() {
       </div>
 
       {/* الموظفون */}
-      <Card className={cn('overflow-hidden', mobileSection !== 'staff' && 'hidden md:block')}>
+      <Card className={cn('overflow-hidden border-0 bg-transparent shadow-none md:border md:bg-card md:shadow-whisper', mobileSection !== 'staff' && 'hidden md:block')}>
         <CardHeader className="hidden pb-3 md:block">
           <CardTitle>الكوادر</CardTitle>
           <CardDescription>قائمة الموظفين وبيانات الراتب والديون</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 pt-4 md:pt-0">
+        <CardContent className="space-y-4 p-0 md:p-6 md:pt-0">
           <div className="space-y-3">
             <div className="relative">
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -255,9 +304,7 @@ function HrContent() {
           ) : filteredEmployees.length ? (
             <>
               <div className="space-y-3 md:hidden">
-                {filteredEmployees.map((e) => {
-                  const allowances = e.allowances.housing + e.allowances.transport + e.allowances.food;
-                  return (
+                {filteredEmployees.map((e) => (
                     <EmployeeListCard
                       key={e.id}
                       employee={{
@@ -268,14 +315,13 @@ function HrContent() {
                         department: e.department,
                         status: e.status,
                         salaryType: e.salaryType ?? 'monthly',
-                        grossSalary: e.baseSalary + allowances,
+                        grossSalary: employeePeriodPackage(e),
                         advanceBalance: e.advanceBalance,
                         phone: e.phone,
                       }}
                       onClick={() => setDetailId(e.id)}
                     />
-                  );
-                })}
+                ))}
               </div>
               <div className="hidden md:block">
                 <Table>
@@ -290,9 +336,7 @@ function HrContent() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredEmployees.map((e) => {
-                      const allowances = e.allowances.housing + e.allowances.transport + e.allowances.food;
-                      return (
+                    {filteredEmployees.map((e) => (
                         <TableRow key={e.id} className="cursor-pointer" onClick={() => setDetailId(e.id)}>
                           <TableCell>
                             <p className="text-[12.5px] font-medium">{e.fullName}</p>
@@ -310,7 +354,7 @@ function HrContent() {
                               : '—'}
                           </TableCell>
                           <TableCell className="text-left">
-                            <Money value={e.baseSalary + allowances} decimals={0} className="font-semibold" />
+                            <Money value={employeePeriodPackage(e)} decimals={0} className="font-semibold tabular-nums" />
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-col items-center gap-1">
@@ -321,8 +365,7 @@ function HrContent() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
+                    ))}
                   </TableBody>
                 </Table>
               </div>
@@ -334,17 +377,17 @@ function HrContent() {
       </Card>
 
       {/* كشوف الرواتب */}
-      <Card className={cn('overflow-hidden', mobileSection !== 'payroll' && 'hidden md:block')}>
+      <Card className={cn('overflow-hidden border-0 bg-transparent shadow-none md:border md:bg-card md:shadow-whisper', mobileSection !== 'payroll' && 'hidden md:block')}>
         <CardHeader className="hidden pb-3 md:block">
           <CardTitle>كشوف الرواتب</CardTitle>
           <CardDescription>الكشوف المنشأة وحالتها</CardDescription>
         </CardHeader>
-        <CardContent className="pt-4 md:pt-6">
+        <CardContent className="p-0 md:p-6 md:pt-6">
           {batches.length === 0 ? (
             <EmptyState icon={BadgeDollarSign} title="لا توجد كشوف" description="أنشئ كشف رواتب من الموظفين النشطين." />
           ) : (
             <>
-              <div className="space-y-3 md:hidden">
+              <div className="space-y-4 md:hidden">
                 {batches.map((b) => (
                   <PayrollBatchCard
                     key={b.id}
@@ -411,8 +454,19 @@ function HrContent() {
                         <p className="text-[10px] text-amber-700">{carried} مُرحَّل</p>
                       ) : null}
                     </TableCell>
-                    <TableCell className="text-left"><Money value={b.totalAmount} decimals={0} className="font-semibold" /></TableCell>
-                    <TableCell><Badge variant={PR_STATUS_VARIANT[b.status]}>{PAYROLL_STATUS_LABELS[b.status]}</Badge></TableCell>
+                    <TableCell className="text-left">
+                      <Money value={payrollBatchTotal(b.lines, b.status)} decimals={0} className="font-semibold" />
+                      {payrollBatchPaidCount(b.lines, b.status) > 0 && b.status !== 'paid' ? (
+                        <p className="text-[10px] text-muted-foreground">
+                          {payrollBatchPaidCount(b.lines, b.status)}/{b.lines.length} صُرف
+                        </p>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={payrollBatchIsPartial(b) || b.status === 'approved' ? 'info' : PR_STATUS_VARIANT[b.status]}>
+                        {b.status === 'paid' ? PAYROLL_STATUS_LABELS.paid : payrollBatchIsPartial(b) ? PAYROLL_STATUS_LABELS.approved : PAYROLL_STATUS_LABELS[b.status]}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-left" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
                         <TurkiPdfToolbar
@@ -460,7 +514,11 @@ function HrContent() {
         }}
       />
 
-      <EmployeeDetailDialog employeeId={detailId} open={!!detailId} onOpenChange={(o) => !o && setDetailId(null)} />
+      <EmployeeDetailDialog
+        employeeId={detailId}
+        open={!!detailId}
+        onOpenChange={(o) => !o && setDetailId(null)}
+      />
 
       <PayrollBatchDialog
         open={batchOpen}
@@ -487,10 +545,21 @@ function HrContent() {
         open={!!editTarget}
         onOpenChange={(o) => !o && setEditTarget(null)}
         employees={rawEmployees}
+        vaults={vaults}
+        banks={banks}
+        cashMovements={cashMovements}
         advanceBalanceOf={(id) =>
           computeEmployeeAdvanceBalance(id, payments, batches, debtEntries)
         }
         canPay={canPay}
+        onPayEmployee={async (batchId, employeeId, source) => {
+          const res = await payPayrollEmployeeLine(batchId, employeeId, source);
+          if (res.ok) {
+            const fresh = useErpStore.getState().payrollBatches.find((b) => b.id === batchId);
+            if (fresh) setEditTarget(fresh);
+          }
+          return res;
+        }}
         onSave={async (batchId, patches) => {
           const res = await updatePayrollBatchLines(batchId, patches);
           if (!res.ok) {
@@ -510,6 +579,12 @@ function HrContent() {
               }
             : undefined
         }
+        canDelete={editTarget ? canDeleteBatch(editTarget) : false}
+        onDelete={
+          editTarget
+            ? () => handleDeleteBatch(editTarget, { skipConfirm: true })
+            : undefined
+        }
       />
 
       <PayrollPayDialog
@@ -526,6 +601,16 @@ function HrContent() {
           } else toast.error(res.error ?? 'تعذّر الصرف');
         }}
       />
+
+      {/* زر عائم — كشف رواتب على الجوال */}
+      {mobileSection === 'payroll' && active.length > 0 ? (
+        <div className="fixed inset-x-4 bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] z-40 md:hidden">
+          <Button size="sm" className="w-full shadow-whisper" onClick={() => setBatchOpen(true)}>
+            <BadgeDollarSign className="size-3.5" />
+            كشف رواتب جديد
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

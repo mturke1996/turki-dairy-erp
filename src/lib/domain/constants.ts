@@ -292,15 +292,26 @@ export const SALARY_BASE_LABELS: Record<SalaryType, string> = {
   half_month: 'أجر نصف الشهر',
 };
 
+/** توضيح معنى المبلغ المُدخل عند إضافة/تعديل الموظف */
+export const SALARY_TYPE_HINTS: Record<SalaryType, string> = {
+  half_month: 'المبلغ = أجر نصف الشهر كاملاً — يُصرف كما هو في كشف نصف شهر (لا يُقسَّم).',
+  monthly: 'المبلغ = الراتب الشهري — كشف شهري كامل، أو نصفه في كشف نصف شهر.',
+  daily: 'المبلغ = الأجر اليومي — يُضرب في أيام الفترة عند إنشاء كشف يومي.',
+};
+
 export const PAYROLL_TYPE_LABELS: Record<PayrollType, string> = {
   monthly: 'كشف شهري',
   bi_monthly: 'كشف نصف شهر',
   daily: 'كشف يومي',
+  all: 'الكل — حسب نوع كل موظف',
 };
+
+/** ترتيب عرض أنواع الكشوف في النماذج */
+export const PAYROLL_TYPE_ORDER: PayrollType[] = ['bi_monthly', 'monthly', 'daily', 'all'];
 
 export const PAYROLL_STATUS_LABELS: Record<PayrollStatus, string> = {
   draft: 'مسودة',
-  approved: 'معتمد',
+  approved: 'قيد الصرف',
   paid: 'مصروف',
 };
 

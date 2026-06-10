@@ -3,7 +3,7 @@ import React from 'react';
 import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell, PdfSignatureStrip } from './ReportShell';
 import { ar } from './arabicPDF';
-import { PDF, pdfBase } from './pdfBase';
+import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
 import { PdfMoneyText, PdfInfoGrid, pdfFmtDate, pdfFmtLiters, pdfFmtMoneyLibyan } from './pdfBrandKit';
 import { PdfSectionTitle, PdfKeepTogether, PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 import { MILK_SHIFT_LABELS, QUALITY_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
@@ -13,9 +13,9 @@ import type { Payment, SupplyTransaction } from '@/lib/domain/types';
 const s = StyleSheet.create({
   totalLabel: { fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen, lineHeight: 1.4 },
   balanceBox: {
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderWidth: 0.75,
     borderColor: PDF.border,
     borderTopWidth: 2.5,
@@ -66,7 +66,7 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
       />
 
       <PdfSectionTitle>سجلّ الاستلام</PdfSectionTitle>
-      <View style={pdfBase.tableHead} minPresenceAhead={40}>
+      <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>
         <PdfTh flex={1.2} kind="date">التاريخ</PdfTh>
         <PdfTh flex={1.4} kind="ref">المرجع</PdfTh>
         <PdfTh flex={0.9}>الوجبة</PdfTh>
@@ -86,7 +86,7 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
           <PdfTdMoney flex={1.2} amount={sup.total} bold />
         </View>
       ))}
-      <View style={pdfBase.totalRowBar} minPresenceAhead={52}>
+      <View style={pdfBase.totalRowBar} minPresenceAhead={PDF_PAGINATION.totalBar}>
         <Text style={s.totalLabel}>{ar('إجمالي قيمة الاستلام المعروض')}</Text>
         <PdfMoneyText amount={suppliesTotal} size="md" />
       </View>
@@ -94,7 +94,7 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
       {sortedPayments.length > 0 && (
         <>
           <PdfSectionTitle>الدفعات</PdfSectionTitle>
-          <View style={pdfBase.tableHead} minPresenceAhead={40}>
+          <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>
             <PdfTh flex={1.4} kind="date">التاريخ</PdfTh>
             <PdfTh flex={1.6} kind="ref">المرجع</PdfTh>
             <PdfTh flex={1.2}>الطريقة</PdfTh>
@@ -108,22 +108,22 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
               <PdfTdMoney flex={1.4} amount={p.amount} color={PDF.logoGreen} bold />
             </View>
           ))}
-          <View style={pdfBase.totalRowBar} minPresenceAhead={52}>
+          <View style={pdfBase.totalRowBar} minPresenceAhead={PDF_PAGINATION.totalBar}>
             <Text style={s.totalLabel}>{ar('إجمالي المدفوع المعروض')}</Text>
             <PdfMoneyText amount={paymentsTotal} size="md" color={PDF.logoGreen} />
           </View>
         </>
       )}
 
-      <PdfKeepTogether minAhead={88}>
+      <PdfKeepTogether>
         <View style={s.balanceBox}>
-          <Text style={{ fontSize: 8.5, color: PDF.muted, marginBottom: 3, lineHeight: 1.35 }}>{ar('الرصيد المستحق للفلاح')}</Text>
+          <Text style={{ fontSize: 8, color: PDF.muted, marginBottom: 2, lineHeight: 1.35 }}>{ar('الرصيد المستحق للفلاح')}</Text>
           <PdfMoneyText amount={farmer.creditBalance} size="md" />
-          <Text style={{ fontSize: 7.5, color: PDF.muted, marginTop: 4, lineHeight: 1.35 }}>
+          <Text style={{ fontSize: 7, color: PDF.muted, marginTop: 3, lineHeight: 1.35 }}>
             {ar('وفق سجلات النظام شاملاً الأرصدة الافتتاحية والتسويات')}
           </Text>
         </View>
-        <PdfSignatureStrip minAhead={0} />
+        <PdfSignatureStrip />
       </PdfKeepTogether>
     </ReportShell>
   );

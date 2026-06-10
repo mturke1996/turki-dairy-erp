@@ -22,9 +22,11 @@ import {
   DEPARTMENT_LABELS,
   EMPLOYEE_STATUS_LABELS,
   SALARY_BASE_LABELS,
+  SALARY_TYPE_HINTS,
   SALARY_TYPE_LABELS,
 } from '@/lib/domain/constants';
-import { parsePayoutAccountValue, payoutAccountValue } from '@/lib/domain/payroll';
+import { parsePayoutAccountValue, payoutAccountValue, previewSalaryFromForm } from '@/lib/domain/payroll';
+import { SalaryFormPreview } from '@/components/employees/salary-form-preview';
 import type {
   BankAccount,
   CashVault,
@@ -58,7 +60,7 @@ export function EmployeeFormDialog({
     fullName: '',
     jobTitle: '',
     department: 'operations' as Department,
-    salaryType: 'monthly' as SalaryType,
+    salaryType: 'half_month' as SalaryType,
     baseSalary: '',
     housing: '',
     transport: '',
@@ -100,7 +102,7 @@ export function EmployeeFormDialog({
         fullName: '',
         jobTitle: '',
         department: 'operations',
-        salaryType: 'monthly',
+        salaryType: 'half_month',
         baseSalary: '',
         housing: '',
         transport: '',
@@ -115,16 +117,21 @@ export function EmployeeFormDialog({
     }
   }, [open, employee]);
 
-  const salaryHint = useMemo(() => {
-    switch (form.salaryType) {
-      case 'daily':
-        return 'يُضرب في أيام الحضور عند إنشاء كشف يومي.';
-      case 'half_month':
-        return 'أجر نصف الشهر — يُصرف عبر كشف نصف شهري.';
-      default:
-        return 'الراتب الشهري الكامل — يُصرف عبر كشف شهري.';
-    }
-  }, [form.salaryType]);
+  const salaryHint = SALARY_TYPE_HINTS[form.salaryType];
+
+  const salaryPreview = useMemo(
+    () =>
+      previewSalaryFromForm({
+        salaryType: form.salaryType,
+        baseSalary: Number(form.baseSalary) || 0,
+        allowances: {
+          housing: Number(form.housing) || 0,
+          transport: Number(form.transport) || 0,
+          food: Number(form.food) || 0,
+        },
+      }),
+    [form.salaryType, form.baseSalary, form.housing, form.transport, form.food],
+  );
 
   function submit() {
     if (!form.fullName.trim()) return toast.error('أدخل اسم الموظف');
@@ -242,13 +249,17 @@ export function EmployeeFormDialog({
           </div>
 
           <div className="rounded-xl border border-border bg-canvas-sunken/50 p-3">
-            <p className="mb-3 text-[11px] font-semibold text-muted-foreground">البدلات الشهرية</p>
+            <p className="mb-3 text-[11px] font-semibold text-muted-foreground">
+              {salaryPreview.allowanceSectionLabel}
+            </p>
             <div className="grid grid-cols-3 gap-3">
               <Field label="سكن"><AmountInput value={form.housing} onChange={(v) => setForm({ ...form, housing: v })} /></Field>
               <Field label="نقل"><AmountInput value={form.transport} onChange={(v) => setForm({ ...form, transport: v })} /></Field>
               <Field label="طعام"><AmountInput value={form.food} onChange={(v) => setForm({ ...form, food: v })} /></Field>
             </div>
           </div>
+
+          <SalaryFormPreview preview={salaryPreview} />
 
           <Field label="خزنة / بنك الصرف الافتراضي" hint="يُقترح تلقائياً عند إنشاء كشف الرواتب">
             <PayoutSourceSelect
