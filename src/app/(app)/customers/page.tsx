@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatTile } from '@/components/shared/stat-tile';
+import { FilterBar } from '@/components/shared/filter-bar';
 import { Money } from '@/components/shared/money';
 import { EmptyState } from '@/components/shared/empty-state';
 import { CustomerFormDialog } from '@/components/customers/customer-form-dialog';
@@ -93,47 +94,45 @@ export default function CustomersPage() {
 
       <Card className="overflow-hidden">
         <CardContent className="space-y-4 pt-4 sm:pt-5">
-          <div className="space-y-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative min-w-0 flex-1">
-                <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="بحث بالاسم، الكود، الهاتف…"
-                  className="h-11 pr-9 text-[14px] sm:h-10"
-                />
-              </div>
-              <div className="hidden shrink-0 sm:flex sm:gap-2">
-                <Select value={quick} onValueChange={(v) => setQuick(v as CustomerQuickFilter)}>
-                  <SelectTrigger className="w-36">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">كل الحالات</SelectItem>
-                    <SelectItem value="active">نشط</SelectItem>
-                    <SelectItem value="overdue">متأخر</SelectItem>
-                    <SelectItem value="on_hold">مجمّد</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={type} onValueChange={(v) => setType(v as typeof type)}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">كل الأنواع</SelectItem>
-                    {(Object.keys(CUSTOMER_TYPE_LABELS) as CustomerType[]).map((k) => (
-                      <SelectItem key={k} value={k}>
-                        {CUSTOMER_TYPE_LABELS[k]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <FilterBar>
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="بحث بالاسم، الكود، الهاتف…"
+                className="h-11 pr-9 text-[14px] sm:h-10"
+              />
             </div>
-            <CustomerQuickChips value={quick} onChange={setQuick} counts={quickCounts} />
-            <CustomerTypeChips value={type} onChange={setType} counts={typeCounts} />
-          </div>
+            <div className="hidden shrink-0 sm:flex sm:gap-2">
+              <Select value={quick} onValueChange={(v) => setQuick(v as CustomerQuickFilter)}>
+                <SelectTrigger className="w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل الحالات</SelectItem>
+                  <SelectItem value="active">نشط</SelectItem>
+                  <SelectItem value="overdue">متأخر</SelectItem>
+                  <SelectItem value="on_hold">مجمّد</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={type} onValueChange={(v) => setType(v as typeof type)}>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل الأنواع</SelectItem>
+                  {(Object.keys(CUSTOMER_TYPE_LABELS) as CustomerType[]).map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {CUSTOMER_TYPE_LABELS[k]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </FilterBar>
+          <CustomerQuickChips value={quick} onChange={setQuick} counts={quickCounts} />
+          <CustomerTypeChips value={type} onChange={setType} counts={typeCounts} />
 
           {filtered.length > 0 ? (
             <p className="text-[11.5px] text-muted-foreground">

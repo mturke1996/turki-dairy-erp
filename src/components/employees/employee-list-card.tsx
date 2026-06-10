@@ -3,8 +3,12 @@
 import { ChevronLeft, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Money } from '@/components/shared/money';
-import { DEPARTMENT_LABELS, EMPLOYEE_STATUS_LABELS } from '@/lib/domain/constants';
-import type { EmployeeStatus } from '@/lib/domain/types';
+import {
+  DEPARTMENT_LABELS,
+  EMPLOYEE_STATUS_LABELS,
+  SALARY_TYPE_LABELS,
+} from '@/lib/domain/constants';
+import type { Department, EmployeeStatus, SalaryType } from '@/lib/domain/types';
 import { cn } from '@/lib/utils';
 
 export type EmployeeListItem = {
@@ -12,8 +16,9 @@ export type EmployeeListItem = {
   fullName: string;
   code: string;
   jobTitle: string;
-  department: keyof typeof DEPARTMENT_LABELS;
+  department: Department;
   status: EmployeeStatus;
+  salaryType: SalaryType;
   grossSalary: number;
   advanceBalance: number;
   phone: string;
@@ -48,9 +53,9 @@ export function EmployeeListCard({
       onClick={onClick}
       className={cn(
         'group relative w-full overflow-hidden rounded-xl border border-border bg-card p-4 text-right shadow-whisper',
-        'transition-all active:scale-[0.99] active:bg-canvas-sunken/50',
+        'transition-[transform,background-color] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.99] active:bg-canvas-sunken/50',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        hasDebt && 'border-s-[3px] border-s-rose-400',
+        hasDebt && 'ring-1 ring-inset ring-rose-200',
         className,
       )}
     >
@@ -86,6 +91,9 @@ export function EmployeeListCard({
             <Badge variant={STATUS_VARIANT[employee.status]} className="text-[10px]">
               {EMPLOYEE_STATUS_LABELS[employee.status]}
             </Badge>
+            <Badge variant="info" className="text-[10px]">
+              {SALARY_TYPE_LABELS[employee.salaryType]}
+            </Badge>
             <Badge variant="neutral" className="text-[10px]">
               {DEPARTMENT_LABELS[employee.department]}
             </Badge>
@@ -95,7 +103,7 @@ export function EmployeeListCard({
 
       <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-canvas-sunken/60 p-2.5">
         <div>
-          <p className="text-[10.5px] font-medium text-muted-foreground">الراتب الإجمالي</p>
+          <p className="text-[10.5px] font-medium text-muted-foreground">الأجر</p>
           <Money value={employee.grossSalary} decimals={0} className="mt-0.5 text-[14px] font-semibold" />
         </div>
         <div className="border-s border-border/80 ps-2.5">

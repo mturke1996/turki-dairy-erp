@@ -23,7 +23,7 @@ export function DatabaseSetupRequired() {
           </p>
         </div>
         <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-right text-[12px] leading-relaxed text-white/80">
-          <p className="mb-2 flex items-center gap-2 font-semibold text-amber-300">
+          <p className="mb-2 flex items-center gap-2 font-semibold text-sun-300">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             أضف في <code className="rounded bg-white/10 px-1 font-mono text-[11px]" dir="ltr">.env.local</code>:
           </p>

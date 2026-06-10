@@ -43,10 +43,16 @@ export type Brand = {
     maskable: string;
   };
   letterheadSrc: string;
-  /** ألوان الشعار الرسمية */
+  /**
+   * ألوان الواجهة الرقمية — متزامنة مع globals.css / tailwind (Fluxen).
+   * `pdfPalette` يبقى للمطبوعات الرسمية (كحلي + أخضر المصنع).
+   */
   colors: {
+    /** الفحمي الأساسي — navy-700 */
     navy: string;
+    /** المرجاني — meadow-500 (اسم green للتوافق مع splash القديم) */
     green: string;
+    /** الذهبي — sun-500 */
     sun: string;
     white: string;
   };
@@ -108,9 +114,9 @@ export const BRAND: Brand = {
     facebook: '',
   },
   colors: {
-    navy: '#0d3a7a',
-    green: '#3d9e2f',
-    sun: '#f5c518',
+    navy: '#171717',
+    green: '#D94841',
+    sun: '#bd9333',
     white: '#ffffff',
   },
   pdfPalette: {

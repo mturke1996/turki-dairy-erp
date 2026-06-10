@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Droplets, ShoppingCart, Tractor, History } from 'lucide-react';
+import { LayoutDashboard, Droplets, ShoppingCart, Tractor } from 'lucide-react';
+import { MobileMoreMenu } from '@/components/layout/mobile-more-menu';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRole } from '@/lib/store/use-permission';
@@ -19,7 +20,6 @@ const PRIMARY_DEF: (PrimaryTab & { permission?: Permission })[] = [
   { href: '/supply', label: 'استلام', icon: Droplets, permission: 'supply.record' },
   { href: '/sales', label: 'بيع', icon: ShoppingCart, permission: 'sales.record' },
   { href: '/farmers', label: 'الفلاحون', icon: Tractor },
-  { href: '/audit', label: 'النشاط', icon: History },
 ];
 
 export function BottomNav() {
@@ -29,8 +29,8 @@ export function BottomNav() {
   const primary = PRIMARY_DEF.filter((t) => !t.permission || can(role, t.permission));
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-md lg:hidden">
-      <div className="mx-auto grid max-w-md pb-[env(safe-area-inset-bottom)]" style={{ gridTemplateColumns: `repeat(${primary.length}, minmax(0, 1fr))` }}>
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-md lg:hidden" aria-label="التنقّل الرئيسي">
+      <div className="mx-auto grid max-w-lg grid-cols-5 pb-[env(safe-area-inset-bottom,0px)]">
         {primary.map((tab) => {
           const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
           const Icon = tab.icon;
@@ -55,6 +55,7 @@ export function BottomNav() {
             </Link>
           );
         })}
+        <MobileMoreMenu />
       </div>
     </nav>
   );

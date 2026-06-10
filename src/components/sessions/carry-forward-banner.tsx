@@ -10,10 +10,10 @@ export function CarryForwardBanner({ carry }: { carry: SessionCarryForwardBalanc
     carry.farmers.length + carry.customers.length + carry.employees.length + carry.external.length;
 
   return (
-    <Card className="border-amber-200/80 bg-gradient-to-br from-amber-50/90 to-card">
+    <Card className="border-sun-200/80 bg-gradient-to-br from-sun-50/90 to-card">
       <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sun-100 text-sun-800">
             <ArrowRightLeft className="h-5 w-5" />
           </span>
           <div>

@@ -217,6 +217,13 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /** أرقام بطلة — serif تحريري مع أرقام متساوية العرض */
+  .metric-hero {
+    font-family: var(--font-serif), Georgia, serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
   /** رقم + وحدة/عملة — RTL: الرقم يميناً (يُقرأ أولاً) ثم الوحدة يساراً */
   .unit-value {
     font-variant-numeric: tabular-nums;

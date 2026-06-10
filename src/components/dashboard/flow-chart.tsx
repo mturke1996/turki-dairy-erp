@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import type { DailyFlowPoint } from '@/lib/domain/calculations';
 import { cn, formatNumber } from '@/lib/utils';
+import { CHART } from '@/lib/chart-colors';
 
 function shortDate(iso: string) {
   const d = new Date(iso);
@@ -63,29 +64,29 @@ export function FlowChart({ data }: { data: DailyFlowPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <ComposedChart data={data} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(42 18% 89%)" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={shortDate}
-          tick={{ fontSize: 11, fill: 'hsl(115 5% 44%)' }}
+          tick={{ fontSize: 11, fill: CHART.axis }}
           tickLine={false}
-          axisLine={{ stroke: 'hsl(42 18% 89%)' }}
+          axisLine={{ stroke: CHART.grid }}
         />
         <YAxis
-          tick={{ fontSize: 11, fill: 'hsl(115 5% 44%)' }}
+          tick={{ fontSize: 11, fill: CHART.axis }}
           tickLine={false}
           axisLine={false}
           width={48}
           tickFormatter={(v) => formatNumber(v, 0)}
         />
-        <Tooltip content={<FlowTooltip />} cursor={{ fill: 'hsl(40 11% 95%)' }} />
-        <Bar dataKey="inQty" name="وارد" fill="#D94841" radius={[3, 3, 0, 0]} maxBarSize={22} />
-        <Bar dataKey="outQty" name="صادر" fill="#171717" radius={[3, 3, 0, 0]} maxBarSize={22} />
+        <Tooltip content={<FlowTooltip />} cursor={{ fill: CHART.cursor }} />
+        <Bar dataKey="inQty" name="وارد" fill={CHART.meadow} radius={[3, 3, 0, 0]} maxBarSize={22} />
+        <Bar dataKey="outQty" name="صادر" fill={CHART.navy} radius={[3, 3, 0, 0]} maxBarSize={22} />
         <Line
           dataKey="balance"
           name="الرصيد"
           type="monotone"
-          stroke="#A89253"
+          stroke={CHART.sun}
           strokeWidth={2.5}
           dot={false}
           activeDot={{ r: 4 }}

@@ -1,15 +1,7 @@
 import Link from 'next/link';
 import { ArrowUpLeft, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-type Accent = 'navy' | 'meadow' | 'sun' | 'rose';
-
-const ACCENT: Record<Accent, { bar: string; icon: string; ring: string }> = {
-  navy: { bar: 'stat-accent-navy', icon: 'text-navy-700', ring: 'ring-navy-100' },
-  meadow: { bar: 'stat-accent-meadow', icon: 'text-meadow-700', ring: 'ring-meadow-100' },
-  sun: { bar: 'stat-accent-sun', icon: 'text-sun-700', ring: 'ring-sun-100' },
-  rose: { bar: 'stat-accent-rose', icon: 'text-rose-600', ring: 'ring-rose-100' },
-};
+import { METRIC_TONES, type MetricTone } from '@/components/shared/metric-tokens';
 
 export function KpiCard({
   label,
@@ -24,14 +16,14 @@ export function KpiCard({
   label: string;
   value: React.ReactNode;
   icon: LucideIcon;
-  accent?: Accent;
+  accent?: MetricTone;
   hint?: React.ReactNode;
   delta?: { value: number; label?: string };
   href?: string;
   /** rail = بطاقة ضيقة للشريط الأفقي على الجوال */
   variant?: 'grid' | 'rail';
 }) {
-  const a = ACCENT[accent];
+  const a = METRIC_TONES[accent];
   const positive = (delta?.value ?? 0) >= 0;
   const isRail = variant === 'rail';
 
@@ -50,7 +42,7 @@ export function KpiCard({
           <div
             className={cn(
               'font-bold leading-tight tracking-tight text-foreground',
-              isRail ? 'text-[17px]' : 'text-[19px] sm:text-[26px]',
+              isRail ? 'text-[17px]' : 'metric-hero text-[19px] sm:text-[26px]',
             )}
           >
             {value}
@@ -63,7 +55,7 @@ export function KpiCard({
             a.bar,
           )}
         >
-          <Icon className={cn('stroke-[1.7]', isRail ? 'h-3.5 w-3.5' : 'h-4 w-4 sm:h-5 sm:w-5', a.icon)} />
+          <Icon className={cn('stroke-[1.7]', isRail ? 'h-3.5 w-3.5' : 'h-4 w-4 sm:h-5 sm:w-5', a.text)} />
         </span>
       </div>
 

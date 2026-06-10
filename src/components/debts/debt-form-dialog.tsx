@@ -265,7 +265,7 @@ export function DebtFormDialog({
                       type="button"
                       onClick={() => setPartyKind(kind)}
                       className={cn(
-                        'flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-center transition-all active:scale-[0.98]',
+                        'flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-center transition-[transform,background-color,border-color] active:scale-[0.98]',
                         active ? `${tone} ring-2` : 'border-border bg-card text-muted-foreground hover:bg-canvas-sunken/60',
                       )}
                     >
@@ -319,7 +319,7 @@ export function DebtFormDialog({
                   type="button"
                   onClick={() => setDirection(d)}
                   className={cn(
-                    'rounded-xl border px-3 py-2.5 text-[12px] font-semibold transition-all',
+                    'rounded-xl border px-3 py-2.5 text-[12px] font-semibold transition-[transform,background-color,border-color]',
                     direction === d
                       ? d === 'payable'
                         ? 'border-rose-300 bg-rose-50 text-rose-800 ring-2 ring-rose-200'
@@ -364,7 +364,7 @@ export function DebtFormDialog({
                     type="button"
                     onClick={() => setCashMode(mode)}
                     className={cn(
-                      'rounded-xl border px-2.5 py-2.5 text-center text-[11px] font-semibold transition-all',
+                      'rounded-xl border px-2.5 py-2.5 text-center text-[11px] font-semibold transition-[transform,background-color,border-color]',
                       cashMode === mode
                         ? mode === 'none'
                           ? 'border-border bg-card text-foreground ring-2 ring-border'

@@ -62,6 +62,18 @@ export default function manifest(): MetadataRoute.Manifest {
         url: '/treasury',
         icons: [{ src: BRAND.icons.pwa192, sizes: '192x192' }],
       },
+      {
+        name: 'العملاء',
+        short_name: 'عملاء',
+        url: '/customers',
+        icons: [{ src: BRAND.icons.pwa192, sizes: '192x192' }],
+      },
+      {
+        name: 'التقارير المالية',
+        short_name: 'تقارير',
+        url: '/reports',
+        icons: [{ src: BRAND.icons.pwa192, sizes: '192x192' }],
+      },
     ],
   };
 }

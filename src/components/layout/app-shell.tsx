@@ -17,7 +17,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   return (
-    <div className="min-h-[100dvh] bg-background">
+    <div className="min-h-[100dvh] bg-background paper">
       {/* الشريط الجانبي الثابت — سطح المكتب (يمين في RTL) */}
       <aside className="fixed inset-y-0 right-0 z-40 hidden w-64 border-l border-border lg:block">
         <Sidebar />
@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* المحتوى */}
       <div className="lg:pr-64">
         <Topbar onMenuClick={() => setMobileOpen(true)} />
-        <main className="mx-auto w-full max-w-[1400px] px-4 py-6 pb-44 sm:px-6 lg:px-8 lg:py-8 lg:pb-8">
+        <main className="mx-auto w-full max-w-[1400px] px-4 py-4 pb-[calc(8.75rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-5 lg:px-8 lg:py-8 lg:pb-8">
           {children}
         </main>
       </div>

@@ -149,7 +149,7 @@ export function AdjustmentEditDialog({
           </div>
 
           {isLoss ? (
-            <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-[12px] text-amber-900">
+            <div className="flex items-start gap-2.5 rounded-lg border border-sun-200 bg-sun-50/70 px-3 py-2.5 text-[12px] text-sun-900">
               <Receipt className="mt-0.5 h-4 w-4 shrink-0" />
               <p className="font-semibold">
                 مصروف هدر غير نقدي:{' '}

@@ -145,9 +145,9 @@ function ExpensesContent() {
       ) : null}
 
       {openSessions.length > 1 ? (
-        <Card className="border-amber-200 bg-amber-50/50">
+        <Card className="border-sun-200 bg-sun-50/50">
           <CardContent className="flex gap-3 p-4">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sun-100 text-sun-700">
               <AlertCircle className="h-4 w-4" />
             </span>
             <p className="text-[12.5px] leading-relaxed text-muted-foreground">
@@ -159,10 +159,10 @@ function ExpensesContent() {
       ) : null}
 
       {!hasAccounts ? (
-        <Card className="border-amber-200 bg-amber-50/60">
+        <Card className="border-sun-200 bg-sun-50/60">
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sun-100 text-sun-700">
                 <AlertCircle className="h-5 w-5" />
               </span>
               <div>

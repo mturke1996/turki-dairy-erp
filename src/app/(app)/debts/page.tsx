@@ -72,8 +72,8 @@ function BalanceOverview({
           </div>
           <div className="w-full space-y-2 lg:max-w-md">
             <div className="flex h-2.5 overflow-hidden rounded-full bg-muted sm:h-3">
-              <div className="bg-meadow-500 transition-all" style={{ width: `${recvPct}%` }} />
-              <div className="bg-rose-400 transition-all" style={{ width: `${100 - recvPct}%` }} />
+              <div className="bg-meadow-500 transition-[width]" style={{ width: `${recvPct}%` }} />
+              <div className="bg-rose-400 transition-[width]" style={{ width: `${100 - recvPct}%` }} />
             </div>
             <div className="grid grid-cols-2 gap-2 text-[11.5px]">
               <div className="rounded-lg bg-meadow-50/80 px-2.5 py-2">

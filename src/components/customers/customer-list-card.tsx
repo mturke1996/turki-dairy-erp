@@ -66,7 +66,7 @@ export function CustomerListCard({
       onClick={onClick}
       className={cn(
         'group relative w-full overflow-hidden rounded-xl border border-border bg-card p-4 text-right shadow-whisper',
-        'transition-all active:scale-[0.99] active:bg-canvas-sunken/50',
+        'transition-[transform,background-color] active:scale-[0.99] active:bg-canvas-sunken/50',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         status.accent && `border-s-[3px] ${status.accent}`,
         className,
@@ -148,7 +148,7 @@ export function CustomerListCard({
           <div className="h-1.5 overflow-hidden rounded-full bg-border/80">
             <div
               className={cn(
-                'h-full rounded-full transition-all',
+                'h-full rounded-full transition-[width]',
                 overLimit ? 'bg-rose-500' : utilPct >= 80 ? 'bg-sun-500' : 'bg-meadow-500',
               )}
               style={{ width: `${utilPct}%` }}

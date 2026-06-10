@@ -21,9 +21,9 @@ export function PageHeader({
             {eyebrow}
           </span>
         ) : null}
-        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-[28px]">{title}</h1>
+        <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl lg:text-[28px]">{title}</h1>
         {description ? (
-          <p className="max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">{description}</p>
+          <p className="max-w-2xl text-[13px] leading-relaxed text-muted-foreground sm:text-[13.5px]">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}

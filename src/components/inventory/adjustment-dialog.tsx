@@ -146,14 +146,14 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
           </div>
 
           {isLoss ? (
-            <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-[12px] text-amber-900">
+            <div className="flex items-start gap-2.5 rounded-lg border border-sun-200 bg-sun-50/70 px-3 py-2.5 text-[12px] text-sun-900">
               <Receipt className="mt-0.5 h-4 w-4 shrink-0" />
               <div className="space-y-0.5">
                 <p className="font-semibold">
                   سيُسجَّل كمصروف هدر غير نقدي:{' '}
                   <Money value={lossValue} decimals={0} className="inline font-bold" />
                 </p>
-                <p className="text-[11px] leading-relaxed text-amber-800">
+                <p className="text-[11px] leading-relaxed text-sun-800">
                   لا يُخصم من الخزنة (ثمن الحليب دُفع سابقاً) — يظهر في «المصاريف» لتتبّع الخسارة، وتُخصم الكمية من المخزون المرحّل.
                 </p>
               </div>

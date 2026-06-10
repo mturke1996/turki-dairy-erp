@@ -11,8 +11,8 @@ import { BRAND } from '@/lib/brand';
 
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-card/90 backdrop-blur-md">
-      <div className="flex h-[4.25rem] items-center gap-2 px-3 sm:gap-3 sm:px-5">
+    <header className="sticky top-0 z-30 border-b border-border bg-card/90 pt-[env(safe-area-inset-top,0px)] backdrop-blur-md">
+      <div className="flex h-14 items-center gap-2 px-3 sm:h-[4.25rem] sm:gap-3 sm:px-5">
         <Button
           variant="ghost"
           size="icon"

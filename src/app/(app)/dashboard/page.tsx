@@ -140,23 +140,20 @@ export default function DashboardPage() {
         </DashboardCollapsibleSection>
       </div>
 
-      {/* سطح المكتب: شبكات KPI */}
+      {/* سطح المكتب: شبكة KPI موحّدة */}
       <div className="hidden grid-cols-2 gap-4 xl:grid-cols-4 lg:grid">
         <KpiCard label="المخزون الحالي" value={<Liters value={d.totals.currentStock} />} icon={Warehouse} accent="meadow" hint={<>قيمة: <Money value={d.totals.inventoryValue} decimals={0} className="inline text-[11.5px]" muted /></>} href="/inventory" />
         <KpiCard label="إيرادات الفترة" value={<Money value={s?.salesRevenue ?? 0} decimals={0} />} icon={Wallet} accent="navy" hint={<>{formatLiters(s?.salesQty ?? 0, 0, false)} عبر {s?.salesCount ?? 0} عملية</>} />
         <KpiCard label="صافي ربح الفترة" value={<Money value={s?.netProfit ?? 0} decimals={0} />} icon={TrendingUp} accent={s && s.netProfit < 0 ? 'rose' : 'sun'} delta={{ value: s?.netMarginPct ?? 0 }} hint="بعد المصاريف والرواتب والهدر" href="/reports" />
-        <KpiCard label="التنبيهات" value={formatNumber(d.alerts.length)} icon={AlertTriangle} accent={hasDangerAlerts ? 'rose' : d.alerts.length ? 'sun' : 'meadow'} hint={d.alerts.length ? 'اضغط للتفاصيل' : 'لا تنبيهات'} href="#alerts" />
-      </div>
-
-      <div className="hidden lg:block">
-        <AlertsPanel alerts={d.alerts} />
-      </div>
-
-      <div className="hidden grid-cols-2 gap-4 xl:grid-cols-4 lg:grid">
+        <KpiCard label="النقد المتاح" value={<Money value={d.totals.netCash} decimals={0} />} icon={Coins} accent={d.totals.netCash >= 0 ? 'meadow' : 'rose'} hint="خزائن + بنوك" href="/treasury" />
         <KpiCard label="ديون الفلاحين" value={<Money value={d.totals.payables} decimals={0} />} icon={Tractor} accent="navy" hint="فلاحون + موظفون" href="/debts" />
         <KpiCard label="ديون العملاء" value={<Money value={d.totals.receivables} decimals={0} />} icon={Building2} accent="meadow" hint={<>متأخر: <Money value={d.totals.overdue} decimals={0} className="inline text-[11.5px]" muted /></>} href="/debts" />
         <KpiCard label="متوسط تكلفة اللتر" value={<Money value={d.totals.wac} decimals={3} />} icon={Gauge} accent="sun" hint="المتوسط المرجّح المتحرّك" />
-        <KpiCard label="النقد المتاح" value={<Money value={d.totals.netCash} decimals={0} />} icon={Coins} accent={d.totals.netCash >= 0 ? 'meadow' : 'rose'} hint="خزائن + بنوك" href="/treasury" />
+        <KpiCard label="التنبيهات" value={formatNumber(d.alerts.length)} icon={AlertTriangle} accent={hasDangerAlerts ? 'rose' : d.alerts.length ? 'sun' : 'meadow'} hint={d.alerts.length ? 'اضغط للتفاصيل' : 'لا تنبيهات'} href="#alerts" />
+      </div>
+
+      <div className="hidden lg:block" id="alerts">
+        <AlertsPanel alerts={d.alerts} />
       </div>
 
       <div className="lg:hidden">

@@ -57,7 +57,7 @@ export default function ReportsPage() {
 
   if (!canFinancial) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-5 sm:space-y-6">
         <PageHeader eyebrow="النظام" title="التقارير" description="التحليلات المالية والمحاسبية." />
         <EmptyState icon={Scale} title="صلاحية غير كافية" description="هذه التقارير متاحة للمدير والمحاسب والمطّلع فقط." />
       </div>
@@ -65,7 +65,7 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       <PageHeader
         eyebrow="النظام"
         title="التقارير المالية"
@@ -101,12 +101,14 @@ export default function ReportsPage() {
       </div>
 
       <Tabs defaultValue="trial">
-        <TabsList>
-          <TabsTrigger value="trial">ميزان المراجعة</TabsTrigger>
-          <TabsTrigger value="pnl">قائمة الدخل</TabsTrigger>
-          <TabsTrigger value="aging">أعمار الديون</TabsTrigger>
-          <TabsTrigger value="journal">دفتر اليومية</TabsTrigger>
-        </TabsList>
+        <div className="-mx-4 overflow-x-auto px-4 no-scrollbar sm:mx-0 sm:px-0">
+          <TabsList className="inline-flex h-auto w-max min-w-full gap-1 p-1 sm:w-full">
+            <TabsTrigger value="trial" className="min-h-[40px] shrink-0 px-3 text-[12px] sm:text-[13px]">ميزان المراجعة</TabsTrigger>
+            <TabsTrigger value="pnl" className="min-h-[40px] shrink-0 px-3 text-[12px] sm:text-[13px]">قائمة الدخل</TabsTrigger>
+            <TabsTrigger value="aging" className="min-h-[40px] shrink-0 px-3 text-[12px] sm:text-[13px]">أعمار الديون</TabsTrigger>
+            <TabsTrigger value="journal" className="min-h-[40px] shrink-0 px-3 text-[12px] sm:text-[13px]">دفتر اليومية</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ميزان المراجعة */}
         <TabsContent value="trial">

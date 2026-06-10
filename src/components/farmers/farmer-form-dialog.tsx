@@ -151,7 +151,7 @@ export function FarmerFormDialog({ open, onOpenChange, farmer }: Props) {
                       type="button"
                       onClick={() => set({ openingDirection: d })}
                       className={cn(
-                        'rounded-xl border px-2 py-2.5 text-[11px] font-semibold transition-all',
+                        'rounded-xl border px-2 py-2.5 text-[11px] font-semibold transition-colors',
                         form.openingDirection === d
                           ? d === 'payable'
                             ? 'border-rose-300 bg-rose-50 text-rose-800 ring-2 ring-rose-200'

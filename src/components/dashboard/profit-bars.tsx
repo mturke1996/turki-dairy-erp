@@ -4,6 +4,7 @@ import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis
 import type { SessionSummary } from '@/lib/domain/calculations';
 import { Money } from '@/components/shared/money';
 import { formatNumber } from '@/lib/utils';
+import { CHART } from '@/lib/chart-colors';
 
 function ProfitTooltip({
   active,
@@ -49,25 +50,25 @@ export function ProfitBars({ summaries }: { summaries: SessionSummary[] }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: -10, bottom: 0 }} barGap={6}>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(42 18% 89%)" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
         <XAxis
           dataKey="label"
-          tick={{ fontSize: 11, fill: 'hsl(115 5% 44%)' }}
+          tick={{ fontSize: 11, fill: CHART.axis }}
           tickLine={false}
-          axisLine={{ stroke: 'hsl(42 18% 89%)' }}
+          axisLine={{ stroke: CHART.grid }}
         />
         <YAxis
-          tick={{ fontSize: 11, fill: 'hsl(115 5% 44%)' }}
+          tick={{ fontSize: 11, fill: CHART.axis }}
           tickLine={false}
           axisLine={false}
           width={52}
           tickFormatter={(v) => formatNumber(v, 0)}
         />
-        <Tooltip content={<ProfitTooltip />} cursor={{ fill: 'hsl(40 11% 95%)' }} />
-        <Bar dataKey="revenue" name="الإيراد" fill="#171717" radius={[4, 4, 0, 0]} maxBarSize={46} />
+        <Tooltip content={<ProfitTooltip />} cursor={{ fill: CHART.cursor }} />
+        <Bar dataKey="revenue" name="الإيراد" fill={CHART.navy} radius={[4, 4, 0, 0]} maxBarSize={46} />
         <Bar dataKey="profit" name="الربح" radius={[4, 4, 0, 0]} maxBarSize={46}>
           {data.map((_, i) => (
-            <Cell key={i} fill="#D94841" />
+            <Cell key={i} fill={CHART.meadow} />
           ))}
         </Bar>
       </BarChart>

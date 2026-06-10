@@ -54,13 +54,13 @@ export function NetPositionCard({ position }: { position: AdjustedNetPosition })
     >
       <div
         className={cn(
-          'pointer-events-none absolute -left-12 -top-12 h-32 w-32 rounded-full blur-3xl sm:-left-16 sm:-top-16 sm:h-48 sm:w-48',
+          'pointer-events-none absolute -left-12 -top-12 h-32 w-32 rounded-full blur-xl sm:-left-16 sm:-top-16 sm:h-48 sm:w-48',
           positive ? 'bg-meadow-200/30' : 'bg-rose-200/25',
         )}
       />
       <div
         className={cn(
-          'pointer-events-none absolute -bottom-16 -right-8 h-40 w-40 rounded-full blur-3xl sm:-bottom-20 sm:-right-10 sm:h-56 sm:w-56',
+          'pointer-events-none absolute -bottom-16 -right-8 h-40 w-40 rounded-full blur-xl sm:-bottom-20 sm:-right-10 sm:h-56 sm:w-56',
           positive ? 'bg-navy-100/25' : 'bg-rose-100/20',
         )}
       />

@@ -43,7 +43,7 @@ export function LoginForm() {
 
   return (
     <div className="grid min-h-[100dvh] lg:grid-cols-[1.05fr_1fr]">
-      <section className="relative hidden flex-col justify-between overflow-hidden bg-[#171717] p-10 text-white lg:flex">
+      <section className="relative hidden flex-col justify-between overflow-hidden bg-navy-900 p-10 text-white lg:flex">
         <div
           className="pointer-events-none absolute inset-0"
           style={{

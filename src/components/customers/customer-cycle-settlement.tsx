@@ -73,7 +73,7 @@ export function CustomerCycleSettlement({ session, readonly }: { session: Sessio
           <div className="mb-4 grid grid-cols-2 gap-2 text-center text-[12px] sm:grid-cols-4">
             <div className="rounded-lg bg-canvas-sunken/60 px-2 py-2">
               <p className="text-muted-foreground">مرحّل</p>
-              <Money value={totals.carried} decimals={0} className="font-semibold text-amber-700" />
+              <Money value={totals.carried} decimals={0} className="font-semibold text-sun-700" />
             </div>
             <div className="rounded-lg bg-canvas-sunken/60 px-2 py-2">
               <p className="text-muted-foreground">مبيعات الدورة</p>
@@ -113,7 +113,7 @@ export function CustomerCycleSettlement({ session, readonly }: { session: Sessio
                       </TableCell>
                       <TableCell className="text-left">
                         {r.carriedForward > 0.01 ? (
-                          <Money value={r.carriedForward} className="text-[12px] text-amber-700" />
+                          <Money value={r.carriedForward} className="text-[12px] text-sun-700" />
                         ) : (
                           <span className="text-[11px] text-muted-foreground">—</span>
                         )}

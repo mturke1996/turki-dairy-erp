@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatTile } from '@/components/shared/stat-tile';
+import { FilterBar } from '@/components/shared/filter-bar';
 import { Money, Liters } from '@/components/shared/money';
 import { EmptyState } from '@/components/shared/empty-state';
 import { FarmerFormDialog } from '@/components/farmers/farmer-form-dialog';
@@ -79,35 +80,33 @@ export default function FarmersPage() {
 
       <Card className="overflow-hidden">
         <CardContent className="space-y-4 pt-4 sm:pt-5">
-          <div className="space-y-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative min-w-0 flex-1">
-                <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="بحث بالاسم، الكود، المنطقة، الهاتف…"
-                  className="h-11 pr-9 text-[14px] sm:h-10"
-                />
-              </div>
-              <div className="hidden shrink-0 md:block md:w-44">
-                <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">كل الحالات</SelectItem>
-                    {(Object.keys(FARMER_STATUS_LABELS) as FarmerStatus[]).map((k) => (
-                      <SelectItem key={k} value={k}>
-                        {FARMER_STATUS_LABELS[k]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <FilterBar>
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="بحث بالاسم، الكود، المنطقة، الهاتف…"
+                className="h-11 pr-9 text-[14px] sm:h-10"
+              />
             </div>
-            <FarmerStatusChips value={status} onChange={setStatus} counts={statusCounts} />
-          </div>
+            <div className="hidden shrink-0 md:block md:w-44">
+              <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل الحالات</SelectItem>
+                  {(Object.keys(FARMER_STATUS_LABELS) as FarmerStatus[]).map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {FARMER_STATUS_LABELS[k]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </FilterBar>
+          <FarmerStatusChips value={status} onChange={setStatus} counts={statusCounts} />
 
           {filtered.length > 0 ? (
             <p className="text-[11.5px] text-muted-foreground">

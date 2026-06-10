@@ -117,7 +117,7 @@ export function FarmerCycleSettlement({ session, readonly }: Props) {
                       </TableCell>
                       <TableCell className="text-left">
                         {r.carriedForward > 0.01 ? (
-                          <Money value={r.carriedForward} className="text-[12px] text-amber-700" />
+                          <Money value={r.carriedForward} className="text-[12px] text-sun-700" />
                         ) : (
                           <span className="text-[11px] text-muted-foreground">—</span>
                         )}

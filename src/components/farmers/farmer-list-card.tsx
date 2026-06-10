@@ -48,7 +48,7 @@ export function FarmerListCard({
       onClick={onClick}
       className={cn(
         'group w-full rounded-xl border border-border bg-card p-4 text-right shadow-whisper',
-        'transition-all active:scale-[0.99] active:bg-canvas-sunken/50',
+        'transition-[transform,background-color] active:scale-[0.99] active:bg-canvas-sunken/50',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         className,
       )}

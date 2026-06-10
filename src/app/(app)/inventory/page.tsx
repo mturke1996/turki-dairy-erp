@@ -149,10 +149,10 @@ export default function InventoryPage() {
       />
 
       {d.activeSession?.status === 'open' && d.activeSession.openingStock > 0 && canAdjust ? (
-        <Card className="border-amber-200 bg-amber-50/40">
+        <Card className="border-sun-200 bg-sun-50/40">
           <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-[13px]">
-              <p className="font-medium text-amber-950">رصيد افتتاحي مسجّل للدورة الحالية</p>
+              <p className="font-medium text-sun-950">رصيد افتتاحي مسجّل للدورة الحالية</p>
               <p className="mt-1 text-muted-foreground">
                 <Liters value={d.activeSession.openingStock} className="font-semibold text-foreground" />
                 {' · '}
