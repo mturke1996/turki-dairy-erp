@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/shared/field';
+import { AmountInput } from '@/components/shared/amount-input';
 import {
   Dialog,
   DialogContent,
@@ -15,8 +16,24 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CONTRACT_TYPE_LABELS, DEPARTMENT_LABELS, EMPLOYEE_STATUS_LABELS } from '@/lib/domain/constants';
-import type { ContractType, Department, Employee, EmployeeStatus } from '@/lib/domain/types';
+import { PayoutSourceSelect } from '@/components/employees/payout-source-select';
+import {
+  CONTRACT_TYPE_LABELS,
+  DEPARTMENT_LABELS,
+  EMPLOYEE_STATUS_LABELS,
+  SALARY_BASE_LABELS,
+  SALARY_TYPE_LABELS,
+} from '@/lib/domain/constants';
+import { parsePayoutAccountValue, payoutAccountValue } from '@/lib/domain/payroll';
+import type {
+  BankAccount,
+  CashVault,
+  ContractType,
+  Department,
+  Employee,
+  EmployeeStatus,
+  SalaryType,
+} from '@/lib/domain/types';
 
 type EmployeeInput = Omit<Employee, 'id' | 'code' | 'createdAt'>;
 
@@ -24,11 +41,15 @@ export function EmployeeFormDialog({
   open,
   onOpenChange,
   employee,
+  vaults,
+  banks,
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   employee?: Employee | null;
+  vaults: CashVault[];
+  banks: BankAccount[];
   onSubmit: (input: EmployeeInput) => void;
 }) {
   const isEdit = Boolean(employee);
@@ -37,6 +58,7 @@ export function EmployeeFormDialog({
     fullName: '',
     jobTitle: '',
     department: 'operations' as Department,
+    salaryType: 'monthly' as SalaryType,
     baseSalary: '',
     housing: '',
     transport: '',
@@ -46,7 +68,10 @@ export function EmployeeFormDialog({
     nationalId: '',
     hireDate: new Date().toISOString().slice(0, 10),
     status: 'active' as EmployeeStatus,
+    payoutAccount: '',
   });
+
+  const baseLabel = SALARY_BASE_LABELS[form.salaryType];
 
   useEffect(() => {
     if (!open) return;
@@ -55,6 +80,7 @@ export function EmployeeFormDialog({
         fullName: employee.fullName,
         jobTitle: employee.jobTitle,
         department: employee.department,
+        salaryType: employee.salaryType ?? 'monthly',
         baseSalary: String(employee.baseSalary),
         housing: String(employee.allowances.housing),
         transport: String(employee.allowances.transport),
@@ -64,12 +90,17 @@ export function EmployeeFormDialog({
         nationalId: employee.nationalId ?? '',
         hireDate: employee.hireDate.slice(0, 10),
         status: employee.status,
+        payoutAccount:
+          employee.defaultPayoutType && employee.defaultPayoutId
+            ? payoutAccountValue(employee.defaultPayoutType, employee.defaultPayoutId)
+            : '',
       });
     } else {
       setForm({
         fullName: '',
         jobTitle: '',
         department: 'operations',
+        salaryType: 'monthly',
         baseSalary: '',
         housing: '',
         transport: '',
@@ -79,17 +110,31 @@ export function EmployeeFormDialog({
         nationalId: '',
         hireDate: new Date().toISOString().slice(0, 10),
         status: 'active',
+        payoutAccount: '',
       });
     }
   }, [open, employee]);
 
+  const salaryHint = useMemo(() => {
+    switch (form.salaryType) {
+      case 'daily':
+        return 'يُضرب في أيام الحضور عند إنشاء كشف يومي.';
+      case 'half_month':
+        return 'أجر نصف الشهر — يُصرف عبر كشف نصف شهري.';
+      default:
+        return 'الراتب الشهري الكامل — يُصرف عبر كشف شهري.';
+    }
+  }, [form.salaryType]);
+
   function submit() {
     if (!form.fullName.trim()) return toast.error('أدخل اسم الموظف');
     if (!form.jobTitle.trim()) return toast.error('أدخل المسمّى الوظيفي');
+    const parsed = form.payoutAccount ? parsePayoutAccountValue(form.payoutAccount) : null;
     onSubmit({
       fullName: form.fullName.trim(),
       jobTitle: form.jobTitle.trim(),
       department: form.department,
+      salaryType: form.salaryType,
       baseSalary: Number(form.baseSalary) || 0,
       allowances: {
         housing: Number(form.housing) || 0,
@@ -101,19 +146,24 @@ export function EmployeeFormDialog({
       phone: form.phone.trim(),
       nationalId: form.nationalId.trim() || undefined,
       status: form.status,
+      defaultPayoutType: parsed?.type,
+      defaultPayoutId: parsed?.id,
     });
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? 'تعديل الموظف' : 'موظف جديد'}</DialogTitle>
-          <DialogDescription>
-            {isEdit ? 'تحديث بيانات الموظف والراتب.' : 'أدخل بيانات الموظف والراتب الأساسي.'}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
+      <DialogContent className="max-w-lg gap-0 overflow-hidden p-0">
+        <div className="border-b border-border px-6 py-5">
+          <DialogHeader>
+            <DialogTitle>{isEdit ? 'تعديل الموظف' : 'موظف جديد'}</DialogTitle>
+            <DialogDescription>
+              {isEdit ? 'تحديث بيانات الموظف ونوع الراتب ومصدر الصرف.' : 'أدخل بيانات الموظف ونوع احتساب الراتب.'}
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+
+        <div className="max-h-[min(72vh,520px)] space-y-4 overflow-y-auto px-6 py-5">
           <div className="grid grid-cols-2 gap-3">
             <Field label="الاسم الكامل" required>
               <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
@@ -122,6 +172,7 @@ export function EmployeeFormDialog({
               <Input value={form.jobTitle} onChange={(e) => setForm({ ...form, jobTitle: e.target.value })} />
             </Field>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="القسم">
               <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v as Department })}>
@@ -144,6 +195,21 @@ export function EmployeeFormDialog({
               </Select>
             </Field>
           </div>
+
+          <Field label="نوع الراتب" hint={salaryHint}>
+            <Select
+              value={form.salaryType}
+              onValueChange={(v) => setForm({ ...form, salaryType: v as SalaryType })}
+            >
+              <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(Object.keys(SALARY_TYPE_LABELS) as SalaryType[]).map((t) => (
+                  <SelectItem key={t} value={t}>{SALARY_TYPE_LABELS[t]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
           {isEdit ? (
             <Field label="الحالة">
               <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as EmployeeStatus })}>
@@ -156,14 +222,16 @@ export function EmployeeFormDialog({
               </Select>
             </Field>
           ) : null}
+
           <div className="grid grid-cols-2 gap-3">
-            <Field label="الراتب الأساسي" required>
-              <Input type="number" dir="ltr" value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: e.target.value })} />
+            <Field label={baseLabel} required>
+              <AmountInput value={form.baseSalary} onChange={(v) => setForm({ ...form, baseSalary: v })} />
             </Field>
             <Field label="الهاتف">
               <Input dir="ltr" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </Field>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="الرقم الوطني">
               <Input dir="ltr" value={form.nationalId} onChange={(e) => setForm({ ...form, nationalId: e.target.value })} />
@@ -172,13 +240,28 @@ export function EmployeeFormDialog({
               <Input type="date" dir="ltr" value={form.hireDate} onChange={(e) => setForm({ ...form, hireDate: e.target.value })} />
             </Field>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="بدل سكن"><Input type="number" dir="ltr" value={form.housing} onChange={(e) => setForm({ ...form, housing: e.target.value })} /></Field>
-            <Field label="بدل نقل"><Input type="number" dir="ltr" value={form.transport} onChange={(e) => setForm({ ...form, transport: e.target.value })} /></Field>
-            <Field label="بدل طعام"><Input type="number" dir="ltr" value={form.food} onChange={(e) => setForm({ ...form, food: e.target.value })} /></Field>
+
+          <div className="rounded-xl border border-border bg-canvas-sunken/50 p-3">
+            <p className="mb-3 text-[11px] font-semibold text-muted-foreground">البدلات الشهرية</p>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="سكن"><AmountInput value={form.housing} onChange={(v) => setForm({ ...form, housing: v })} /></Field>
+              <Field label="نقل"><AmountInput value={form.transport} onChange={(v) => setForm({ ...form, transport: v })} /></Field>
+              <Field label="طعام"><AmountInput value={form.food} onChange={(v) => setForm({ ...form, food: v })} /></Field>
+            </div>
           </div>
+
+          <Field label="خزنة / بنك الصرف الافتراضي" hint="يُقترح تلقائياً عند إنشاء كشف الرواتب">
+            <PayoutSourceSelect
+              value={form.payoutAccount}
+              onChange={(v) => setForm({ ...form, payoutAccount: v })}
+              vaults={vaults}
+              banks={banks}
+              placeholder="اختياري — بدون تحديد"
+            />
+          </Field>
         </div>
-        <DialogFooter>
+
+        <DialogFooter className="border-t border-border bg-canvas-sunken/40 px-6 py-4">
           <Button onClick={submit}>
             <Plus className="h-4 w-4" />
             {isEdit ? 'حفظ التعديلات' : 'إضافة الموظف'}

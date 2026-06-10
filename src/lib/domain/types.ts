@@ -146,6 +146,8 @@ export interface Payment {
   /** ربط الخزينة/البنك — يطابق paid_from_type/id في Supabase */
   paidFromType?: AccountSourceType;
   paidFromId?: string;
+  /** تفاصيل التقسيم عند الدفع من أكثر من حساب */
+  treasurySplits?: TreasurySplitPart[];
   reference?: string;
   notes?: string;
   /** تسوية دورة — الدفع يغطي كامل مستحقات الفلاح في هذه الدورة */
@@ -338,6 +340,13 @@ export interface AuthUser {
 
 export type AccountSourceType = 'vault' | 'bank';
 
+/** جزء من مبلغ مُقسَّم بين خزنتين أو أكثر */
+export interface TreasurySplitPart {
+  sourceType: AccountSourceType;
+  sourceId: string;
+  amount: number;
+}
+
 export type CashMovementType =
   | 'income'
   | 'expense'
@@ -403,6 +412,14 @@ export interface CashMovement {
   date: string;
   createdAt: string;
   createdBy?: string;
+  /** معرّف مجموعة التقسيم — يربط حركتين أو أكثر لنفس العملية */
+  splitGroupId?: string;
+  /** ترتيب الجزء (1، 2، …) */
+  splitIndex?: number;
+  /** عدد أجزاء التقسيم */
+  splitCount?: number;
+  /** إجمالي المبلغ قبل التقسيم */
+  splitTotalAmount?: number;
 }
 
 export interface CashTransfer {
@@ -473,6 +490,8 @@ export interface Expense {
 export type Department = 'operations' | 'finance' | 'logistics' | 'management';
 export type ContractType = 'permanent' | 'temporary' | 'seasonal';
 export type EmployeeStatus = 'active' | 'on_leave' | 'terminated';
+/** monthly=راتب شهري، daily=أجر يومي (baseSalary=الأجر/يوم)، half_month=نصف شهر */
+export type SalaryType = 'monthly' | 'daily' | 'half_month';
 
 export interface Employee {
   id: string;
@@ -485,13 +504,18 @@ export interface Employee {
   allowances: { housing: number; transport: number; food: number };
   hireDate: string;
   contractType: ContractType;
+  /** نوع احتساب الراتب — يحدد كشف الصرف المناسب (افتراضي: شهري) */
+  salaryType?: SalaryType;
+  /** خزنة أو بنك افتراضي لصرف راتب هذا الموظف */
+  defaultPayoutType?: AccountSourceType;
+  defaultPayoutId?: string;
   bankId?: string;
   phone: string;
   status: EmployeeStatus;
   createdAt: string;
 }
 
-export type PayrollType = 'monthly' | 'bi_monthly';
+export type PayrollType = 'monthly' | 'bi_monthly' | 'daily';
 export type PayrollStatus = 'draft' | 'approved' | 'paid';
 
 export interface PayrollLine {

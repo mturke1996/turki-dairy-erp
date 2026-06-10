@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -9,12 +9,40 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Field } from '@/components/shared/field';
-import { Money, moneyText } from '@/components/shared/money';
+import { Money } from '@/components/shared/money';
 import { AmountInput } from '@/components/shared/amount-input';
+import {
+  EMPTY_SPLIT_STATE,
+  SplitPaymentFields,
+  treasurySelectionFromState,
+  validateSplitPaymentState,
+  type SplitPaymentState,
+} from '@/components/treasury/split-payment-fields';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
-import { accountBalance } from '@/lib/domain/treasury';
+import { movementsForReference } from '@/lib/domain/treasury-splits';
 import type { Payment, PaymentMethod } from '@/lib/domain/types';
+
+function treasuryStateFromPayment(payment: Payment): SplitPaymentState {
+  if (payment.treasurySplits && payment.treasurySplits.length >= 2) {
+    const [p1, p2] = payment.treasurySplits;
+    return {
+      enabled: true,
+      singleSource: 'none',
+      part1Amount: String(p1.amount),
+      part1Source: `${p1.sourceType}:${p1.sourceId}`,
+      part2Amount: String(p2.amount),
+      part2Source: `${p2.sourceType}:${p2.sourceId}`,
+    };
+  }
+  if (payment.paidFromType && payment.paidFromId) {
+    return {
+      ...EMPTY_SPLIT_STATE,
+      singleSource: `${payment.paidFromType}:${payment.paidFromId}`,
+    };
+  }
+  return EMPTY_SPLIT_STATE;
+}
 
 export function FarmerPaymentEditDialog({
   open,
@@ -37,7 +65,7 @@ export function FarmerPaymentEditDialog({
   const [date, setDate] = useState('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const [source, setSource] = useState('none');
+  const [treasury, setTreasury] = useState<SplitPaymentState>(EMPTY_SPLIT_STATE);
   const [settlementComplete, setSettlementComplete] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -49,38 +77,29 @@ export function FarmerPaymentEditDialog({
     setReference(payment.reference ?? '');
     setNotes(payment.notes ?? '');
     setSettlementComplete(Boolean(payment.settlementComplete));
-    if (payment.paidFromType && payment.paidFromId) {
-      setSource(`${payment.paidFromType}:${payment.paidFromId}`);
-    } else {
-      setSource('none');
-    }
+    setTreasury(treasuryStateFromPayment(payment));
   }, [open, payment]);
 
-  const accounts = useMemo(
-    () => [
-      ...vaults.filter((v) => v.isActive).map((v) => ({ value: `vault:${v.id}`, label: v.name, type: 'vault' as const, id: v.id })),
-      ...banks.filter((b) => b.isActive).map((b) => ({ value: `bank:${b.id}`, label: b.bankName, type: 'bank' as const, id: b.id })),
-    ],
-    [vaults, banks],
-  );
-
-  const selected = accounts.find((a) => a.value === source) ?? null;
-  const oldCm = payment
-    ? cashMovements.find((m) => m.referenceType === 'payment' && m.referenceId === payment.id)
-    : null;
-  const sourceBalance = selected ? accountBalance(selected.type, selected.id, vaults, banks, cashMovements) : 0;
-  const effectiveBalance =
-    selected && oldCm && oldCm.sourceType === selected.type && oldCm.sourceId === selected.id
-      ? sourceBalance + oldCm.amount
-      : sourceBalance;
+  const oldMovements = payment
+    ? movementsForReference(cashMovements, 'payment', payment.id)
+    : [];
   const val = Number(amount) || 0;
 
   async function submit() {
     if (!payment) return;
+    const splitErr = validateSplitPaymentState(val, treasury, {
+      allowNone: true,
+      checkOutflow: true,
+      vaults,
+      banks,
+      cashMovements,
+      creditBack: oldMovements,
+    });
+    if (splitErr) return toast.error(splitErr);
     if (val <= 0) return toast.error('أدخل مبلغاً صحيحاً.');
-    if (selected && val > effectiveBalance + 0.001) {
-      return toast.error(`رصيد «${selected.label}» (${moneyText(effectiveBalance, 0)}) لا يكفي.`);
-    }
+
+    const treasurySel = treasurySelectionFromState(val, treasury);
+    const noTreasury = !treasury.enabled && treasury.singleSource === 'none';
 
     setBusy(true);
     try {
@@ -90,8 +109,9 @@ export function FarmerPaymentEditDialog({
         date: new Date(date + 'T10:00:00').toISOString(),
         reference: reference.trim() || undefined,
         notes: notes.trim() || undefined,
-        sourceType: selected?.type,
-        sourceId: selected?.id,
+        sourceType: noTreasury ? undefined : treasurySel.sourceType,
+        sourceId: noTreasury ? undefined : treasurySel.sourceId,
+        splits: noTreasury ? null : treasurySel.splits,
         settlementComplete,
       });
       if (res.ok) {
@@ -144,26 +164,20 @@ export function FarmerPaymentEditDialog({
               <Input type="date" dir="ltr" value={date} onChange={(e) => setDate(e.target.value)} />
             </Field>
           </div>
-          <Field
-            label="الصرف من حساب"
-            hint={accounts.length === 0 ? 'لا توجد خزن/بنوك' : undefined}
-          >
-            <Select value={source} onValueChange={setSource} disabled={accounts.length === 0}>
-              <SelectTrigger><SelectValue placeholder="بدون تأثير نقدي" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">تسجيل فقط (بدون حركة نقدية)</SelectItem>
-                {accounts.map((a) => (
-                  <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          {selected ? (
-            <div className="flex items-center justify-between rounded-lg bg-canvas-sunken px-3 py-2 text-[12px]">
-              <span className="text-muted-foreground">الرصيد المتاح</span>
-              <Money value={effectiveBalance} className="font-semibold" />
-            </div>
-          ) : null}
+
+          <SplitPaymentFields
+            totalAmount={val}
+            vaults={vaults}
+            banks={banks}
+            cashMovements={cashMovements}
+            state={treasury}
+            onChange={setTreasury}
+            singleLabel="الصرف من حساب"
+            outflow
+            allowNone
+            creditBack={oldMovements}
+          />
+
           <Field label="رقم المرجع / الشيك" hint="اختياري">
             <Input dir="ltr" value={reference} onChange={(e) => setReference(e.target.value)} />
           </Field>

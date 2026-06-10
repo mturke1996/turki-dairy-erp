@@ -1,11 +1,12 @@
 'use client';
 
-import { Calendar, Users, Wallet } from 'lucide-react';
+import { Calendar, Landmark, Users, Wallet } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Money } from '@/components/shared/money';
-import { PAYROLL_STATUS_LABELS } from '@/lib/domain/constants';
-import type { PayrollBatch } from '@/lib/domain/types';
+import { PAYROLL_STATUS_LABELS, PAYROLL_TYPE_LABELS } from '@/lib/domain/constants';
+import { payoutSourceLabel } from '@/lib/domain/payroll';
+import type { BankAccount, CashVault, PayrollBatch } from '@/lib/domain/types';
 import { cn, formatShortDate } from '@/lib/utils';
 
 const STATUS_VARIANT: Record<PayrollBatch['status'], 'neutral' | 'info' | 'success'> = {
@@ -14,20 +15,18 @@ const STATUS_VARIANT: Record<PayrollBatch['status'], 'neutral' | 'info' | 'succe
   paid: 'success',
 };
 
-const STATUS_STRIPE: Record<PayrollBatch['status'], string> = {
-  draft: 'bg-muted-foreground/40',
-  approved: 'bg-navy-400',
-  paid: 'bg-meadow-500',
-};
-
 export function PayrollBatchCard({
   batch,
+  vaults,
+  banks,
   canPay,
   onPay,
   pdfAction,
   className,
 }: {
   batch: PayrollBatch;
+  vaults: CashVault[];
+  banks: BankAccount[];
   canPay: boolean;
   onPay: () => void;
   pdfAction: React.ReactNode;
@@ -38,13 +37,12 @@ export function PayrollBatchCard({
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-xl border border-border bg-card shadow-whisper',
+        'overflow-hidden rounded-xl border border-border bg-card shadow-whisper',
+        isPaid && 'ring-1 ring-inset ring-meadow-200',
         className,
       )}
     >
-      <div className={cn('absolute inset-y-0 start-0 w-1', STATUS_STRIPE[batch.status])} aria-hidden />
-
-      <div className="p-4 ps-5">
+      <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="truncate text-[15px] font-semibold text-foreground">{batch.label}</p>
@@ -64,6 +62,15 @@ export function PayrollBatchCard({
             <Users className="h-3.5 w-3.5 shrink-0 opacity-70" />
             {batch.lines.length} موظف
           </span>
+          <span className="inline-flex items-center gap-1">
+            {PAYROLL_TYPE_LABELS[batch.payrollType]}
+          </span>
+          {batch.paidFromType && batch.paidFromId ? (
+            <span className="inline-flex max-w-[140px] items-center gap-1 truncate">
+              <Landmark className="h-3.5 w-3.5 shrink-0 opacity-70" />
+              {payoutSourceLabel(batch.paidFromType, batch.paidFromId, vaults, banks)}
+            </span>
+          ) : null}
         </div>
 
         <div className="mt-3 flex items-end justify-between gap-3 rounded-lg bg-canvas-sunken/60 px-3 py-2.5">

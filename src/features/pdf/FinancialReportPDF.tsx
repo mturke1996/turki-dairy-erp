@@ -118,8 +118,20 @@ export function FinancialReportPDF({ trialBalance, pnl, aging, asOfLabel }: Fina
       <Text style={s.section}>{ar('قائمة الدخل')}</Text>
       <View style={s.pnlRow}>
         <Text style={s.pnlLabel}>{ar('إيرادات المبيعات')}</Text>
-        <PdfMoneyText amount={pnl.revenue} size="sm" />
+        <PdfMoneyText amount={pnl.salesRevenue} size="sm" />
       </View>
+      {pnl.externalIncome > 0 ? (
+        <View style={s.pnlRow}>
+          <Text style={s.pnlLabel}>{ar('مدخولات خارجية')}</Text>
+          <PdfMoneyText amount={pnl.externalIncome} size="sm" />
+        </View>
+      ) : null}
+      {pnl.externalIncome > 0 ? (
+        <View style={s.pnlRow}>
+          <Text style={s.pnlLabel}>{ar('إجمالي الإيرادات')}</Text>
+          <PdfMoneyText amount={pnl.revenue} size="sm" />
+        </View>
+      ) : null}
       <View style={s.pnlRow}>
         <Text style={s.pnlLabel}>{ar('تكلفة البضاعة المباعة')}</Text>
         <PdfMoneyText amount={-pnl.cogs} size="sm" color={PDF.danger} />

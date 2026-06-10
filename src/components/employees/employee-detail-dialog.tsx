@@ -21,7 +21,10 @@ import {
   EMPLOYEE_STATUS_LABELS,
   PAYMENT_METHOD_LABELS,
   PAYROLL_STATUS_LABELS,
+  SALARY_BASE_LABELS,
+  SALARY_TYPE_LABELS,
 } from '@/lib/domain/constants';
+import { payoutSourceLabel } from '@/lib/domain/payroll';
 import type { EmployeeStats } from '@/lib/domain/calculations';
 import { isDebtFullySettled, resolveDebtDirection } from '@/lib/domain/debt';
 import { formatShortDate } from '@/lib/utils';
@@ -53,6 +56,7 @@ export function EmployeeDetailDialog({
   const d = useDerived();
   const vaults = useErpStore((s) => s.vaults);
   const banks = useErpStore((s) => s.banks);
+  const cashMovements = useErpStore((s) => s.cashMovements);
   const updateEmployee = useErpStore((s) => s.updateEmployee);
   const deleteEmployee = useErpStore((s) => s.deleteEmployee);
   const deletePayment = useErpStore((s) => s.deletePayment);
@@ -111,11 +115,6 @@ export function EmployeeDetailDialog({
     );
   }
 
-  const tenureMonths = Math.max(
-    0,
-    Math.floor((Date.now() - new Date(raw.hireDate).getTime()) / (30 * 86_400_000)),
-  );
-
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -143,10 +142,10 @@ export function EmployeeDetailDialog({
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <SummaryCell label="الراتب الشهري" value={<Money value={employee.grossSalary} decimals={0} />} />
+            <SummaryCell label="نوع الراتب" value={SALARY_TYPE_LABELS[raw.salaryType ?? 'monthly']} />
+            <SummaryCell label={SALARY_BASE_LABELS[raw.salaryType ?? 'monthly']} value={<Money value={raw.baseSalary} decimals={0} />} />
             <SummaryCell label="الدين" value={<Money value={employee.advanceBalance} decimals={0} />} highlight={employee.advanceBalance > 0} />
             <SummaryCell label="صرف YTD" value={<Money value={employee.ytdPaid} decimals={0} />} />
-            <SummaryCell label="مدة الخدمة" value={`${tenureMonths} شهر`} />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -185,10 +184,15 @@ export function EmployeeDetailDialog({
             </div>
             <div>
               <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">تفصيل الراتب</p>
-              <p className="mt-2">أساسي: <Money value={raw.baseSalary} decimals={0} className="inline" /></p>
+              <p className="mt-2">{SALARY_BASE_LABELS[raw.salaryType ?? 'monthly']}: <Money value={raw.baseSalary} decimals={0} className="inline" /></p>
               <p className="mt-1 text-muted-foreground">
                 بدلات: سكن {raw.allowances.housing} · نقل {raw.allowances.transport} · طعام {raw.allowances.food}
               </p>
+              {raw.defaultPayoutType && raw.defaultPayoutId ? (
+                <p className="mt-1 text-muted-foreground">
+                  صرف من: {payoutSourceLabel(raw.defaultPayoutType, raw.defaultPayoutId, vaults, banks)}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -276,6 +280,8 @@ export function EmployeeDetailDialog({
         open={editOpen}
         onOpenChange={setEditOpen}
         employee={raw}
+        vaults={vaults}
+        banks={banks}
         onSubmit={async (input) => {
           const res = await updateEmployee(raw.id, input);
           if (res.ok) {
@@ -293,6 +299,7 @@ export function EmployeeDetailDialog({
         onOpenChange={setAdvanceOpen}
         vaults={vaults}
         banks={banks}
+        cashMovements={cashMovements}
         onSubmit={(input) => {
           void (async () => {
             const res = await recordEmployeeAdvance(input);

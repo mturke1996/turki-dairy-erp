@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -11,10 +11,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Field } from '@/components/shared/field';
 import { Money, moneyText } from '@/components/shared/money';
 import { AmountInput } from '@/components/shared/amount-input';
+import {
+  EMPTY_SPLIT_STATE,
+  SplitPaymentFields,
+  treasurySelectionFromState,
+  validateSplitPaymentState,
+  type SplitPaymentState,
+} from '@/components/treasury/split-payment-fields';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
-import { accountBalance } from '@/lib/domain/treasury';
-import type { AccountSourceType, PaymentMethod } from '@/lib/domain/types';
+import type { PaymentMethod } from '@/lib/domain/types';
 
 type Props = {
   open: boolean;
@@ -48,7 +54,7 @@ export function PaymentDialog({
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const [source, setSource] = useState('none');
+  const [treasury, setTreasury] = useState<SplitPaymentState>(EMPTY_SPLIT_STATE);
   const [settlementComplete, setSettlementComplete] = useState(false);
 
   const isFarmer = kind === 'farmer';
@@ -59,36 +65,31 @@ export function PaymentDialog({
       const initial = defaultAmount ?? (outstanding > 0 ? Math.round(outstanding) : '');
       setAmount(initial ? String(initial) : '');
       setSettlementComplete(settlementDefault ?? false);
-      setSource('none');
+      setTreasury(EMPTY_SPLIT_STATE);
       setReference('');
       setNotes('');
     }
   }, [open, defaultAmount, settlementDefault, outstanding]);
 
-  const accounts = useMemo(
-    () => [
-      ...vaults.filter((v) => v.isActive).map((v) => ({ value: `vault:${v.id}`, label: v.name, type: 'vault' as const, id: v.id })),
-      ...banks.filter((b) => b.isActive).map((b) => ({ value: `bank:${b.id}`, label: b.bankName, type: 'bank' as const, id: b.id })),
-    ],
-    [vaults, banks],
-  );
-
-  const selected = accounts.find((a) => a.value === source) ?? null;
-  const sourceBalance = selected ? accountBalance(selected.type, selected.id, vaults, banks, cashMovements) : 0;
-
   async function submit() {
+    const splitErr = validateSplitPaymentState(val, treasury, {
+      allowNone: true,
+      checkOutflow: isFarmer,
+      vaults,
+      banks,
+      cashMovements,
+    });
+    if (splitErr) return toast.error(splitErr);
     if (val <= 0) return toast.error('أدخل مبلغاً صحيحاً.');
-    if (isFarmer && selected && val > sourceBalance + 0.001) {
-      return toast.error(`رصيد «${selected.label}» (${moneyText(sourceBalance, 0)}) لا يكفي.`);
-    }
+
+    const treasurySel = treasurySelectionFromState(val, treasury);
     const base = {
       amount: val,
       method,
       date: new Date(date + 'T10:00:00').toISOString(),
       reference: reference.trim() || undefined,
       notes: notes.trim() || undefined,
-      sourceType: selected?.type as AccountSourceType | undefined,
-      sourceId: selected?.id,
+      ...treasurySel,
       settlementComplete: isFarmer ? settlementComplete : undefined,
     };
     const res = isFarmer
@@ -148,26 +149,19 @@ export function PaymentDialog({
               <Input type="date" dir="ltr" value={date} onChange={(e) => setDate(e.target.value)} />
             </Field>
           </div>
-          <Field
-            label={isFarmer ? 'الصرف من حساب' : 'الإيداع في حساب'}
-            hint={accounts.length === 0 ? 'لا توجد خزن/بنوك — أضِفها من صفحة النقد والبنوك' : undefined}
-          >
-            <Select value={source} onValueChange={setSource} disabled={accounts.length === 0}>
-              <SelectTrigger><SelectValue placeholder="بدون تأثير نقدي" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">تسجيل فقط (بدون حركة نقدية)</SelectItem>
-                {accounts.map((a) => (
-                  <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          {selected ? (
-            <div className="flex items-center justify-between rounded-lg bg-canvas-sunken px-3 py-2 text-[12px]">
-              <span className="text-muted-foreground">رصيد «{selected.label}»</span>
-              <Money value={sourceBalance} className="font-semibold" />
-            </div>
-          ) : null}
+
+          <SplitPaymentFields
+            totalAmount={val}
+            vaults={vaults}
+            banks={banks}
+            cashMovements={cashMovements}
+            state={treasury}
+            onChange={setTreasury}
+            singleLabel={isFarmer ? 'الصرف من حساب' : 'الإيداع في حساب'}
+            outflow={isFarmer}
+            allowNone
+          />
+
           <Field label="رقم المرجع / الشيك" hint="اختياري">
             <Input dir="ltr" value={reference} onChange={(e) => setReference(e.target.value)} />
           </Field>

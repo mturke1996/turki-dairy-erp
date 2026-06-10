@@ -14,10 +14,10 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between', className)}>
-      <div className="space-y-1.5">
+    <div dir="rtl" className={cn('flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between', className)}>
+      <div className="space-y-1.5 text-right">
         {eyebrow ? (
-          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-meadow-600">
+          <span className="text-[11px] font-semibold text-meadow-600">
             {eyebrow}
           </span>
         ) : null}

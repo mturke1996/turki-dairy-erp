@@ -11,6 +11,20 @@ import {
   type ErpData,
 } from "@/lib/domain/calculations";
 import { accountBalance } from "@/lib/domain/treasury";
+import {
+  buildSplitCashMovements,
+  movementsForReference,
+  paymentTreasuryMeta,
+  resolveTreasurySources,
+  validateSplitBalances,
+  validateTreasurySourceInput,
+  verifyReferenceMovements,
+} from "@/lib/domain/treasury-splits";
+import {
+  buildPayrollLines,
+  payrollBatchTotal,
+  salaryTypeMatchesBatch,
+} from "@/lib/domain/payroll";
 import { cycleForDate, cycleOfMonth } from "@/lib/domain/cycle";
 import {
   allocatePaymentToPartyDebts,
@@ -44,10 +58,10 @@ import type {
   InventoryAdjustment,
   Payment,
   PayrollBatch,
-  PayrollLine,
   SaleTransaction,
   Session,
   SupplyTransaction,
+  TreasurySplitPart,
   DebtEntry,
   DebtPartyKind,
   ExpenseGroup,
@@ -180,8 +194,9 @@ interface ErpState {
     immediatePayment?: {
       amount: number;
       method: Payment["method"];
-      sourceType: AccountSourceType;
-      sourceId: string;
+      sourceType?: AccountSourceType;
+      sourceId?: string;
+      splits?: TreasurySplitPart[];
       reference?: string;
       settlementComplete?: boolean;
     };
@@ -203,6 +218,7 @@ interface ErpState {
     notes?: string;
     sourceType?: AccountSourceType;
     sourceId?: string;
+    splits?: TreasurySplitPart[];
     settlementComplete?: boolean;
   }) => Promise<MutationResult>;
   updateFarmerPayment: (
@@ -215,6 +231,7 @@ interface ErpState {
       notes?: string;
       sourceType?: AccountSourceType;
       sourceId?: string;
+      splits?: TreasurySplitPart[] | null;
       settlementComplete?: boolean;
     },
   ) => Promise<MutationResult>;
@@ -227,6 +244,7 @@ interface ErpState {
     notes?: string;
     sourceType?: AccountSourceType;
     sourceId?: string;
+    splits?: TreasurySplitPart[];
   }) => Promise<MutationResult>;
   recordEmployeeAdvance: (input: {
     employeeId: string;
@@ -235,8 +253,9 @@ interface ErpState {
     date?: string;
     reference?: string;
     notes?: string;
-    sourceType: AccountSourceType;
-    sourceId: string;
+    sourceType?: AccountSourceType;
+    sourceId?: string;
+    splits?: TreasurySplitPart[];
   }) => Promise<MutationResult>;
   recordDebtEntry: (input: {
     partyKind: DebtPartyKind;
@@ -251,6 +270,7 @@ interface ErpState {
     method?: Payment["method"];
     sourceType?: AccountSourceType;
     sourceId?: string;
+    splits?: TreasurySplitPart[];
     /** مبلغ النقد الفعلي (للتسوية الجزئية عند الصرف/التحصيل) */
     cashAmount?: number;
   }) => Promise<MutationResult>;
@@ -273,6 +293,7 @@ interface ErpState {
       notes?: string;
       sourceType?: AccountSourceType;
       sourceId?: string;
+      splits?: TreasurySplitPart[];
     },
   ) => Promise<MutationResult>;
   addAdjustment: (input: {
@@ -425,6 +446,8 @@ interface ErpState {
     payrollType: PayrollBatch["payrollType"];
     periodFrom: string;
     periodTo: string;
+    paidFromType?: AccountSourceType;
+    paidFromId?: string;
   }) => Promise<MutationResult>;
   payPayrollBatch: (
     batchId: string,
@@ -1318,18 +1341,31 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     if (ip) {
       if (ip.amount <= 0)
         return { ok: false, error: "مبلغ الدفع الفوري غير صالح." };
-      const bal = accountBalance(
-        ip.sourceType,
-        ip.sourceId,
-        state.vaults,
-        state.banks,
-        state.cashMovements,
-      );
-      if (ip.amount > bal + 0.001)
-        return {
-          ok: false,
-          error: `رصيد الحساب (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي للدفع الفوري.`,
-        };
+      const ipErr = validateTreasurySourceInput({
+        amount: ip.amount,
+        sourceType: ip.sourceType,
+        sourceId: ip.sourceId,
+        splits: ip.splits,
+      });
+      if (ipErr) return { ok: false, error: ipErr };
+      const ipResolved = resolveTreasurySources({
+        amount: ip.amount,
+        sourceType: ip.sourceType,
+        sourceId: ip.sourceId,
+        splits: ip.splits,
+      });
+      if (ipResolved.mode !== "none") {
+        const balCheck = validateSplitBalances(
+          ipResolved.parts,
+          "out",
+          state.vaults,
+          state.banks,
+          state.cashMovements,
+        );
+        if (!balCheck.ok) return balCheck;
+      } else {
+        return { ok: false, error: "اختر حساب الصرف للدفع الفوري." };
+      }
     }
 
     const hasPeriod = !!(input.periodFrom || input.periodTo);
@@ -1372,10 +1408,18 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     };
 
     let payment: Payment | null = null;
-    let movement: CashMovement | null = null;
+    let ipMovements: CashMovement[] = [];
 
     if (ip) {
       const payId = uid("pay-");
+      const ipAmount = round(ip.amount);
+      const ipResolved = resolveTreasurySources({
+        amount: ipAmount,
+        sourceType: ip.sourceType,
+        sourceId: ip.sourceId,
+        splits: ip.splits,
+      });
+      const ipTreasury = paymentTreasuryMeta(ipResolved);
       payment = {
         id: payId,
         ref: nextRef(
@@ -1386,31 +1430,42 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         partyId: input.farmerId,
         sessionId: state.activeSessionId,
         date,
-        amount: round(ip.amount),
+        amount: ipAmount,
         method: ip.method,
-        paidFromType: ip.sourceType,
-        paidFromId: ip.sourceId,
+        ...ipTreasury,
         reference: ip.reference ?? tx.ref,
         notes: "دفع فوري عند استلام الحليب",
         settlementComplete: ip.settlementComplete ?? ip.amount >= total - 0.01,
         createdAt: new Date().toISOString(),
         createdBy: state.auth?.name,
       };
-      movement = {
-        id: uid("cm-"),
-        ref: nextRef("CM", state.cashMovements),
-        movementType: "farmer_payout",
-        sourceType: ip.sourceType,
-        sourceId: ip.sourceId,
-        amount: round(ip.amount),
-        direction: "out",
-        referenceType: "payment",
-        referenceId: payId,
-        description: `دفع فوري — استلام ${farmer.fullName}`,
-        sessionId: state.activeSessionId,
-        date,
-        createdAt: new Date().toISOString(),
-      };
+      if (ipResolved.mode !== "none") {
+        ipMovements = buildSplitCashMovements({
+          parts: ipResolved.parts,
+          totalAmount: ipAmount,
+          splitGroupId:
+            ipResolved.mode === "split" ? ipResolved.splitGroupId : undefined,
+          movementType: "farmer_payout",
+          direction: "out",
+          referenceType: "payment",
+          referenceId: payId,
+          baseDescription: `دفع فوري — استلام ${farmer.fullName}`,
+          sessionId: state.activeSessionId,
+          date,
+          createdBy: state.auth?.name,
+          vaults: state.vaults,
+          banks: state.banks,
+          existingRefs: state.cashMovements,
+          createId: () => uid("cm-"),
+        });
+        const integrity = verifyReferenceMovements(
+          ipMovements,
+          "payment",
+          payId,
+          ipAmount,
+        );
+        if (!integrity.ok) return integrity;
+      }
     }
 
     const audit = makeAudit(
@@ -1428,10 +1483,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         table: "payments",
         rows: [payment as unknown as Record<string, unknown>],
       });
-    if (movement)
+    if (ipMovements.length)
       dbOps.push({
         table: "cash_movements",
-        rows: [movement as unknown as Record<string, unknown>],
+        rows: ipMovements as unknown as Record<string, unknown>[],
       });
 
     const res = await mutateWithDb(
@@ -1439,8 +1494,8 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         set((s) => ({
           supplies: [tx, ...s.supplies],
           payments: payment ? [payment, ...s.payments] : s.payments,
-          cashMovements: movement
-            ? [movement, ...s.cashMovements]
+          cashMovements: ipMovements.length
+            ? [...ipMovements, ...s.cashMovements]
             : s.cashMovements,
           auditLogs: [audit, ...s.auditLogs],
         })),
@@ -1516,21 +1571,33 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     if (!farmer) return { ok: false, error: "الفلاح غير موجود." };
     const amount = round(input.amount);
     const date = input.date ?? new Date().toISOString();
-    const useSource = Boolean(input.sourceType && input.sourceId);
 
-    if (useSource) {
-      const bal = accountBalance(
-        input.sourceType!,
-        input.sourceId!,
+    const treasuryErr = validateTreasurySourceInput(
+      {
+        amount,
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        splits: input.splits,
+      },
+      { allowNone: true },
+    );
+    if (treasuryErr) return { ok: false, error: treasuryErr };
+
+    const resolved = resolveTreasurySources({
+      amount,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      splits: input.splits,
+    });
+    if (resolved.mode !== "none") {
+      const balCheck = validateSplitBalances(
+        resolved.parts,
+        "out",
         state.vaults,
         state.banks,
         state.cashMovements,
       );
-      if (amount > bal + 0.001)
-        return {
-          ok: false,
-          error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي للدفع.`,
-        };
+      if (!balCheck.ok) return balCheck;
     }
 
     const debtAlloc = allocatePaymentToPartyDebts(
@@ -1541,8 +1608,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       ["payable"],
     );
 
+    const payId = uid("pay-");
+    const treasuryMeta = paymentTreasuryMeta(resolved);
     const tx: Payment = {
-      id: uid("pay-"),
+      id: payId,
       ref: nextRef(
         "PAY",
         state.payments.filter((p) => p.kind === "farmer_payment"),
@@ -1553,8 +1622,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       date,
       amount,
       method: input.method,
-      paidFromType: useSource ? input.sourceType : undefined,
-      paidFromId: useSource ? input.sourceId : undefined,
+      ...treasuryMeta,
       reference: input.reference,
       notes: input.notes,
       settlementComplete: input.settlementComplete,
@@ -1564,23 +1632,37 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       createdBy: state.auth?.name,
     };
 
-    const movement: CashMovement | null = useSource
-      ? {
-          id: uid("cm-"),
-          ref: nextRef("CM", state.cashMovements),
-          movementType: "farmer_payout",
-          sourceType: input.sourceType!,
-          sourceId: input.sourceId!,
-          amount,
-          direction: "out",
-          referenceType: "payment",
-          referenceId: tx.id,
-          description: `دفعة للفلاح ${farmer?.fullName ?? ""}`.trim(),
-          sessionId: state.activeSessionId,
-          date,
-          createdAt: new Date().toISOString(),
-        }
-      : null;
+    const movements =
+      resolved.mode === "none"
+        ? []
+        : buildSplitCashMovements({
+            parts: resolved.parts,
+            totalAmount: amount,
+            splitGroupId:
+              resolved.mode === "split" ? resolved.splitGroupId : undefined,
+            movementType: "farmer_payout",
+            direction: "out",
+            referenceType: "payment",
+            referenceId: payId,
+            baseDescription: `دفعة للفلاح ${farmer?.fullName ?? ""}`.trim(),
+            sessionId: state.activeSessionId,
+            date,
+            createdBy: state.auth?.name,
+            vaults: state.vaults,
+            banks: state.banks,
+            existingRefs: state.cashMovements,
+            createId: () => uid("cm-"),
+          });
+
+    if (movements.length) {
+      const integrity = verifyReferenceMovements(
+        movements,
+        "payment",
+        payId,
+        amount,
+      );
+      if (!integrity.ok) return integrity;
+    }
 
     const audit = makeAudit(
       state,
@@ -1596,10 +1678,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         rows: [row as unknown as Record<string, unknown>],
       })),
     ];
-    if (movement)
+    if (movements.length)
       dbOps.push({
         table: "cash_movements",
-        rows: [movement as unknown as Record<string, unknown>],
+        rows: movements as unknown as Record<string, unknown>[],
       });
 
     const res = await mutateWithDb(
@@ -1607,8 +1689,8 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         set((s) => ({
           payments: [tx, ...s.payments],
           debtEntries: debtAlloc.entries,
-          cashMovements: movement
-            ? [movement, ...s.cashMovements]
+          cashMovements: movements.length
+            ? [...movements, ...s.cashMovements]
             : s.cashMovements,
           auditLogs: [audit, ...s.auditLogs],
         })),
@@ -1634,18 +1716,34 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         const amount = round(patch.amount ?? existing.amount);
         if (amount <= 0) return { ok: false, error: 'المبلغ يجب أن يكون أكبر من صفر.' };
 
-        const sourceTouched = 'sourceType' in patch || 'sourceId' in patch;
-        const sourceType = sourceTouched ? patch.sourceType : existing.paidFromType;
-        const sourceId = sourceTouched ? patch.sourceId : existing.paidFromId;
-        const useSource = Boolean(sourceType && sourceId);
+        const treasuryTouched =
+          'sourceType' in patch || 'sourceId' in patch || 'splits' in patch;
+        const sourceType = treasuryTouched ? patch.sourceType : existing.paidFromType;
+        const sourceId = treasuryTouched ? patch.sourceId : existing.paidFromId;
+        const splits = treasuryTouched
+          ? patch.splits === null
+            ? undefined
+            : patch.splits
+          : existing.treasurySplits;
 
-        const oldCm = state.cashMovements.find((m) => m.referenceType === 'payment' && m.referenceId === id);
-        if (useSource) {
-          const bal = accountBalance(sourceType!, sourceId!, state.vaults, state.banks, state.cashMovements);
-          const effectiveBal = bal + (oldCm && oldCm.sourceType === sourceType && oldCm.sourceId === sourceId ? oldCm.amount : 0);
-          if (amount > effectiveBal + 0.001) {
-            return { ok: false, error: `الرصيد المتاح (${formatMoney(Math.floor(effectiveBal), { decimals: 0 })}) لا يكفي.` };
-          }
+        const treasuryErr = validateTreasurySourceInput(
+          { amount, sourceType, sourceId, splits },
+          { allowNone: true },
+        );
+        if (treasuryErr) return { ok: false, error: treasuryErr };
+
+        const oldMovements = movementsForReference(state.cashMovements, 'payment', id);
+        const resolved = resolveTreasurySources({ amount, sourceType, sourceId, splits });
+        if (resolved.mode !== 'none') {
+          const balCheck = validateSplitBalances(
+            resolved.parts,
+            'out',
+            state.vaults,
+            state.banks,
+            state.cashMovements,
+            oldMovements,
+          );
+          if (!balCheck.ok) return balCheck;
         }
 
         const restoredDebts = reversePaymentDebtAllocation(
@@ -1657,6 +1755,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         const debtAlloc = allocatePaymentToPartyDebts(restoredDebts, 'farmer', existing.partyId, amount, ['payable']);
 
         const date = patch.date ?? existing.date;
+        const treasuryMeta = paymentTreasuryMeta(resolved);
         const updated: Payment = {
           ...existing,
           amount,
@@ -1664,41 +1763,43 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           date,
           reference: patch.reference !== undefined ? patch.reference : existing.reference,
           notes: patch.notes !== undefined ? patch.notes : existing.notes,
-          paidFromType: useSource ? sourceType : undefined,
-          paidFromId: useSource ? sourceId : undefined,
+          paidFromType: treasuryMeta.paidFromType,
+          paidFromId: treasuryMeta.paidFromId,
+          treasurySplits: treasuryMeta.treasurySplits,
           settlementComplete: patch.settlementComplete ?? existing.settlementComplete,
           debtSettledAmount: debtAlloc.applied > 0.001 ? round(debtAlloc.applied) : undefined,
         };
 
-        let updatedCm: CashMovement | null = null;
-        let cmDeleteIds: string[] = [];
-        if (useSource) {
-          updatedCm = oldCm
-            ? {
-                ...oldCm,
-                amount,
-                sourceType: sourceType!,
-                sourceId: sourceId!,
-                date,
-                description: `دفعة للفلاح ${farmer.fullName}`.trim(),
-              }
-            : {
-                id: uid('cm-'),
-                ref: nextRef('CM', state.cashMovements),
+        const cmDeleteIds = oldMovements.map((m) => m.id);
+        const newMovements =
+          resolved.mode === 'none'
+            ? []
+            : buildSplitCashMovements({
+                parts: resolved.parts,
+                totalAmount: amount,
+                splitGroupId: resolved.mode === 'split' ? resolved.splitGroupId : undefined,
                 movementType: 'farmer_payout',
-                sourceType: sourceType!,
-                sourceId: sourceId!,
-                amount,
                 direction: 'out',
                 referenceType: 'payment',
                 referenceId: id,
-                description: `دفعة للفلاح ${farmer.fullName}`.trim(),
+                baseDescription: `دفعة للفلاح ${farmer.fullName}`.trim(),
                 sessionId: existing.sessionId,
                 date,
-                createdAt: new Date().toISOString(),
-              };
-        } else if (oldCm) {
-          cmDeleteIds = [oldCm.id];
+                createdBy: state.auth?.name,
+                vaults: state.vaults,
+                banks: state.banks,
+                existingRefs: state.cashMovements,
+                createId: () => uid('cm-'),
+              });
+
+        if (newMovements.length) {
+          const integrity = verifyReferenceMovements(
+            newMovements,
+            'payment',
+            id,
+            amount,
+          );
+          if (!integrity.ok) return integrity;
         }
 
         const debtUpdates = debtAlloc.updates;
@@ -1707,7 +1808,9 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           { table: 'payments', rows: [updated as unknown as Record<string, unknown>] },
           ...debtUpdates.map((row) => ({ table: 'debt_entries', rows: [row as unknown as Record<string, unknown>] })),
         ];
-        if (updatedCm) dbOps.push({ table: 'cash_movements', rows: [updatedCm as unknown as Record<string, unknown>] });
+        if (newMovements.length) {
+          dbOps.push({ table: 'cash_movements', rows: newMovements as unknown as Record<string, unknown>[] });
+        }
         if (cmDeleteIds.length) dbOps.push({ table: 'cash_movements', deletes: cmDeleteIds });
 
         const res = await mutateWithDb(
@@ -1715,11 +1818,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
             set((s) => ({
               payments: s.payments.map((p) => (p.id === id ? updated : p)),
               debtEntries: debtAlloc.entries,
-              cashMovements: updatedCm
-                ? oldCm
-                  ? s.cashMovements.map((m) => (m.id === updatedCm!.id ? updatedCm! : m))
-                  : [updatedCm, ...s.cashMovements]
-                : s.cashMovements.filter((m) => !cmDeleteIds.includes(m.id)),
+              cashMovements: [
+                ...newMovements,
+                ...s.cashMovements.filter((m) => !cmDeleteIds.includes(m.id)),
+              ],
               auditLogs: [audit, ...s.auditLogs],
             })),
           dbOps,
@@ -1737,7 +1839,24 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     if (!customer) return { ok: false, error: "العميل غير موجود." };
     const amount = round(input.amount);
     const date = input.date ?? new Date().toISOString();
-    const useSource = Boolean(input.sourceType && input.sourceId);
+
+    const treasuryErr = validateTreasurySourceInput(
+      {
+        amount,
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        splits: input.splits,
+      },
+      { allowNone: true },
+    );
+    if (treasuryErr) return { ok: false, error: treasuryErr };
+
+    const resolved = resolveTreasurySources({
+      amount,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      splits: input.splits,
+    });
 
     const debtAlloc = allocatePaymentToPartyDebts(
       state.debtEntries,
@@ -1747,8 +1866,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       ["receivable"],
     );
 
+    const payId = uid("pay-");
+    const treasuryMeta = paymentTreasuryMeta(resolved);
     const tx: Payment = {
-      id: uid("pay-"),
+      id: payId,
       ref: nextRef(
         "RCV",
         state.payments.filter((p) => p.kind === "customer_payment"),
@@ -1759,8 +1880,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       date,
       amount,
       method: input.method,
-      paidFromType: useSource ? input.sourceType : undefined,
-      paidFromId: useSource ? input.sourceId : undefined,
+      ...treasuryMeta,
       reference: input.reference,
       notes: input.notes,
       debtSettledAmount:
@@ -1769,23 +1889,37 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       createdBy: state.auth?.name,
     };
 
-    const movement: CashMovement | null = useSource
-      ? {
-          id: uid("cm-"),
-          ref: nextRef("CM", state.cashMovements),
-          movementType: "sale_payment",
-          sourceType: input.sourceType!,
-          sourceId: input.sourceId!,
-          amount,
-          direction: "in",
-          referenceType: "payment",
-          referenceId: tx.id,
-          description: `تحصيل من العميل ${customer?.entityName ?? ""}`.trim(),
-          sessionId: state.activeSessionId,
-          date,
-          createdAt: new Date().toISOString(),
-        }
-      : null;
+    const movements =
+      resolved.mode === "none"
+        ? []
+        : buildSplitCashMovements({
+            parts: resolved.parts,
+            totalAmount: amount,
+            splitGroupId:
+              resolved.mode === "split" ? resolved.splitGroupId : undefined,
+            movementType: "sale_payment",
+            direction: "in",
+            referenceType: "payment",
+            referenceId: payId,
+            baseDescription: `تحصيل من العميل ${customer?.entityName ?? ""}`.trim(),
+            sessionId: state.activeSessionId,
+            date,
+            createdBy: state.auth?.name,
+            vaults: state.vaults,
+            banks: state.banks,
+            existingRefs: state.cashMovements,
+            createId: () => uid("cm-"),
+          });
+
+    if (movements.length) {
+      const integrity = verifyReferenceMovements(
+        movements,
+        "payment",
+        payId,
+        amount,
+      );
+      if (!integrity.ok) return integrity;
+    }
 
     const audit = makeAudit(
       state,
@@ -1801,10 +1935,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         rows: [row as unknown as Record<string, unknown>],
       })),
     ];
-    if (movement)
+    if (movements.length)
       dbOps.push({
         table: "cash_movements",
-        rows: [movement as unknown as Record<string, unknown>],
+        rows: movements as unknown as Record<string, unknown>[],
       });
 
     const res = await mutateWithDb(
@@ -1812,8 +1946,8 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         set((s) => ({
           payments: [tx, ...s.payments],
           debtEntries: debtAlloc.entries,
-          cashMovements: movement
-            ? [movement, ...s.cashMovements]
+          cashMovements: movements.length
+            ? [...movements, ...s.cashMovements]
             : s.cashMovements,
           auditLogs: [audit, ...s.auditLogs],
         })),
@@ -1832,21 +1966,37 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     if (!employee) return { ok: false, error: "الموظف غير موجود." };
     const amount = round(input.amount);
     const date = input.date ?? new Date().toISOString();
-    const bal = accountBalance(
-      input.sourceType,
-      input.sourceId,
+
+    const treasuryErr = validateTreasurySourceInput({
+      amount,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      splits: input.splits,
+    });
+    if (treasuryErr) return { ok: false, error: treasuryErr };
+
+    const resolved = resolveTreasurySources({
+      amount,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      splits: input.splits,
+    });
+    if (resolved.mode === "none") {
+      return { ok: false, error: "اختر مصدر الصرف." };
+    }
+    const balCheck = validateSplitBalances(
+      resolved.parts,
+      "out",
       state.vaults,
       state.banks,
       state.cashMovements,
     );
-    if (amount > bal + 0.001)
-      return {
-        ok: false,
-        error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي للسلفة.`,
-      };
+    if (!balCheck.ok) return balCheck;
 
+    const payId = uid("pay-");
+    const treasuryMeta = paymentTreasuryMeta(resolved);
     const tx: Payment = {
-      id: uid("pay-"),
+      id: payId,
       ref: nextRef(
         "ADV",
         state.payments.filter((p) => p.kind === "employee_advance"),
@@ -1857,29 +2007,38 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       date,
       amount,
       method: input.method,
-      paidFromType: input.sourceType,
-      paidFromId: input.sourceId,
+      ...treasuryMeta,
       reference: input.reference,
       notes: input.notes,
       createdAt: new Date().toISOString(),
       createdBy: state.auth?.name,
     };
 
-    const movement: CashMovement = {
-      id: uid("cm-"),
-      ref: nextRef("CM", state.cashMovements),
+    const movements = buildSplitCashMovements({
+      parts: resolved.parts,
+      totalAmount: amount,
+      splitGroupId: resolved.mode === "split" ? resolved.splitGroupId : undefined,
       movementType: "expense",
-      sourceType: input.sourceType,
-      sourceId: input.sourceId,
-      amount,
       direction: "out",
       referenceType: "payment",
-      referenceId: tx.id,
-      description: `سلفة للموظف ${employee.fullName}`.trim(),
+      referenceId: payId,
+      baseDescription: `سلفة للموظف ${employee.fullName}`.trim(),
       sessionId: state.activeSessionId,
       date,
-      createdAt: new Date().toISOString(),
-    };
+      createdBy: state.auth?.name,
+      vaults: state.vaults,
+      banks: state.banks,
+      existingRefs: state.cashMovements,
+      createId: () => uid("cm-"),
+    });
+
+    const integrity = verifyReferenceMovements(
+      movements,
+      "payment",
+      payId,
+      amount,
+    );
+    if (!integrity.ok) return integrity;
 
     const audit = makeAudit(
       state,
@@ -1892,14 +2051,14 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       () =>
         set((s) => ({
           payments: [tx, ...s.payments],
-          cashMovements: [movement, ...s.cashMovements],
+          cashMovements: [...movements, ...s.cashMovements],
           auditLogs: [audit, ...s.auditLogs],
         })),
       [
         { table: "payments", rows: [tx as unknown as Record<string, unknown>] },
         {
           table: "cash_movements",
-          rows: [movement as unknown as Record<string, unknown>],
+          rows: movements as unknown as Record<string, unknown>[],
         },
       ],
     );
@@ -1915,9 +2074,6 @@ export const useErpStore = create<ErpState>()((set, get) => ({
 
     const cashMode = input.cashMode ?? "none";
     const useSource = cashMode !== "none";
-    if (useSource && (!input.sourceType || !input.sourceId)) {
-      return { ok: false, error: "اختر الخزينة أو البنك للحركة النقدية." };
-    }
 
     const direction = input.direction ?? defaultDebtDirection(input.partyKind);
     let partyName = input.partyName?.trim() ?? "";
@@ -1966,19 +2122,30 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         )
       : 0;
 
-    if (useSource && cashDirection === "out") {
-      const bal = accountBalance(
-        input.sourceType!,
-        input.sourceId!,
-        state.vaults,
-        state.banks,
-        state.cashMovements,
-      );
-      if (cashAmount > bal + 0.001) {
-        return {
-          ok: false,
-          error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي.`,
-        };
+    let cashResolved = resolveTreasurySources({ amount: 0 });
+    if (useSource) {
+      const treasuryErr = validateTreasurySourceInput({
+        amount: cashAmount,
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        splits: input.splits,
+      });
+      if (treasuryErr) return { ok: false, error: treasuryErr };
+      cashResolved = resolveTreasurySources({
+        amount: cashAmount,
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        splits: input.splits,
+      });
+      if (cashResolved.mode !== "none" && cashDirection === "out") {
+        const balCheck = validateSplitBalances(
+          cashResolved.parts,
+          "out",
+          state.vaults,
+          state.banks,
+          state.cashMovements,
+        );
+        if (!balCheck.ok) return balCheck;
       }
     }
 
@@ -2019,10 +2186,14 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           ? " — تحصيل نقدي"
           : "";
 
+    const cashTreasuryMeta =
+      cashResolved.mode !== "none" ? paymentTreasuryMeta(cashResolved) : {};
+
     let linkedPayment: Payment | null = null;
+    const linkedPayId = uid("pay-");
     if (settleOnCreate > 0.001 && input.partyKind === "farmer" && partyId) {
       linkedPayment = {
-        id: uid("pay-"),
+        id: linkedPayId,
         ref: nextRef(
           "PAY",
           state.payments.filter((p) => p.kind === "farmer_payment"),
@@ -2033,8 +2204,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         date: dateRaw,
         amount: settleOnCreate,
         method: input.method ?? "cash",
-        paidFromType: input.sourceType,
-        paidFromId: input.sourceId,
+        ...cashTreasuryMeta,
         reference: entry.ref,
         notes: `تسجيل دين مع صرف — ${entry.ref}`,
         debtSettledAmount: settleOnCreate,
@@ -2047,7 +2217,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       partyId
     ) {
       linkedPayment = {
-        id: uid("pay-"),
+        id: linkedPayId,
         ref: nextRef(
           "RCV",
           state.payments.filter((p) => p.kind === "customer_payment"),
@@ -2058,8 +2228,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         date: dateRaw,
         amount: settleOnCreate,
         method: input.method ?? "cash",
-        paidFromType: input.sourceType,
-        paidFromId: input.sourceId,
+        ...cashTreasuryMeta,
         reference: entry.ref,
         notes: `تسجيل دين مع تحصيل — ${entry.ref}`,
         debtSettledAmount: settleOnCreate,
@@ -2068,8 +2237,8 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       };
     }
 
-    let movement: CashMovement | null = null;
-    if (useSource && cashDirection) {
+    let movements: CashMovement[] = [];
+    if (useSource && cashDirection && cashResolved.mode !== "none") {
       const cashOut = cashDirection === "out";
       const movementType =
         input.partyKind === "farmer" && cashOut
@@ -2079,22 +2248,33 @@ export const useErpStore = create<ErpState>()((set, get) => ({
             : cashOut
               ? "expense"
               : "income";
-      movement = {
-        id: uid("cm-"),
-        ref: nextRef("CM", state.cashMovements),
+      movements = buildSplitCashMovements({
+        parts: cashResolved.parts,
+        totalAmount: cashAmount,
+        splitGroupId:
+          cashResolved.mode === "split" ? cashResolved.splitGroupId : undefined,
         movementType,
-        sourceType: input.sourceType!,
-        sourceId: input.sourceId!,
-        amount: cashAmount,
         direction: cashDirection,
         referenceType: linkedPayment ? "payment" : "debt",
         referenceId: linkedPayment?.id ?? entry.id,
-        description: `تسجيل دين ${entry.ref}${cashNote} — ${partyName}`,
+        baseDescription: `تسجيل دين ${entry.ref}${cashNote} — ${partyName}`,
         sessionId: state.activeSessionId,
         date: dateRaw,
-        createdAt: new Date().toISOString(),
         createdBy: state.auth?.name,
-      };
+        vaults: state.vaults,
+        banks: state.banks,
+        existingRefs: state.cashMovements,
+        createId: () => uid("cm-"),
+      });
+      const refId = linkedPayment?.id ?? entry.id;
+      const refType = linkedPayment ? "payment" : "debt";
+      const integrity = verifyReferenceMovements(
+        movements,
+        refType,
+        refId,
+        cashAmount,
+      );
+      if (!integrity.ok) return integrity;
     }
 
     const audit = makeAudit(
@@ -2117,10 +2297,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         rows: [linkedPayment as unknown as Record<string, unknown>],
       });
     }
-    if (movement) {
+    if (movements.length) {
       dbRows.push({
         table: "cash_movements",
-        rows: [movement as unknown as Record<string, unknown>],
+        rows: movements as unknown as Record<string, unknown>[],
       });
     }
 
@@ -2129,8 +2309,8 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         set((s) => ({
           debtEntries: [entry, ...s.debtEntries],
           payments: linkedPayment ? [linkedPayment, ...s.payments] : s.payments,
-          cashMovements: movement
-            ? [movement, ...s.cashMovements]
+          cashMovements: movements.length
+            ? [...movements, ...s.cashMovements]
             : s.cashMovements,
           auditLogs: [audit, ...s.auditLogs],
         })),
@@ -2204,24 +2384,36 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       };
     }
 
-    const useSource = Boolean(input.sourceType && input.sourceId);
     const cashOut = debtSettlementIsCashOut(entry);
-    if (useSource && cashOut) {
-      const bal = accountBalance(
-        input.sourceType!,
-        input.sourceId!,
+    const treasuryErr = validateTreasurySourceInput(
+      {
+        amount,
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        splits: input.splits,
+      },
+      { allowNone: true },
+    );
+    if (treasuryErr) return { ok: false, error: treasuryErr };
+
+    const resolved = resolveTreasurySources({
+      amount,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      splits: input.splits,
+    });
+    if (resolved.mode !== "none" && cashOut) {
+      const balCheck = validateSplitBalances(
+        resolved.parts,
+        "out",
         state.vaults,
         state.banks,
         state.cashMovements,
       );
-      if (amount > bal + 0.001) {
-        return {
-          ok: false,
-          error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي.`,
-        };
-      }
+      if (!balCheck.ok) return balCheck;
     }
 
+    const treasuryMeta = paymentTreasuryMeta(resolved);
     const date = input.date ?? new Date().toISOString();
     const partyLabel =
       entry.partyKind === "external"
@@ -2241,9 +2433,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const settlementNote = `تسوية دين ${entry.ref}${noteSuffix}`;
 
     let linkedPayment: Payment | null = null;
+    const linkedPayId = uid("pay-");
     if (entry.partyKind === "farmer" && entry.partyId) {
       linkedPayment = {
-        id: uid("pay-"),
+        id: linkedPayId,
         ref: nextRef(
           "PAY",
           state.payments.filter((p) => p.kind === "farmer_payment"),
@@ -2254,8 +2447,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         date,
         amount,
         method: input.method,
-        paidFromType: useSource ? input.sourceType : undefined,
-        paidFromId: useSource ? input.sourceId : undefined,
+        ...treasuryMeta,
         reference: entry.ref,
         notes: settlementNote,
         debtSettledAmount: amount,
@@ -2264,7 +2456,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       };
     } else if (entry.partyKind === "customer" && entry.partyId) {
       linkedPayment = {
-        id: uid("pay-"),
+        id: linkedPayId,
         ref: nextRef(
           "RCV",
           state.payments.filter((p) => p.kind === "customer_payment"),
@@ -2275,8 +2467,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         date,
         amount,
         method: input.method,
-        paidFromType: useSource ? input.sourceType : undefined,
-        paidFromId: useSource ? input.sourceId : undefined,
+        ...treasuryMeta,
         reference: entry.ref,
         notes: settlementNote,
         debtSettledAmount: amount,
@@ -2298,36 +2489,48 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       });
     }
 
-    let movement: CashMovement | null = null;
+    const movements =
+      resolved.mode === "none"
+        ? []
+        : buildSplitCashMovements({
+            parts: resolved.parts,
+            totalAmount: amount,
+            splitGroupId:
+              resolved.mode === "split" ? resolved.splitGroupId : undefined,
+            movementType:
+              entry.partyKind === "farmer" && cashOut
+                ? "farmer_payout"
+                : entry.partyKind === "customer" && !cashOut
+                  ? "sale_payment"
+                  : cashOut
+                    ? "expense"
+                    : "income",
+            direction: cashOut ? "out" : "in",
+            referenceType: linkedPayment ? "payment" : "debt",
+            referenceId: linkedPayment?.id ?? entry.id,
+            baseDescription: `${settlementNote} — ${partyLabel}`,
+            sessionId: state.activeSessionId,
+            date,
+            createdBy: state.auth?.name,
+            vaults: state.vaults,
+            banks: state.banks,
+            existingRefs: state.cashMovements,
+            createId: () => uid("cm-"),
+          });
 
-    if (useSource) {
-      const movementType =
-        entry.partyKind === "farmer" && cashOut
-          ? "farmer_payout"
-          : entry.partyKind === "customer" && !cashOut
-            ? "sale_payment"
-            : cashOut
-              ? "expense"
-              : "income";
-      movement = {
-        id: uid("cm-"),
-        ref: nextRef("CM", state.cashMovements),
-        movementType,
-        sourceType: input.sourceType!,
-        sourceId: input.sourceId!,
+    if (movements.length) {
+      const refId = linkedPayment?.id ?? entry.id;
+      const refType = linkedPayment ? "payment" : "debt";
+      const integrity = verifyReferenceMovements(
+        movements,
+        refType,
+        refId,
         amount,
-        direction: cashOut ? "out" : "in",
-        referenceType: linkedPayment ? "payment" : "debt",
-        referenceId: linkedPayment?.id ?? entry.id,
-        description: `${settlementNote} — ${partyLabel}`,
-        sessionId: state.activeSessionId,
-        date,
-        createdAt: new Date().toISOString(),
-        createdBy: state.auth?.name,
-      };
+      );
+      if (!integrity.ok) return integrity;
       dbRows.push({
         table: "cash_movements",
-        rows: [movement as unknown as Record<string, unknown>],
+        rows: movements as unknown as Record<string, unknown>[],
       });
     }
 
@@ -2346,8 +2549,8 @@ export const useErpStore = create<ErpState>()((set, get) => ({
             d.id === id ? updatedEntry : d,
           ),
           payments: linkedPayment ? [linkedPayment, ...s.payments] : s.payments,
-          cashMovements: movement
-            ? [movement, ...s.cashMovements]
+          cashMovements: movements.length
+            ? [...movements, ...s.cashMovements]
             : s.cashMovements,
           auditLogs: [audit, ...s.auditLogs],
         })),
@@ -2425,7 +2628,9 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const res = await mutateWithDb(
       () =>
         set((s) => ({
-          adjustments: [tx, ...s.adjustments],
+          adjustments: s.adjustments.some((a) => a.id === tx.id)
+            ? s.adjustments
+            : [tx, ...s.adjustments],
           expenseCategories: wasteCat
             ? [...s.expenseCategories, wasteCat]
             : s.expenseCategories,
@@ -3703,6 +3908,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const code = nextPartyCode("E", state.employees);
     const emp: Employee = {
       ...input,
+      salaryType: input.salaryType ?? "monthly",
       id: uid("emp-"),
       code,
       hireDate: input.hireDate?.slice(0, 10),
@@ -3824,33 +4030,37 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const gate = requireOpenSession(state);
     if (!gate.ok) return gate;
     const active = state.employees.filter((e) => e.status === "active");
-    if (!active.length)
-      return { ok: false, error: "لا يوجد موظفون نشطون لإنشاء كشف رواتب." };
-    const lines: PayrollLine[] = active.map((e) => {
-      const allowancesTotal =
-        e.allowances.housing + e.allowances.transport + e.allowances.food;
-      const gross = round(e.baseSalary + allowancesTotal);
-      const advanceBal = computeEmployeeAdvanceBalance(
-        e.id,
-        state.payments,
-        state.payrollBatches,
-        state.debtEntries,
-      );
-      const advanceDeducted = round(Math.min(advanceBal, gross));
-      const deductionsTotal = advanceDeducted;
-      const netSalary = round(gross - advanceDeducted);
+    const eligible = active.filter((e) =>
+      salaryTypeMatchesBatch(e.salaryType, input.payrollType),
+    );
+    if (!eligible.length) {
       return {
-        employeeId: e.id,
-        baseSalary: e.baseSalary,
-        allowancesTotal,
-        deductionsTotal,
-        netSalary,
-        attendanceDays: 30,
-        absenceDays: 0,
-        advanceDeducted,
+        ok: false,
+        error: "لا يوجد موظفون نشطون بنوع راتب مطابق لهذا الكشف.",
       };
-    });
-    const totalAmount = round(lines.reduce((s, l) => s + l.netSalary, 0));
+    }
+    const advanceBalances = new Map(
+      eligible.map((e) => [
+        e.id,
+        computeEmployeeAdvanceBalance(
+          e.id,
+          state.payments,
+          state.payrollBatches,
+          state.debtEntries,
+        ),
+      ]),
+    );
+    const lines = buildPayrollLines(
+      eligible,
+      input.payrollType,
+      input.periodFrom,
+      input.periodTo,
+      advanceBalances,
+    );
+    if (!lines.length) {
+      return { ok: false, error: "لم يُنشأ أي سطر في الكشف." };
+    }
+    const totalAmount = payrollBatchTotal(lines);
     const id = uid("pr-");
     const batch: PayrollBatch = {
       id,
@@ -3861,6 +4071,8 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       periodTo: input.periodTo,
       lines,
       totalAmount,
+      paidFromType: input.paidFromType,
+      paidFromId: input.paidFromId,
       status: "draft",
       sessionId: state.activeSessionId,
       createdBy: state.auth?.name,

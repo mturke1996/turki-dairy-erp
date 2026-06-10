@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,8 +16,22 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  EMPTY_SPLIT_STATE,
+  SplitPaymentFields,
+  treasurySelectionFromState,
+  validateSplitPaymentState,
+  type SplitPaymentState,
+} from '@/components/treasury/split-payment-fields';
 import { PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
-import type { AccountSourceType, PaymentMethod } from '@/lib/domain/types';
+import type {
+  AccountSourceType,
+  BankAccount,
+  CashMovement,
+  CashVault,
+  PaymentMethod,
+  TreasurySplitPart,
+} from '@/lib/domain/types';
 import type { EmployeeStats } from '@/lib/domain/calculations';
 
 export function EmployeeAdvanceDialog({
@@ -26,42 +40,49 @@ export function EmployeeAdvanceDialog({
   onOpenChange,
   vaults,
   banks,
+  cashMovements,
   onSubmit,
 }: {
   employee: EmployeeStats | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  vaults: { id: string; name: string }[];
-  banks: { id: string; bankName: string }[];
+  vaults: CashVault[];
+  banks: BankAccount[];
+  cashMovements: CashMovement[];
   onSubmit: (input: {
     employeeId: string;
     amount: number;
     method: PaymentMethod;
-    sourceType: AccountSourceType;
-    sourceId: string;
+    sourceType?: AccountSourceType;
+    sourceId?: string;
+    splits?: TreasurySplitPart[];
     notes?: string;
   }) => void;
 }) {
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [account, setAccount] = useState('');
+  const [treasury, setTreasury] = useState<SplitPaymentState>(EMPTY_SPLIT_STATE);
   const [notes, setNotes] = useState('');
-
-  const options = useMemo(
-    () => [
-      ...vaults.map((v) => ({ value: `vault:${v.id}`, label: `خزنة: ${v.name}` })),
-      ...banks.map((b) => ({ value: `bank:${b.id}`, label: `بنك: ${b.bankName}` })),
-    ],
-    [vaults, banks],
-  );
 
   function submit() {
     if (!employee) return;
     const val = Number(amount);
     if (!val || val <= 0) return toast.error('أدخل مبلغ الدين');
-    if (!account) return toast.error('اختر مصدر الصرف');
-    const [sourceType, sourceId] = account.split(':') as [AccountSourceType, string];
-    onSubmit({ employeeId: employee.id, amount: val, method, sourceType, sourceId, notes: notes.trim() || undefined });
+    const splitErr = validateSplitPaymentState(val, treasury, {
+      checkOutflow: true,
+      vaults,
+      banks,
+      cashMovements,
+    });
+    if (splitErr) return toast.error(splitErr);
+    const treasurySel = treasurySelectionFromState(val, treasury);
+    onSubmit({
+      employeeId: employee.id,
+      amount: val,
+      method,
+      ...treasurySel,
+      notes: notes.trim() || undefined,
+    });
   }
 
   return (
@@ -71,7 +92,7 @@ export function EmployeeAdvanceDialog({
         onOpenChange(v);
         if (!v) {
           setAmount('');
-          setAccount('');
+          setTreasury(EMPTY_SPLIT_STATE);
           setNotes('');
         }
       }}
@@ -102,12 +123,18 @@ export function EmployeeAdvanceDialog({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="مصدر الصرف" required>
-            <Select value={account} onValueChange={setAccount}>
-              <SelectTrigger><SelectValue placeholder="اختر خزنة أو بنك" /></SelectTrigger>
-              <SelectContent>{options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
-            </Select>
-          </Field>
+
+          <SplitPaymentFields
+            totalAmount={Number(amount) || 0}
+            vaults={vaults}
+            banks={banks}
+            cashMovements={cashMovements}
+            state={treasury}
+            onChange={setTreasury}
+            singleLabel="مصدر الصرف"
+            outflow
+          />
+
           <Field label="ملاحظات">
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </Field>

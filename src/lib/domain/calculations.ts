@@ -18,7 +18,7 @@ import {
   type ProfitAndLoss,
 } from './accounting';
 import { resolveAdjustmentReasonKind } from './constants';
-import { adjustmentLossValueFromLedger, buildInventoryLedger, round, type InventoryResult } from './inventory';
+import { adjustmentLossValueFromLedger, adjustmentOutQtyFromLedger, buildInventoryLedger, round, uniqueAdjustments, type InventoryResult } from './inventory';
 import { computeTreasury, computeAdjustedNetPosition, type AdjustedNetPosition } from './treasury';
 import { debtBalanceContribution, paymentNetOfDebtSettlement, resolveDebtDirection } from './debt';
 import type {
@@ -664,7 +664,7 @@ export function buildAllJournals(data: ErpData, saleCogs: Record<string, number>
   }
   for (const e of data.expenses) {
     // المصاريف غير النقدية (هدر مخزون) محسوبة فعلاً ضمن قيد التسوية — تفادياً للازدواج.
-    if (e.status === 'approved' && !e.nonCash) entries.push(journalForExpense(e));
+    if (e.status === 'approved' && !isNonCashExpense(e)) entries.push(journalForExpense(e));
   }
   for (const b of data.payrollBatches) {
     if (b.status === 'paid') entries.push(journalForPayroll(b));
@@ -702,6 +702,7 @@ export interface SessionSummary {
   supplyCount: number;
   salesQty: number;
   salesRevenue: number;
+  externalIncome: number;
   salesCount: number;
   cogs: number;
   grossProfit: number;
@@ -728,21 +729,24 @@ export function computeSessionSummary(
   const supplyCost = sum(sup.map((s) => s.total));
   const salesQty = sum(sal.map((s) => s.quantity));
   const salesRevenue = sum(sal.map((s) => s.total));
+  const externalIncome = sum(
+    (data.externalIncomes ?? []).filter((i) => i.sessionId === session.id).map((i) => i.amount),
+  );
   const cogs = sum(sal.map((s) => inv.saleCogs[s.id] ?? 0));
   const approvedExpenses = data.expenses.filter((e) => e.sessionId === session.id && e.status === 'approved');
-  const wasteLosses = sum(approvedExpenses.filter((e) => e.nonCash).map((e) => e.amount));
-  const operatingExpenses = sum(approvedExpenses.filter((e) => !e.nonCash).map((e) => e.amount));
+  const wasteLosses = sum(approvedExpenses.filter((e) => isNonCashExpense(e)).map((e) => e.amount));
+  const operatingExpenses = sum(approvedExpenses.filter((e) => !isNonCashExpense(e)).map((e) => e.amount));
   const salaries = sum(
     data.payrollBatches.filter((b) => b.sessionId === session.id && b.status === 'paid').map((b) => b.totalAmount),
   );
-  const pnl = computePnL(salesRevenue, cogs, { wasteLosses, operatingExpenses, salaries });
+  const pnl = computePnL(salesRevenue, cogs, { wasteLosses, operatingExpenses, salaries }, externalIncome);
   const farmerPayments = sum(
     data.payments.filter((p) => p.kind === 'farmer_payment' && p.sessionId === session.id).map((p) => p.amount),
   );
   const customerReceipts = sum(
     data.payments.filter((p) => p.kind === 'customer_payment' && p.sessionId === session.id).map((p) => p.amount),
   );
-  const adjQty = sum(data.adjustments.filter((a) => a.sessionId === session.id).map((a) => a.quantity));
+  const adjQty = sum(uniqueAdjustments(data.adjustments.filter((a) => a.sessionId === session.id)).map((a) => a.quantity));
   const closingStock = round(Math.max(0, session.openingStock + supplyQty - salesQty + adjQty));
   return {
     session,
@@ -751,6 +755,7 @@ export function computeSessionSummary(
     supplyCount: sup.length,
     salesQty: round(salesQty),
     salesRevenue: round(salesRevenue),
+    externalIncome: round(externalIncome),
     salesCount: sal.length,
     cogs: round(cogs),
     grossProfit: pnl.grossProfit,
@@ -802,16 +807,22 @@ function adjustmentIsLoss(a: InventoryAdjustment): boolean {
   return kind === 'loss';
 }
 
+/** مصروف هدر غير نقدي — أو مرتبط بتسوية مخزون حتى لو فُقد علم nonCash. */
+export function isNonCashExpense(e: Expense): boolean {
+  return e.nonCash === true || !!e.sourceAdjustmentId;
+}
+
 function toWasteLine(a: InventoryAdjustment, inv?: InventoryResult): WasteLineItem {
-  const abs = Math.abs(a.quantity);
+  const ledgerQty = inv ? adjustmentOutQtyFromLedger(inv, a.id) : null;
+  const quantity = ledgerQty ?? round(Math.abs(a.quantity));
   const ledgerValue = inv ? adjustmentLossValueFromLedger(inv, a.id) : null;
   return {
     id: a.id,
     ref: a.ref,
     date: a.date,
     sessionId: a.sessionId,
-    quantity: round(abs),
-    value: ledgerValue ?? round(abs * a.unitCost),
+    quantity,
+    value: ledgerValue ?? round(quantity * a.unitCost),
     reason: a.reason,
   };
 }
@@ -822,7 +833,9 @@ export function computeWasteSummary(
   sessionId: string | null,
   inv?: InventoryResult,
 ): WasteSummary {
-  const lossLines = adjustments.filter(adjustmentIsLoss).map((a) => toWasteLine(a, inv));
+  const lossLines = uniqueAdjustments(adjustments)
+    .filter(adjustmentIsLoss)
+    .map((a) => toWasteLine(a, inv));
   const sessionLines =
     sessionId === null ? lossLines : lossLines.filter((l) => l.sessionId === sessionId);
 
@@ -940,6 +953,7 @@ export function computeDerived(data: ErpData): DerivedData {
       operatingExpenses: sum(sessionSummaries.map((s) => s.operatingExpenses)),
       salaries: sum(sessionSummaries.map((s) => s.salaries)),
     },
+    sum(sessionSummaries.map((s) => s.externalIncome)),
   );
 
   const wasteSummary = computeWasteSummary(data.adjustments, data.activeSessionId, inv);

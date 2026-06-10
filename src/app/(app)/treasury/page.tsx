@@ -38,6 +38,7 @@ import { CashStatementPDF } from '@/features/pdf/CashStatementPDF';
 import { OpeningBalanceDialog } from '@/components/treasury/opening-balance-dialog';
 import { SettlementSummaryCard } from '@/components/treasury/settlement-summary-card';
 import { TreasuryAccountCard } from '@/components/treasury/treasury-account-card';
+import { SplitMovementBadge } from '@/components/treasury/split-movement-badge';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { useDerived } from '@/lib/store/use-derived';
 import { computeTreasury, accountLabel } from '@/lib/domain/treasury';
@@ -201,6 +202,7 @@ function TreasuryContent() {
               {m.description ? (
                 <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">{m.description}</p>
               ) : null}
+              <SplitMovementBadge movement={m} allMovements={movements} vaults={vaults} banks={banks} />
               <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-foreground">
                 <span className="font-mono" dir="ltr">{m.ref}</span>
                 <span dir="ltr">{formatShortDate(m.date)}</span>
@@ -228,7 +230,10 @@ function TreasuryContent() {
                     <Badge variant={MOVEMENT_VARIANT[m.movementType]}>{CASH_MOVEMENT_LABELS[m.movementType]}</Badge>
                   </TableCell>
                   <TableCell className="text-[12.5px]">{accountLabel(m.sourceType, m.sourceId, vaults, banks)}</TableCell>
-                  <TableCell className="max-w-[220px] truncate text-[12.5px] text-muted-foreground">{m.description}</TableCell>
+                  <TableCell className="max-w-[260px] text-[12.5px] text-muted-foreground">
+                    <p className="truncate">{m.description}</p>
+                    <SplitMovementBadge movement={m} allMovements={movements} vaults={vaults} banks={banks} />
+                  </TableCell>
                   <TableCell className="text-left">
                     <Money
                       value={m.amount}

@@ -27,7 +27,13 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { usePermission } from '@/lib/store/use-permission';
-import { accountBalance } from '@/lib/domain/treasury';
+import {
+  EMPTY_SPLIT_STATE,
+  SplitPaymentFields,
+  treasurySelectionFromState,
+  validateSplitPaymentState,
+  type SplitPaymentState,
+} from '@/components/treasury/split-payment-fields';
 import { COPY, MILK_SHIFT_LABELS, QUALITY_LABELS, QUALITY_VARIANT, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import type { MilkShift, PaymentMethod, QualityTier } from '@/lib/domain/types';
 import { formatShortDate } from '@/lib/utils';
@@ -52,14 +58,6 @@ export default function SupplyPage() {
     [data.farmers],
   );
 
-  const accounts = useMemo(
-    () => [
-      ...data.vaults.filter((v) => v.isActive).map((v) => ({ value: `vault:${v.id}`, label: v.name, type: 'vault' as const, id: v.id })),
-      ...data.banks.filter((b) => b.isActive).map((b) => ({ value: `bank:${b.id}`, label: b.bankName, type: 'bank' as const, id: b.id })),
-    ],
-    [data.vaults, data.banks],
-  );
-
   const [farmerId, setFarmerId] = useState('');
   const [recordMode, setRecordMode] = useState<'single' | 'period'>('single');
   const [milkShift, setMilkShift] = useState<MilkShift>('morning');
@@ -74,7 +72,7 @@ export default function SupplyPage() {
   const [payNow, setPayNow] = useState(false);
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState<PaymentMethod>('cash');
-  const [paySource, setPaySource] = useState('none');
+  const [payTreasury, setPayTreasury] = useState<SplitPaymentState>(EMPTY_SPLIT_STATE);
   const [settleFull, setSettleFull] = useState(true);
 
   const selectedFarmer = activeFarmers.find((f) => f.id === farmerId);
@@ -82,10 +80,6 @@ export default function SupplyPage() {
   const price = Number(unitPrice) || 0;
   const total = qty * price;
   const payVal = Number(payAmount) || 0;
-  const payAccount = accounts.find((a) => a.value === paySource) ?? null;
-  const sourceBalance = payAccount
-    ? accountBalance(payAccount.type, payAccount.id, data.vaults, data.banks, data.cashMovements)
-    : 0;
 
   function onFarmerChange(id: string) {
     setFarmerId(id);
@@ -122,7 +116,7 @@ export default function SupplyPage() {
     setNotes('');
     setPayNow(false);
     setPayAmount('');
-    setPaySource('none');
+    setPayTreasury(EMPTY_SPLIT_STATE);
   }
 
   function submit() {
@@ -138,8 +132,13 @@ export default function SupplyPage() {
 
     if (payNow) {
       if (payVal <= 0) return toast.error('أدخل مبلغ الدفع الفوري.');
-      if (!payAccount) return toast.error('اختر حساب الخزينة/البنك للصرف.');
-      if (payVal > sourceBalance + 0.001) return toast.error('رصيد الحساب لا يكفي.');
+      const splitErr = validateSplitPaymentState(payVal, payTreasury, {
+        checkOutflow: true,
+        vaults: data.vaults,
+        banks: data.banks,
+        cashMovements: data.cashMovements,
+      });
+      if (splitErr) return toast.error(splitErr);
     }
 
     void (async () => {
@@ -158,12 +157,11 @@ export default function SupplyPage() {
       fatPct: fatPct ? Number(fatPct) : undefined,
       date: txDate,
       notes: notes.trim() || undefined,
-      immediatePayment: payNow && payAccount
+      immediatePayment: payNow
         ? {
             amount: payVal,
             method: payMethod,
-            sourceType: payAccount.type,
-            sourceId: payAccount.id,
+            ...treasurySelectionFromState(payVal, payTreasury),
             settlementComplete: settleFull,
           }
         : undefined,
@@ -376,20 +374,17 @@ export default function SupplyPage() {
                         </SelectContent>
                       </Select>
                     </Field>
-                    <Field label="الصرف من">
-                      <Select value={paySource} onValueChange={setPaySource}>
-                        <SelectTrigger><SelectValue placeholder="اختر حساب" /></SelectTrigger>
-                        <SelectContent>
-                          {accounts.map((a) => (
-                            <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
                   </div>
-                  {payAccount ? (
-                    <p className="text-[11px] text-muted-foreground">رصيد «{payAccount.label}»: <Money value={sourceBalance} className="inline font-semibold" /></p>
-                  ) : null}
+                  <SplitPaymentFields
+                    totalAmount={payVal}
+                    vaults={data.vaults}
+                    banks={data.banks}
+                    cashMovements={data.cashMovements}
+                    state={payTreasury}
+                    onChange={setPayTreasury}
+                    singleLabel="الصرف من حساب"
+                    outflow
+                  />
                   <div className="flex items-center gap-2">
                     <Switch id="settle-full" checked={settleFull} onCheckedChange={setSettleFull} />
                     <Label htmlFor="settle-full" className="text-[12px]">تم الدفع — تسوية كاملة لهذا الاستلام</Label>

@@ -22,9 +22,9 @@ export function StatTile({
 }) {
   const t = METRIC_TONES[tone];
   return (
-    <div className={cn('rounded-xl border border-border bg-card p-3 shadow-whisper sm:p-4', className)}>
+    <div dir="rtl" className={cn('rounded-xl border border-border bg-card p-3 shadow-whisper sm:p-4', className)}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
+        <p className="text-right text-[12px] font-medium text-muted-foreground">{label}</p>
         {Icon ? (
           <span className={cn('flex h-8 w-8 items-center justify-center rounded-lg ring-1', t.icon)}>
             <Icon className="h-4 w-4 stroke-[1.7]" />

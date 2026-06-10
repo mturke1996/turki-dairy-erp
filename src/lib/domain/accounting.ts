@@ -259,7 +259,10 @@ export function buildTrialBalance(entries: JournalEntry[]): {
 }
 
 export interface ProfitAndLoss {
+  /** إجمالي الإيرادات = مبيعات + مدخولات خارجية. */
   revenue: number;
+  salesRevenue: number;
+  externalIncome: number;
   cogs: number;
   grossProfit: number;
   /** هامش مجمل الربح ٪ من الإيرادات. */
@@ -283,16 +286,26 @@ export interface PnLCosts {
   salaries?: number;
 }
 
-export function computePnL(revenue: number, cogs: number, costs: PnLCosts = {}): ProfitAndLoss {
+export function computePnL(
+  salesRevenue: number,
+  cogs: number,
+  costs: PnLCosts = {},
+  externalIncome = 0,
+): ProfitAndLoss {
   const wasteLosses = round(costs.wasteLosses ?? 0);
   const operatingExpenses = round(costs.operatingExpenses ?? 0);
   const salaries = round(costs.salaries ?? 0);
+  const sales = round(salesRevenue);
+  const external = round(externalIncome);
+  const revenue = round(sales + external);
   const grossProfit = round(revenue - cogs);
   const marginPct = revenue > 0 ? round((grossProfit / revenue) * 100) : 0;
   const netProfit = round(grossProfit - wasteLosses - operatingExpenses - salaries);
   const netMarginPct = revenue > 0 ? round((netProfit / revenue) * 100) : 0;
   return {
-    revenue: round(revenue),
+    revenue,
+    salesRevenue: sales,
+    externalIncome: external,
     cogs: round(cogs),
     grossProfit,
     marginPct,

@@ -14,9 +14,11 @@ import type {
   MilkShift,
   PaymentMethod,
   PayrollStatus,
+  PayrollType,
   PriceTier,
   QualityTier,
   Role,
+  SalaryType,
 } from './types';
 
 /** مصطلحات الواجهة — استلام الحليب بدل «توريد» */
@@ -274,6 +276,25 @@ export const EMPLOYEE_STATUS_LABELS: Record<EmployeeStatus, string> = {
   active: 'نشط',
   on_leave: 'في إجازة',
   terminated: 'منتهي الخدمة',
+};
+
+export const SALARY_TYPE_LABELS: Record<SalaryType, string> = {
+  monthly: 'شهري',
+  daily: 'يومي',
+  half_month: 'نصف شهر',
+};
+
+/** تسمية حقل baseSalary حسب نوع الراتب */
+export const SALARY_BASE_LABELS: Record<SalaryType, string> = {
+  monthly: 'الراتب الشهري',
+  daily: 'الأجر اليومي',
+  half_month: 'أجر نصف الشهر',
+};
+
+export const PAYROLL_TYPE_LABELS: Record<PayrollType, string> = {
+  monthly: 'كشف شهري',
+  bi_monthly: 'كشف نصف شهر',
+  daily: 'كشف يومي',
 };
 
 export const PAYROLL_STATUS_LABELS: Record<PayrollStatus, string> = {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Building2, Globe, Landmark, Tractor, Users, Wallet } from 'lucide-react';
+import { Building2, Globe, Tractor, Users, Wallet } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -33,7 +33,13 @@ import {
   defaultDebtDirection,
   type DebtCashMode,
 } from '@/lib/domain/debt';
-import { accountBalance } from '@/lib/domain/treasury';
+import {
+  EMPTY_SPLIT_STATE,
+  SplitPaymentFields,
+  treasurySelectionFromState,
+  validateSplitPaymentState,
+  type SplitPaymentState,
+} from '@/components/treasury/split-payment-fields';
 import type { DebtDirection, DebtEntry, DebtPartyKind, PaymentMethod } from '@/lib/domain/types';
 import { cn } from '@/lib/utils';
 
@@ -96,20 +102,9 @@ export function DebtFormDialog({
   const [description, setDescription] = useState('');
   const [cashMode, setCashMode] = useState<DebtCashMode>('none');
   const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [source, setSource] = useState('none');
+  const [treasury, setTreasury] = useState<SplitPaymentState>(EMPTY_SPLIT_STATE);
   const [cashAmount, setCashAmount] = useState('');
   const [busy, setBusy] = useState(false);
-
-  const accounts = useMemo(
-    () => [
-      ...vaults.filter((v) => v.isActive).map((v) => ({ value: `vault:${v.id}`, label: v.name, type: 'vault' as const, id: v.id })),
-      ...banks.filter((b) => b.isActive).map((b) => ({ value: `bank:${b.id}`, label: b.bankName, type: 'bank' as const, id: b.id })),
-    ],
-    [vaults, banks],
-  );
-
-  const selected = accounts.find((a) => a.value === source) ?? null;
-  const sourceBalance = selected ? accountBalance(selected.type, selected.id, vaults, banks, cashMovements) : 0;
 
   const debtVal = Number(amount) || 0;
   const cashVal = cashMode === 'none' ? 0 : Number(cashAmount) || debtVal;
@@ -131,7 +126,7 @@ export function DebtFormDialog({
       setDate(entry.date.slice(0, 10));
       setDescription(entry.description ?? '');
       setCashMode('none');
-      setSource('none');
+      setTreasury(EMPTY_SPLIT_STATE);
       setCashAmount('');
       setMethod('cash');
     } else {
@@ -144,7 +139,7 @@ export function DebtFormDialog({
       setDate(new Date().toISOString().slice(0, 10));
       setDescription('');
       setCashMode('none');
-      setSource('none');
+      setTreasury(EMPTY_SPLIT_STATE);
       setCashAmount('');
       setMethod('cash');
     }
@@ -160,7 +155,7 @@ export function DebtFormDialog({
 
   useEffect(() => {
     if (cashMode === 'none') {
-      setSource('none');
+      setTreasury(EMPTY_SPLIT_STATE);
       setCashAmount('');
     }
   }, [cashMode]);
@@ -192,15 +187,20 @@ export function DebtFormDialog({
     if (partyKind === 'external' && !partyName.trim()) return toast.error('أدخل اسم الطرف الخارجي.');
     if (partyKind !== 'external' && !partyId) return toast.error('اختر الطرف.');
 
+    const payVal = cashMode === 'none' ? 0 : Number(cashAmount) || val;
     if (cashMode !== 'none') {
-      if (!accounts.length) return toast.error('أضِف خزنة أو بنك من صفحة النقد أولاً.');
-      if (!selected) return toast.error('اختر الخزينة أو البنك.');
-      const payVal = Number(cashAmount) || val;
+      if (!vaults.filter((v) => v.isActive).length && !banks.filter((b) => b.isActive).length) {
+        return toast.error('أضِف خزنة أو بنك من صفحة النقد أولاً.');
+      }
       if (payVal <= 0) return toast.error('أدخل مبلغ الحركة النقدية.');
       if (payVal > val + 0.01) return toast.error('مبلغ النقد لا يمكن أن يتجاوز قيمة الدين.');
-      if (cashOut && payVal > sourceBalance + 0.001) {
-        return toast.error(`رصيد «${selected.label}» لا يكفي للصرف.`);
-      }
+      const splitErr = validateSplitPaymentState(payVal, treasury, {
+        checkOutflow: cashOut,
+        vaults,
+        banks,
+        cashMovements,
+      });
+      if (splitErr) return toast.error(splitErr);
     }
 
     setBusy(true);
@@ -218,7 +218,7 @@ export function DebtFormDialog({
           onOpenChange(false);
         } else toast.error(res.error ?? 'تعذّر التحديث');
       } else {
-        const payVal = cashMode === 'none' ? undefined : Number(cashAmount) || val;
+        const treasurySel = cashMode === 'none' ? {} : treasurySelectionFromState(payVal, treasury);
         const res = await recordDebtEntry({
           partyKind,
           partyId: partyKind === 'external' ? undefined : partyId,
@@ -229,8 +229,7 @@ export function DebtFormDialog({
           description: description.trim() || undefined,
           cashMode,
           method: cashMode === 'none' ? undefined : method,
-          sourceType: selected?.type,
-          sourceId: selected?.id,
+          ...treasurySel,
           cashAmount: payVal,
         });
         if (res.ok) {
@@ -383,35 +382,6 @@ export function DebtFormDialog({
 
               {cashMode !== 'none' ? (
                 <div className="mt-4 space-y-3 border-t border-border/70 pt-4">
-                  <Field
-                    label={cashOut ? 'الصرف من حساب' : 'الإيداع في حساب'}
-                    required
-                    hint={accounts.length === 0 ? 'أضِف خزنة/بنك من صفحة النقد' : undefined}
-                  >
-                    <Select value={source} onValueChange={setSource} disabled={accounts.length === 0}>
-                      <SelectTrigger className="h-11">
-                        <SelectValue placeholder="اختر خزنة أو بنك" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {accounts.map((a) => (
-                          <SelectItem key={a.value} value={a.value}>
-                            <span className="flex items-center gap-1.5">
-                              <Landmark className="h-3.5 w-3.5 opacity-60" />
-                              {a.label}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  {selected ? (
-                    <div className="flex items-center justify-between rounded-lg bg-card px-3 py-2 text-[12px]">
-                      <span className="text-muted-foreground">رصيد «{selected.label}»</span>
-                      <Money value={sourceBalance} className="font-semibold" />
-                    </div>
-                  ) : null}
-
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Field
                       label="مبلغ النقد"
@@ -443,6 +413,17 @@ export function DebtFormDialog({
                       </Select>
                     </Field>
                   </div>
+
+                  <SplitPaymentFields
+                    totalAmount={cashVal}
+                    vaults={vaults}
+                    banks={banks}
+                    cashMovements={cashMovements}
+                    state={treasury}
+                    onChange={setTreasury}
+                    singleLabel={cashOut ? 'الصرف من حساب' : 'الإيداع في حساب'}
+                    outflow={cashOut}
+                  />
 
                   {debtVal > 0 ? (
                     <div className="space-y-1.5 rounded-lg border border-dashed border-border bg-card/80 px-3 py-2.5 text-[12px]">

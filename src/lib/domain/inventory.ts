@@ -41,6 +41,27 @@ function ts(date: string, fallback: string): number {
   return Number.isNaN(b) ? 0 : b;
 }
 
+/** تسوية رصيد افتتاحي — لا تُعامل كحركة تشغيلية لغرض صف الافتتاح. */
+export function isOpeningStockAdjustment(a: InventoryAdjustment): boolean {
+  return a.reason.includes('رصيد افتتاحي') || a.reason.includes('متبقي من الدورة');
+}
+
+/** يزيل التكرارات المحتملة (مزامنة/حفظ مزدوج) — آخر نسخة لكل id. */
+export function uniqueAdjustments(adjustments: InventoryAdjustment[]): InventoryAdjustment[] {
+  const byId = new Map<string, InventoryAdjustment>();
+  for (const a of adjustments) byId.set(a.id, a);
+  return [...byId.values()];
+}
+
+/** كمية الهدر الفعلية من دفتر المخزون (مصدر الحقيقة لأثر الرصيد). */
+export function adjustmentOutQtyFromLedger(inv: InventoryResult, adjustmentId: string): number | null {
+  const outs = inv.entries.filter(
+    (e) => e.sourceKind === 'adjustment' && e.sourceId === adjustmentId && e.quantityOut > 0,
+  );
+  if (outs.length === 0) return null;
+  return round(outs.reduce((s, e) => s + e.quantityOut, 0));
+}
+
 /**
  * يبني الدفتر عبر كل الفترات بترتيب زمني واحد متّصل (الرصيد يُرحَّل تلقائياً).
  * يضيف حركة افتتاحية واحدة فقط لأقدم فترة إن كان لها رصيد افتتاحي.
@@ -52,11 +73,16 @@ export function buildInventoryLedger(
   sessions: Session[],
 ): InventoryResult {
   const events: Event[] = [];
+  const uniqueAdj = uniqueAdjustments(adjustments);
 
-  // رصيد افتتاحي لأقدم فترة فقط (الباقي مُرحّل ضمن الحركات)
+  // رصيد افتتاحي لأقدم فترة — فقط قبل أي حركة تشغيلية (يتطابق مع setSessionOpeningStock)
   const sorted = [...sessions].sort((a, b) => ts(a.periodFrom, a.createdAt) - ts(b.periodFrom, b.createdAt));
   const earliest = sorted[0];
-  if (earliest && earliest.openingStock > 0) {
+  const hasOperationalMovements =
+    supplies.length > 0 ||
+    sales.length > 0 ||
+    uniqueAdj.some((a) => !isOpeningStockAdjustment(a));
+  if (earliest && earliest.openingStock > 0 && !hasOperationalMovements) {
     events.push({
       t: 'opening',
       date: earliest.periodFrom,
@@ -69,8 +95,7 @@ export function buildInventoryLedger(
 
   for (const s of supplies) events.push({ t: 'supply', date: s.date, sortKey: s.createdAt, data: s });
   for (const s of sales) events.push({ t: 'sale', date: s.date, sortKey: s.createdAt, data: s });
-  for (const a of adjustments)
-    events.push({ t: 'adjustment', date: a.date, sortKey: a.createdAt, data: a });
+  for (const a of uniqueAdj) events.push({ t: 'adjustment', date: a.date, sortKey: a.createdAt, data: a });
 
   events.sort((a, b) => {
     const da = ts(a.date, a.t === 'opening' ? a.date : a.sortKey);
@@ -210,11 +235,11 @@ export function adjustmentLossValueFromLedger(
   inv: InventoryResult,
   adjustmentId: string,
 ): number | null {
-  const entry = inv.entries.find(
+  const outs = inv.entries.filter(
     (e) => e.sourceKind === 'adjustment' && e.sourceId === adjustmentId && e.quantityOut > 0,
   );
-  if (!entry) return null;
-  return round(entry.quantityOut * entry.unitCost);
+  if (outs.length === 0) return null;
+  return round(outs.reduce((s, e) => s + e.quantityOut * e.unitCost, 0));
 }
 
 export function sessionLedgerEntries(

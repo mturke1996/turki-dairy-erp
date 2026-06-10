@@ -29,6 +29,7 @@ import {
 import type { FarmerStats } from '@/lib/domain/calculations';
 import type { Payment } from '@/lib/domain/types';
 import { isDebtFullySettled, resolveDebtDirection } from '@/lib/domain/debt';
+import { formatPaymentTreasuryLabel } from '@/lib/domain/treasury-splits';
 import { formatShortDate } from '@/lib/utils';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
 import { PartyDeleteButton } from '@/components/shared/party-delete-button';
@@ -244,6 +245,7 @@ export function FarmerDetailDialog({
                         <TableHead>التاريخ</TableHead>
                         <TableHead>المرجع</TableHead>
                         <TableHead className="text-center">الطريقة</TableHead>
+                        <TableHead>الحساب</TableHead>
                         <TableHead className="text-left">المبلغ</TableHead>
                         <TableHead />
                       </TableRow>
@@ -257,6 +259,14 @@ export function FarmerDetailDialog({
                           <TableCell className="text-[12.5px]">{formatShortDate(p.date)}</TableCell>
                           <TableCell className="font-mono text-[11.5px] text-muted-foreground" dir="ltr">{p.ref}</TableCell>
                           <TableCell className="text-center text-[12px]">{PAYMENT_METHOD_LABELS[p.method]}</TableCell>
+                          <TableCell className="max-w-[180px] text-[11.5px] text-muted-foreground">
+                            {formatPaymentTreasuryLabel(p, data.vaults, data.banks)}
+                            {p.treasurySplits && p.treasurySplits.length >= 2 ? (
+                              <span className="mr-1 inline-block rounded bg-navy-100 px-1.5 py-0.5 text-[10px] font-semibold text-navy-700">
+                                مجزّأ
+                              </span>
+                            ) : null}
+                          </TableCell>
                           <TableCell className="text-left"><Money value={p.amount} className="text-[12.5px] font-semibold text-meadow-700" /></TableCell>
                           <TableCell>
                             {modifiable ? (

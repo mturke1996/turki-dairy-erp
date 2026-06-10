@@ -349,6 +349,65 @@ describe('computeWasteSummary and alerts', () => {
     expect(w.byReason[0].reason).toBe('تلف وفساد');
   });
 
+  it('records exactly one liter of waste as one liter', () => {
+    const oneLiterLoss: InventoryAdjustment = {
+      ...lossAdj,
+      id: 'adj-1l',
+      ref: 'ADJ-1L',
+      quantity: -1,
+    };
+    const supplies: SupplyTransaction[] = [
+      {
+        id: 'sup-a', ref: 'SUP-A', farmerId: 'f1', sessionId: 'sw2', date: '2026-06-01',
+        quantity: 50, unitPrice: 2, total: 100, qualityTier: 'A', createdAt: '2026-06-01',
+      },
+    ];
+    const inv = buildInventoryLedger(supplies, [], [oneLiterLoss], [session]);
+    const w = computeWasteSummary([oneLiterLoss], 'sw2', inv);
+    expect(w.sessionQty).toBe(1);
+    expect(inv.currentStock).toBe(49);
+  });
+
+  it('dedupes duplicate adjustment rows so waste is not doubled', () => {
+    const dup: InventoryAdjustment = {
+      ...lossAdj,
+      id: 'adj-dup',
+      ref: 'ADJ-DUP',
+      quantity: -1,
+    };
+    const supplies: SupplyTransaction[] = [
+      {
+        id: 'sup-b', ref: 'SUP-B', farmerId: 'f1', sessionId: 'sw2', date: '2026-06-01',
+        quantity: 20, unitPrice: 2, total: 40, qualityTier: 'A', createdAt: '2026-06-01',
+      },
+    ];
+    const inv = buildInventoryLedger(supplies, [], [dup, dup], [session]);
+    const w = computeWasteSummary([dup, dup], 'sw2', inv);
+    expect(w.sessionQty).toBe(1);
+    expect(inv.currentStock).toBe(19);
+  });
+
+  it('does not double-count opening stock with opening adjustment after supplies exist', () => {
+    const openingAdj: InventoryAdjustment = {
+      id: 'adj-open', ref: 'ADJ-O', sessionId: 'sw2', date: '2026-06-01',
+      quantity: 500, unitCost: 2, reason: 'رصيد افتتاحي للدورة — متبقي من الدورة السابقة',
+      reasonKind: 'correction', createdAt: '2026-06-01',
+    };
+    const sessionWithOpening: Session = {
+      ...session,
+      openingStock: 1000,
+      openingAvgCost: 2,
+    };
+    const supplies: SupplyTransaction[] = [
+      {
+        id: 'sup-c', ref: 'SUP-C', farmerId: 'f1', sessionId: 'sw2', date: '2026-06-02',
+        quantity: 100, unitPrice: 2, total: 200, qualityTier: 'A', createdAt: '2026-06-02',
+      },
+    ];
+    const inv = buildInventoryLedger(supplies, [], [openingAdj], [sessionWithOpening]);
+    expect(inv.currentStock).toBe(600);
+  });
+
   it('uses ledger WAC for waste value when stored unitCost differs', () => {
     const supplies: SupplyTransaction[] = [
       {

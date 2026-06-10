@@ -10,6 +10,13 @@ import { Field } from '@/components/shared/field';
 import { Money, moneyText } from '@/components/shared/money';
 import { AmountInput } from '@/components/shared/amount-input';
 import { Badge } from '@/components/ui/badge';
+import {
+  EMPTY_SPLIT_STATE,
+  SplitPaymentFields,
+  treasurySelectionFromState,
+  validateSplitPaymentState,
+  type SplitPaymentState,
+} from '@/components/treasury/split-payment-fields';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { PAYMENT_METHOD_LABELS, DEBT_PARTY_LABELS } from '@/lib/domain/constants';
 import {
@@ -18,8 +25,7 @@ import {
   debtSettlementIsCashOut,
   resolveDebtDirection,
 } from '@/lib/domain/debt';
-import { accountBalance } from '@/lib/domain/treasury';
-import type { AccountSourceType, DebtEntry, PaymentMethod } from '@/lib/domain/types';
+import type { DebtEntry, PaymentMethod } from '@/lib/domain/types';
 
 export function DebtSettleDialog({
   open,
@@ -42,7 +48,7 @@ export function DebtSettleDialog({
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
-  const [source, setSource] = useState('none');
+  const [treasury, setTreasury] = useState<SplitPaymentState>(EMPTY_SPLIT_STATE);
   const [busy, setBusy] = useState(false);
 
   const remaining = entry ? debtRemainingAmount(entry) : 0;
@@ -55,7 +61,7 @@ export function DebtSettleDialog({
       setMethod('cash');
       setDate(new Date().toISOString().slice(0, 10));
       setNotes('');
-      setSource('none');
+      setTreasury(EMPTY_SPLIT_STATE);
     }
   }, [open, entry, remaining]);
 
@@ -67,34 +73,29 @@ export function DebtSettleDialog({
     return employees.find((e) => e.id === entry.partyId)?.fullName ?? '—';
   }, [entry, farmers, customers, employees]);
 
-  const accounts = useMemo(
-    () => [
-      ...vaults.filter((v) => v.isActive).map((v) => ({ value: `vault:${v.id}`, label: v.name, type: 'vault' as const, id: v.id })),
-      ...banks.filter((b) => b.isActive).map((b) => ({ value: `bank:${b.id}`, label: b.bankName, type: 'bank' as const, id: b.id })),
-    ],
-    [vaults, banks],
-  );
-
-  const selected = accounts.find((a) => a.value === source) ?? null;
-  const sourceBalance = selected ? accountBalance(selected.type, selected.id, vaults, banks, cashMovements) : 0;
-
   async function submit() {
     if (!entry) return;
     if (val <= 0) return toast.error('أدخل مبلغاً صحيحاً.');
     if (val > remaining + 0.01) return toast.error(`المتبقي ${moneyText(remaining, 0)}`);
-    if (cashOut && selected && val > sourceBalance + 0.001) {
-      return toast.error(`رصيد «${selected.label}» (${moneyText(sourceBalance, 0)}) لا يكفي.`);
-    }
+
+    const splitErr = validateSplitPaymentState(val, treasury, {
+      allowNone: true,
+      checkOutflow: cashOut,
+      vaults,
+      banks,
+      cashMovements,
+    });
+    if (splitErr) return toast.error(splitErr);
 
     setBusy(true);
     try {
+      const treasurySel = treasurySelectionFromState(val, treasury);
       const res = await settleDebtEntry(entry.id, {
         amount: val,
         method,
         date: new Date(date + 'T10:00:00').toISOString(),
         notes: notes.trim() || undefined,
-        sourceType: selected?.type as AccountSourceType | undefined,
-        sourceId: selected?.id,
+        ...treasurySel,
       });
       if (res.ok) {
         toast.success('تمت تسوية الدين', { description: `${moneyText(val, 0)} — ${entry.ref}` });
@@ -165,31 +166,17 @@ export function DebtSettleDialog({
             </Field>
           </div>
 
-          <Field
-            label={cashOut ? 'الصرف من حساب' : 'الإيداع في حساب'}
-            hint={accounts.length === 0 ? 'أضِف خزنة/بنك من صفحة النقد' : 'اختياري — بدون حساب تُسجَّل التسوية محاسبياً فقط'}
-          >
-            <Select value={source} onValueChange={setSource} disabled={accounts.length === 0}>
-              <SelectTrigger>
-                <SelectValue placeholder="بدون حركة نقدية" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">بدون حركة نقدية</SelectItem>
-                {accounts.map((a) => (
-                  <SelectItem key={a.value} value={a.value}>
-                    {a.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-
-          {selected ? (
-            <div className="flex items-center justify-between rounded-lg bg-canvas-sunken px-3 py-2 text-[12px]">
-              <span className="text-muted-foreground">رصيد «{selected.label}»</span>
-              <Money value={sourceBalance} className="font-semibold" />
-            </div>
-          ) : null}
+          <SplitPaymentFields
+            totalAmount={val}
+            vaults={vaults}
+            banks={banks}
+            cashMovements={cashMovements}
+            state={treasury}
+            onChange={setTreasury}
+            singleLabel={cashOut ? 'الصرف من حساب' : 'الإيداع في حساب'}
+            outflow={cashOut}
+            allowNone
+          />
 
           <Field label="ملاحظة" hint="اختياري">
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="مثال: سداد دين افتتاحي" />

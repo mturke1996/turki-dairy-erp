@@ -9,22 +9,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Field } from '@/components/shared/field';
-import { Money, moneyText } from '@/components/shared/money';
+import { Money } from '@/components/shared/money';
 import { StatTile } from '@/components/shared/stat-tile';
 import { EmptyState } from '@/components/shared/empty-state';
 import { EmployeeFormDialog } from '@/components/employees/employee-form-dialog';
 import { EmployeeDetailDialog } from '@/components/employees/employee-detail-dialog';
 import { EmployeeListCard, EmployeeStatusChips } from '@/components/employees/employee-list-card';
 import { PayrollBatchCard } from '@/components/employees/payroll-batch-card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { PayrollBatchDialog } from '@/components/employees/payroll-batch-dialog';
+import { PayrollPayDialog } from '@/components/employees/payroll-pay-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
@@ -32,12 +25,14 @@ import { PayrollPDF, type PayrollLineRow } from '@/features/pdf/PayrollPDF';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { usePermission } from '@/lib/store/use-permission';
 import {
-  DEPARTMENT_LABELS,
   EMPLOYEE_STATUS_LABELS,
   PAYROLL_STATUS_LABELS,
+  PAYROLL_TYPE_LABELS,
+  SALARY_TYPE_LABELS,
 } from '@/lib/domain/constants';
+import { computeEmployeeAdvanceBalance } from '@/lib/domain/calculations';
+import { employeeMonthlyEquivalent, payoutSourceLabel } from '@/lib/domain/payroll';
 import type {
-  AccountSourceType,
   EmployeeStatus,
   PayrollBatch,
 } from '@/lib/domain/types';
@@ -66,9 +61,13 @@ export default function HrPage() {
 function HrContent() {
   const d = useDerived();
   const employees = d.employees;
+  const rawEmployees = useErpStore((s) => s.employees);
   const batches = useErpStore((s) => s.payrollBatches);
   const vaults = useErpStore((s) => s.vaults);
   const banks = useErpStore((s) => s.banks);
+  const payments = useErpStore((s) => s.payments);
+  const debtEntries = useErpStore((s) => s.debtEntries);
+  const cashMovements = useErpStore((s) => s.cashMovements);
   const addEmployee = useErpStore((s) => s.addEmployee);
   const createPayrollBatch = useErpStore((s) => s.createPayrollBatch);
   const payPayrollBatch = useErpStore((s) => s.payPayrollBatch);
@@ -104,7 +103,7 @@ function HrContent() {
 
   const active = employees.filter((e) => e.status === 'active');
   const monthlyLabor = useMemo(
-    () => active.reduce((s, e) => s + e.baseSalary + e.allowances.housing + e.allowances.transport + e.allowances.food, 0),
+    () => active.reduce((s, e) => s + employeeMonthlyEquivalent(e), 0),
     [active],
   );
   const lastPaid = useMemo(
@@ -150,7 +149,7 @@ function HrContent() {
       <PageHeader
         eyebrow="المالية"
         title="الموظفون والرواتب"
-        description="إدارة الكوادر وكشوف الرواتب — الصرف يُنشئ حركة نقدية تلقائياً."
+        description="إدارة الكوادر — أنواع الراتب (شهري / يومي / نصف شهر) وربط الصرف بالخزينة."
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Button variant="outline" className="w-full sm:w-auto" onClick={() => setEmpOpen(true)}>
@@ -253,6 +252,7 @@ function HrContent() {
                         jobTitle: e.jobTitle,
                         department: e.department,
                         status: e.status,
+                        salaryType: e.salaryType ?? 'monthly',
                         grossSalary: e.baseSalary + allowances,
                         advanceBalance: e.advanceBalance,
                         phone: e.phone,
@@ -268,9 +268,9 @@ function HrContent() {
                     <TableRow>
                       <TableHead>الموظف</TableHead>
                       <TableHead>المسمّى</TableHead>
-                      <TableHead>القسم</TableHead>
-                      <TableHead className="text-left">الراتب الأساسي</TableHead>
-                      <TableHead className="text-left">الصافي</TableHead>
+                      <TableHead>نوع الراتب</TableHead>
+                      <TableHead>مصدر الصرف</TableHead>
+                      <TableHead className="text-left">الأجر</TableHead>
                       <TableHead>الحالة</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -284,9 +284,19 @@ function HrContent() {
                             <p className="text-[11px] text-muted-foreground" dir="ltr">{e.code}</p>
                           </TableCell>
                           <TableCell className="text-[12.5px]">{e.jobTitle}</TableCell>
-                          <TableCell className="text-[12px] text-muted-foreground">{DEPARTMENT_LABELS[e.department]}</TableCell>
-                          <TableCell className="text-left"><Money value={e.baseSalary} decimals={0} /></TableCell>
-                          <TableCell className="text-left"><Money value={e.baseSalary + allowances} decimals={0} className="font-semibold" /></TableCell>
+                          <TableCell>
+                            <Badge variant="neutral" className="text-[10px]">
+                              {SALARY_TYPE_LABELS[e.salaryType ?? 'monthly']}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[120px] truncate text-[11.5px] text-muted-foreground">
+                            {e.defaultPayoutType && e.defaultPayoutId
+                              ? payoutSourceLabel(e.defaultPayoutType, e.defaultPayoutId, vaults, banks)
+                              : '—'}
+                          </TableCell>
+                          <TableCell className="text-left">
+                            <Money value={e.baseSalary + allowances} decimals={0} className="font-semibold" />
+                          </TableCell>
                           <TableCell>
                             <div className="flex flex-col items-center gap-1">
                               <Badge variant={EMP_STATUS_VARIANT[e.status]}>{EMPLOYEE_STATUS_LABELS[e.status]}</Badge>
@@ -324,6 +334,8 @@ function HrContent() {
                   <PayrollBatchCard
                     key={b.id}
                     batch={b}
+                    vaults={vaults}
+                    banks={banks}
                     canPay={canPay}
                     onPay={() => setPayTarget(b)}
                     pdfAction={
@@ -343,7 +355,9 @@ function HrContent() {
               <TableHeader>
                 <TableRow>
                   <TableHead>الكشف</TableHead>
+                  <TableHead>النوع</TableHead>
                   <TableHead>الفترة</TableHead>
+                  <TableHead>مصدر الصرف</TableHead>
                   <TableHead className="text-center">الموظفون</TableHead>
                   <TableHead className="text-left">الإجمالي</TableHead>
                   <TableHead>الحالة</TableHead>
@@ -357,8 +371,16 @@ function HrContent() {
                       <p className="text-[12.5px] font-medium">{b.label}</p>
                       <p className="text-[11px] text-muted-foreground" dir="ltr">{b.ref}</p>
                     </TableCell>
+                    <TableCell>
+                      <Badge variant="neutral" className="text-[10px]">{PAYROLL_TYPE_LABELS[b.payrollType]}</Badge>
+                    </TableCell>
                     <TableCell className="text-[12px] text-muted-foreground" dir="ltr">
                       {formatShortDate(b.periodFrom)} — {formatShortDate(b.periodTo)}
+                    </TableCell>
+                    <TableCell className="max-w-[110px] truncate text-[11.5px] text-muted-foreground">
+                      {b.paidFromType && b.paidFromId
+                        ? payoutSourceLabel(b.paidFromType, b.paidFromId, vaults, banks)
+                        : '—'}
                     </TableCell>
                     <TableCell className="text-center text-[12.5px]">{b.lines.length}</TableCell>
                     <TableCell className="text-left"><Money value={b.totalAmount} decimals={0} className="font-semibold" /></TableCell>
@@ -393,6 +415,8 @@ function HrContent() {
       <EmployeeFormDialog
         open={empOpen}
         onOpenChange={setEmpOpen}
+        vaults={vaults}
+        banks={banks}
         onSubmit={async (input) => {
           const res = await addEmployee(input);
           if (res.ok) {
@@ -404,10 +428,15 @@ function HrContent() {
 
       <EmployeeDetailDialog employeeId={detailId} open={!!detailId} onOpenChange={(o) => !o && setDetailId(null)} />
 
-      <BatchDialog
+      <PayrollBatchDialog
         open={batchOpen}
         onOpenChange={setBatchOpen}
-        count={active.length}
+        employees={rawEmployees}
+        vaults={vaults}
+        banks={banks}
+        advanceBalanceOf={(id) =>
+          computeEmployeeAdvanceBalance(id, payments, batches, debtEntries)
+        }
         onSubmit={async (input) => {
           const res = await createPayrollBatch(input);
           if (res.ok) {
@@ -417,11 +446,12 @@ function HrContent() {
         }}
       />
 
-      <PayDialog
+      <PayrollPayDialog
         batch={payTarget}
         onClose={() => setPayTarget(null)}
         vaults={vaults}
         banks={banks}
+        cashMovements={cashMovements}
         onPay={async (batchId, source) => {
           const res = await payPayrollBatch(batchId, source);
           if (res.ok) {
@@ -431,115 +461,5 @@ function HrContent() {
         }}
       />
     </div>
-  );
-}
-
-function BatchDialog({
-  open,
-  onOpenChange,
-  count,
-  onSubmit,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  count: number;
-  onSubmit: (input: { label: string; payrollType: 'monthly' | 'bi_monthly'; periodFrom: string; periodTo: string }) => void;
-}) {
-  const [label, setLabel] = useState('');
-  const [type, setType] = useState<'monthly' | 'bi_monthly'>('bi_monthly');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-
-  function submit() {
-    if (!label.trim()) return toast.error('أدخل عنوان الكشف');
-    onSubmit({ label: label.trim(), payrollType: type, periodFrom: from || new Date().toISOString().slice(0, 10), periodTo: to || new Date().toISOString().slice(0, 10) });
-    setLabel(''); setFrom(''); setTo('');
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>كشف رواتب جديد</DialogTitle>
-          <DialogDescription>سيُنشأ الكشف لـ {count} موظف نشط بصافي الراتب الحالي.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <Field label="عنوان الكشف" required><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="رواتب يونيو 2026 — النصف الثاني" /></Field>
-          <Field label="نوع الكشف">
-            <Select value={type} onValueChange={(v) => setType(v as 'monthly' | 'bi_monthly')}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="bi_monthly">نصف شهري</SelectItem>
-                <SelectItem value="monthly">شهري</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="من تاريخ"><Input type="date" dir="ltr" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
-            <Field label="إلى تاريخ"><Input type="date" dir="ltr" value={to} onChange={(e) => setTo(e.target.value)} /></Field>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button onClick={submit}><BadgeDollarSign className="h-4 w-4" />إنشاء الكشف</Button>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>إلغاء</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function PayDialog({
-  batch,
-  onClose,
-  vaults,
-  banks,
-  onPay,
-}: {
-  batch: PayrollBatch | null;
-  onClose: () => void;
-  vaults: { id: string; name: string }[];
-  banks: { id: string; bankName: string }[];
-  onPay: (batchId: string, source: { type: AccountSourceType; id: string }) => void;
-}) {
-  const options = useMemo(
-    () => [
-      ...vaults.map((v) => ({ value: `vault:${v.id}`, label: `خزنة: ${v.name}` })),
-      ...banks.map((b) => ({ value: `bank:${b.id}`, label: `بنك: ${b.bankName}` })),
-    ],
-    [vaults, banks],
-  );
-  const [account, setAccount] = useState('');
-
-  return (
-    <Dialog open={!!batch} onOpenChange={(o) => { if (!o) { onClose(); setAccount(''); } }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>صرف الرواتب</DialogTitle>
-          <DialogDescription>
-            {batch ? `${batch.label} — الإجمالي ${moneyText(batch.totalAmount, 0)}` : ''}
-          </DialogDescription>
-        </DialogHeader>
-        <Field label="مصدر الصرف" required>
-          <Select value={account} onValueChange={setAccount}>
-            <SelectTrigger><SelectValue placeholder="اختر خزنة أو بنك" /></SelectTrigger>
-            <SelectContent>{options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
-          </Select>
-        </Field>
-        <DialogFooter>
-          <Button
-            onClick={() => {
-              if (!batch) return;
-              if (!account) return toast.error('اختر مصدر الصرف');
-              const [type, id] = account.split(':') as [AccountSourceType, string];
-              onPay(batch.id, { type, id });
-              setAccount('');
-            }}
-          >
-            <Wallet className="h-4 w-4" />تأكيد الصرف
-          </Button>
-          <Button variant="ghost" onClick={() => { onClose(); setAccount(''); }}>إلغاء</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
