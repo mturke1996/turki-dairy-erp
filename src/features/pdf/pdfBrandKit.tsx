@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { View, Text, StyleSheet, Image } from '@react-pdf/renderer';
 import { PDF_FONT_FAMILY } from './pdfFonts';
-import { ar } from './arabicPDF';
+import { ar, ltrAmountCurrency } from './arabicPDF';
 import { BRAND } from '@/lib/brand';
 import { usePdfLogoDataUri, usePdfMarkDataUri } from './pdf-logo-context';
 
@@ -149,8 +149,7 @@ export const pdfBrandStyles = StyleSheet.create({
   moneyRow: {
     flexDirection: 'row',
     direction: 'ltr',
-    alignItems: 'baseline',
-    gap: 5,
+    alignItems: 'center',
     justifyContent: 'flex-end',
   },
 
@@ -258,14 +257,14 @@ export const PdfBrandIdentity = ({ markSize = 50 }: { markSize?: number }) => {
 export const PdfFactoryContactBar = () => (
   <View style={pdfBrandStyles.contactBar} wrap={false}>
     <Text style={pdfBrandStyles.contactBarItem}>{ar(BRAND.contact.address)}</Text>
-    <Text style={pdfBrandStyles.contactBarMuted} dir="ltr">
+    <Text style={[pdfBrandStyles.contactBarMuted, { direction: 'ltr' }]}>
       {BRAND.contact.phone}
       {BRAND.contact.email ? `   ·   ${BRAND.contact.email}` : ''}
     </Text>
   </View>
 );
 
-export type PdfInfoItem = { label: string; value: string; ltr?: boolean };
+export type PdfInfoItem = { label: string; value?: string; ltr?: boolean; moneyAmount?: number; decimals?: number };
 
 /** شبكة بيانات موحّدة للتقارير. */
 export const PdfInfoGrid = ({ items }: { items: PdfInfoItem[] }) => (
@@ -273,14 +272,20 @@ export const PdfInfoGrid = ({ items }: { items: PdfInfoItem[] }) => (
     {items.map((item, i) => (
       <View key={i} style={pdfBrandStyles.infoCell}>
         <Text style={pdfBrandStyles.infoLabel}>{ar(item.label)}</Text>
-        <Text
-          style={[
-            pdfBrandStyles.infoValue,
-            item.ltr ? { direction: 'ltr', textAlign: 'left' } : null,
-          ]}
-        >
-          {ar(item.value)}
-        </Text>
+        {item.moneyAmount != null && Number.isFinite(item.moneyAmount) ? (
+          <View style={{ alignItems: 'flex-end' }}>
+            <PdfMoneyText amount={item.moneyAmount} size="sm" decimals={item.decimals ?? 2} />
+          </View>
+        ) : (
+          <Text
+            style={[
+              pdfBrandStyles.infoValue,
+              item.ltr ? { direction: 'ltr', textAlign: 'right' } : null,
+            ]}
+          >
+            {item.ltr ? item.value : ar(item.value ?? '')}
+          </Text>
+        )}
       </View>
     ))}
   </View>
@@ -304,7 +309,7 @@ export function pdfFmtUnit(n: number, unit: string, decimals = 0): string {
 }
 
 export function pdfFmtMoneyLibyan(n: number, decimals = 2): string {
-  return pdfFmtUnit(n, LIBYAN_CURRENCY_LABEL, decimals);
+  return ltrAmountCurrency(n, LIBYAN_CURRENCY_LABEL, decimals);
 }
 
 export function pdfFmtLiters(n: number, decimals = 0): string {
@@ -324,9 +329,14 @@ export const PdfMoneyText = ({
   decimals?: number;
   color?: string;
 }) => (
-  <Text style={{ fontSize: MONEY_SIZE[size], fontWeight: 'bold', color, direction: 'ltr', textAlign: 'right', lineHeight: 1.35 }}>
-    {pdfFmtMoneyLibyan(amount, decimals)}
-  </Text>
+  <View style={pdfBrandStyles.moneyRow}>
+    <Text style={{ fontSize: MONEY_SIZE[size], fontWeight: 'bold', color, direction: 'ltr', lineHeight: 1.35 }}>
+      {pdfFmtNum(amount, decimals)}
+    </Text>
+    <Text style={{ fontSize: MONEY_SIZE[size] * 0.82, fontWeight: 'bold', color: P.muted, marginLeft: 4, lineHeight: 1.35 }}>
+      {LIBYAN_CURRENCY_LABEL}
+    </Text>
+  </View>
 );
 
 /** تذييل رسمي نحيف — خط هوية ثلاثي وسطران هادئان، لا يزاحم المحتوى أبداً. */
@@ -367,7 +377,7 @@ export const TurkiPdfHeader = ({
         <Text style={pdfBrandStyles.docKicker}>{ar('وثيقة رسمية — مصنع التركي')}</Text>
         <Text style={pdfBrandStyles.docTitle}>{ar(titleEn)}</Text>
         {subtitleAr ? <Text style={pdfBrandStyles.docRef}>{ar(subtitleAr)}</Text> : null}
-        {refLine ? <Text style={pdfBrandStyles.docRef} dir="ltr">{refLine}</Text> : null}
+        {refLine ? <Text style={pdfBrandStyles.docRef}>{refLine}</Text> : null}
       </View>
       <PdfBrandIdentity />
     </View>

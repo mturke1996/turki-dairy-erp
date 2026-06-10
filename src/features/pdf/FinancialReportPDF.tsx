@@ -3,8 +3,9 @@ import React from 'react';
 import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
-import { PDF } from './pdfBase';
+import { PDF, pdfBase } from './pdfBase';
 import { PdfMoneyText, pdfFmtNum } from './pdfBrandKit';
+import { PdfTh, PdfTd, PdfMoneyInline } from './PdfTable';
 import { ACCOUNT_LABELS } from '@/lib/domain/constants';
 import type { TrialBalanceRow, ProfitAndLoss } from '@/lib/domain/accounting';
 import type { AgingBuckets } from '@/lib/domain/calculations';
@@ -25,14 +26,10 @@ const s = StyleSheet.create({
     paddingRight: 8,
     lineHeight: 1.35,
   },
-  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.primary, paddingVertical: 9, paddingHorizontal: 9, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: PDF.accent },
-  th: { color: PDF.white, fontSize: 8.5, fontWeight: 'bold', lineHeight: 1.4 },
-  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 7.5, paddingHorizontal: 9, borderBottomWidth: 0.5, borderBottomColor: PDF.border, alignItems: 'center' },
-  rowAlt: { backgroundColor: PDF.rowAlt },
   td: { fontSize: 8.5, color: PDF.text, lineHeight: 1.45 },
   totalRow: {
-    direction: 'rtl',
-    flexDirection: 'row',
+    direction: 'ltr',
+    flexDirection: 'row-reverse',
     backgroundColor: PDF.logoGreenSoft,
     paddingVertical: 9,
     paddingHorizontal: 9,
@@ -40,24 +37,26 @@ const s = StyleSheet.create({
     borderTopColor: PDF.accent,
     alignItems: 'center',
   },
-  tf: { fontSize: 9, fontWeight: 'bold', color: PDF.primary, lineHeight: 1.4 },
+  tf: { fontSize: 9, fontWeight: 'bold', color: PDF.primary, lineHeight: 1.4, direction: 'ltr' },
 
   pnlRow: {
-    direction: 'rtl',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    direction: 'ltr',
+    flexDirection: 'row-reverse',
+    justifyContent: 'flex-start',
     alignItems: 'center',
+    gap: 14,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderBottomWidth: 0.5,
     borderBottomColor: PDF.border,
   },
-  pnlLabel: { fontSize: 9.5, color: PDF.text, lineHeight: 1.45 },
+  pnlLabel: { fontSize: 9.5, color: PDF.text, lineHeight: 1.45, textAlign: 'right' },
   pnlStrong: {
-    direction: 'rtl',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    direction: 'ltr',
+    flexDirection: 'row-reverse',
+    justifyContent: 'flex-start',
     alignItems: 'center',
+    gap: 14,
     paddingVertical: 10,
     paddingHorizontal: 12,
     backgroundColor: PDF.paleGold,
@@ -89,26 +88,29 @@ export function FinancialReportPDF({ trialBalance, pnl, aging, asOfLabel }: Fina
     >
       {/* ميزان المراجعة */}
       <Text style={s.section}>{ar('ميزان المراجعة')}</Text>
-      <View style={s.head} minPresenceAhead={40}>
-        <Text style={[s.th, { flex: 2.4, textAlign: 'right' }]}>{ar('الحساب')}</Text>
-        <Text style={[s.th, { flex: 1.3, textAlign: 'left' }]}>{ar('مدين')}</Text>
-        <Text style={[s.th, { flex: 1.3, textAlign: 'left' }]}>{ar('دائن')}</Text>
-        <Text style={[s.th, { flex: 1.5, textAlign: 'left' }]}>{ar('الرصيد')}</Text>
+      <View style={pdfBase.tableHead} minPresenceAhead={40}>
+        <PdfTh flex={2.4}>الحساب</PdfTh>
+        <PdfTh flex={1.3} kind="money">مدين</PdfTh>
+        <PdfTh flex={1.3} kind="money">دائن</PdfTh>
+        <PdfTh flex={1.5} kind="money">الرصيد</PdfTh>
       </View>
       {trialBalance.rows.map((r, i) => (
-        <View key={r.account} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
-          <Text style={[s.td, { flex: 2.4, textAlign: 'right' }]}>{ar(ACCOUNT_LABELS[r.account])}</Text>
-          <Text style={[s.td, { flex: 1.3, textAlign: 'left' }]}>{r.debit ? ar(pdfFmtNum(r.debit)) : '—'}</Text>
-          <Text style={[s.td, { flex: 1.3, textAlign: 'left' }]}>{r.credit ? ar(pdfFmtNum(r.credit)) : '—'}</Text>
-          <Text style={[s.td, { flex: 1.5, textAlign: 'left', fontWeight: 'bold' }]}>
-            {ar(`${pdfFmtNum(Math.abs(r.balance))} ${r.balance >= 0 ? 'مدين' : 'دائن'}`)}
-          </Text>
+        <View key={r.account} style={[pdfBase.tableRow, i % 2 === 1 && pdfBase.rowEven]} wrap={false}>
+          <PdfTd flex={2.4}>{ACCOUNT_LABELS[r.account]}</PdfTd>
+          <PdfTd flex={1.3} kind="num">{r.debit ? pdfFmtNum(r.debit) : '—'}</PdfTd>
+          <PdfTd flex={1.3} kind="num">{r.credit ? pdfFmtNum(r.credit) : '—'}</PdfTd>
+          <View style={[{ flex: 1.5 }, pdfBase.tdMoneyWrap]}>
+            <View style={{ flexDirection: 'row', direction: 'ltr', alignItems: 'center', gap: 5 }}>
+              <PdfMoneyInline amount={Math.abs(r.balance)} bold />
+              <Text style={[s.td, { fontWeight: 'bold' }]}>{ar(r.balance >= 0 ? 'مدين' : 'دائن')}</Text>
+            </View>
+          </View>
         </View>
       ))}
-      <View style={s.totalRow} wrap={false}>
+      <View style={s.totalRow} minPresenceAhead={52}>
         <Text style={[s.tf, { flex: 2.4, textAlign: 'right' }]}>{ar(trialBalance.balanced ? 'الإجماليات (متوازن)' : 'الإجماليات (غير متوازن!)')}</Text>
-        <Text style={[s.tf, { flex: 1.3, textAlign: 'left' }]}>{ar(pdfFmtNum(trialBalance.totalDebit))}</Text>
-        <Text style={[s.tf, { flex: 1.3, textAlign: 'left' }]}>{ar(pdfFmtNum(trialBalance.totalCredit))}</Text>
+        <Text style={[s.tf, { flex: 1.3, textAlign: 'left' }]}>{pdfFmtNum(trialBalance.totalDebit)}</Text>
+        <Text style={[s.tf, { flex: 1.3, textAlign: 'left' }]}>{pdfFmtNum(trialBalance.totalCredit)}</Text>
         <Text style={[s.tf, { flex: 1.5, textAlign: 'left' }]}> </Text>
       </View>
 
@@ -122,7 +124,7 @@ export function FinancialReportPDF({ trialBalance, pnl, aging, asOfLabel }: Fina
         <Text style={s.pnlLabel}>{ar('تكلفة البضاعة المباعة')}</Text>
         <PdfMoneyText amount={-pnl.cogs} size="sm" color={PDF.danger} />
       </View>
-      <View style={s.pnlStrong} wrap={false}>
+      <View style={s.pnlStrong} minPresenceAhead={48}>
         <Text style={{ fontSize: 10.5, fontWeight: 'bold', color: PDF.primary, lineHeight: 1.4 }}>{ar('مجمل الربح')}</Text>
         <PdfMoneyText amount={pnl.grossProfit} size="md" color={PDF.logoGreen} />
       </View>
@@ -138,7 +140,7 @@ export function FinancialReportPDF({ trialBalance, pnl, aging, asOfLabel }: Fina
         <Text style={s.pnlLabel}>{ar('الرواتب والأجور')}</Text>
         <PdfMoneyText amount={-pnl.salaries} size="sm" color={PDF.danger} />
       </View>
-      <View style={[s.pnlStrong, { marginTop: 6, borderWidth: 1, borderColor: pnl.netProfit >= 0 ? PDF.logoGreen : PDF.danger }]} wrap={false}>
+      <View style={[s.pnlStrong, { marginTop: 6, borderWidth: 1, borderColor: pnl.netProfit >= 0 ? PDF.logoGreen : PDF.danger }]} minPresenceAhead={48}>
         <Text style={{ fontSize: 10.5, fontWeight: 'bold', color: PDF.primary, lineHeight: 1.4 }}>
           {ar(pnl.netProfit >= 0 ? 'صافي الربح' : 'صافي الخسارة')}
         </Text>
@@ -147,19 +149,19 @@ export function FinancialReportPDF({ trialBalance, pnl, aging, asOfLabel }: Fina
 
       {/* أعمار الديون */}
       <Text style={s.section} minPresenceAhead={60}>{ar('أعمار ديون العملاء')}</Text>
-      <View style={s.head}>
-        <Text style={[s.th, { flex: 1, textAlign: 'center' }]}>{ar('غير مستحق')}</Text>
-        <Text style={[s.th, { flex: 1, textAlign: 'center' }]}>{ar('1-30')}</Text>
-        <Text style={[s.th, { flex: 1, textAlign: 'center' }]}>{ar('31-60')}</Text>
-        <Text style={[s.th, { flex: 1, textAlign: 'center' }]}>{ar('61-90')}</Text>
-        <Text style={[s.th, { flex: 1, textAlign: 'center' }]}>{ar('+90')}</Text>
+      <View style={pdfBase.tableHead}>
+        <PdfTh flex={1} kind="num">غير مستحق</PdfTh>
+        <PdfTh flex={1} kind="num">1-30</PdfTh>
+        <PdfTh flex={1} kind="num">31-60</PdfTh>
+        <PdfTh flex={1} kind="num">61-90</PdfTh>
+        <PdfTh flex={1} kind="num">+90</PdfTh>
       </View>
-      <View style={[s.row, { borderBottomWidth: 0 }]}>
-        <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{ar(pdfFmtNum(aging.current, 0))}</Text>
-        <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{ar(pdfFmtNum(aging.d1_30, 0))}</Text>
-        <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{ar(pdfFmtNum(aging.d31_60, 0))}</Text>
-        <Text style={[s.td, { flex: 1, textAlign: 'center', color: PDF.sun }]}>{ar(pdfFmtNum(aging.d61_90, 0))}</Text>
-        <Text style={[s.td, { flex: 1, textAlign: 'center', color: PDF.danger, fontWeight: 'bold' }]}>{ar(pdfFmtNum(aging.d90_plus, 0))}</Text>
+      <View style={[pdfBase.tableRow, { borderBottomWidth: 0 }]}>
+        <PdfTd flex={1} kind="num">{pdfFmtNum(aging.current, 0)}</PdfTd>
+        <PdfTd flex={1} kind="num">{pdfFmtNum(aging.d1_30, 0)}</PdfTd>
+        <PdfTd flex={1} kind="num">{pdfFmtNum(aging.d31_60, 0)}</PdfTd>
+        <PdfTd flex={1} kind="num" color={PDF.sun}>{pdfFmtNum(aging.d61_90, 0)}</PdfTd>
+        <PdfTd flex={1} kind="num" color={PDF.danger} bold>{pdfFmtNum(aging.d90_plus, 0)}</PdfTd>
       </View>
     </ReportShell>
   );

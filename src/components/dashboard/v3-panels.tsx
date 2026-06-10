@@ -37,7 +37,7 @@ export function DashboardV3Panels() {
   const draftBatches = batches.filter((b) => b.status !== 'paid').length;
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
+    <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-0.5 snap-x snap-mandatory no-scrollbar lg:mx-0 lg:grid lg:grid-cols-2 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0 xl:grid-cols-4">
       {/* الخزن والبنوك */}
       <PanelCard href="/treasury" icon={Wallet} title="الخزائن والبنوك" subtitle="المركز النقدي اللحظي">
         <div className="mb-3">
@@ -148,7 +148,7 @@ function PanelCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="transition-shadow hover:shadow-soft">
+    <Card className="w-[17.5rem] shrink-0 snap-start transition-shadow hover:shadow-soft lg:w-auto lg:shrink">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">

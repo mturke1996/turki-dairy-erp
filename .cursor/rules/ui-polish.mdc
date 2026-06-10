@@ -1,0 +1,30 @@
+---
+description: UI polish standards — motion, loading states, accessibility (ui-skills.com)
+alwaysApply: true
+---
+
+# UI Engineering (Turki Dairy ERP)
+
+Apply these skills when designing or polishing interfaces:
+
+- **baseline-ui** — typography scale, spacing rhythm, Tailwind consistency
+- **fixing-motion-performance** — animate only `transform` and `opacity`; respect `prefers-reduced-motion`
+- **fixing-accessibility** — `role="status"`, `aria-live`, focus, contrast on loading states
+- **emil-design-eng** — ease-out for entrances; no `transition: all`; loading screens may use subtle motion (rare/first-load)
+- **impeccable** — anti-generic aesthetics; brand-aware color; polish without changing behavior
+
+## Loading & waiting
+
+- Full-page splash: brand navy canvas, staggered fade-up, indeterminate progress rail, status semantics
+- Inline/table loading: prefer **Skeleton** over spinners when layout is known
+- Button/dialog loading: compact **LoadingIndicator**; keep label visible
+
+## Motion rules
+
+- Duration: 160–600ms for UI feedback; linear only for indeterminate progress
+- Easing: `cubic-bezier(0.16, 1, 0.3, 1)` for enter; no blur on full-screen surfaces
+- Never block interaction longer than necessary; splash is the only full-screen wait state
+
+## Scope
+
+Polish visuals and micro-interactions only — do not change business logic, routes, or data flow unless explicitly asked.

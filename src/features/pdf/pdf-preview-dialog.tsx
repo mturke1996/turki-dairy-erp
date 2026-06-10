@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { LoadingIndicator } from '@/components/ui/loading-indicator';
 import { buildPdfViewerUrl } from './pdf-blob-utils';
 
 type PdfPreviewDialogProps = {
@@ -99,10 +100,11 @@ export function PdfPreviewDialog({
               className="absolute inset-0 h-full w-full border-0 bg-white"
             />
           ) : (
-            <div className="flex h-full min-h-[50dvh] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-              <Loader2 className="h-7 w-7 animate-spin text-meadow-600" />
-              جارٍ تجهيز المعاينة…
-            </div>
+            <LoadingIndicator
+              size="lg"
+              label="جارٍ تجهيز المعاينة…"
+              className="min-h-[50dvh] justify-center text-meadow-600"
+            />
           )}
         </div>
 

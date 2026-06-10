@@ -3,15 +3,111 @@ import React from 'react';
 import { Text, View } from '@react-pdf/renderer';
 import { ar } from './arabicPDF';
 import { PDF, pdfBase } from './pdfBase';
+import { pdfFmtNum, LIBYAN_CURRENCY_LABEL } from './pdfBrandKit';
 
 export type PdfTableColumn = {
   key: string;
   label: string;
   flex: number;
   align?: 'right' | 'left' | 'center';
+  kind?: 'text' | 'num' | 'money' | 'ref' | 'date';
 };
 
 export type PdfTableRow = Record<string, React.ReactNode>;
+
+/** مبلغ: الرقم ثم د.ل — نمط Etlala (LTR صريح، العملة بعد الرقم دائماً) */
+export function PdfMoneyInline({
+  amount,
+  decimals = 2,
+  size = 9,
+  color = PDF.text,
+  currencyColor = PDF.muted,
+  bold = true,
+}: {
+  amount: number;
+  decimals?: number;
+  size?: number;
+  color?: string;
+  currencyColor?: string;
+  bold?: boolean;
+}) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', direction: 'ltr' }}>
+      <Text style={{ fontSize: size, fontWeight: bold ? 'bold' : 'normal', color, direction: 'ltr' }}>
+        {pdfFmtNum(amount, decimals)}
+      </Text>
+      <Text style={{ fontSize: Math.max(size * 0.88, 7.5), color: currencyColor, marginLeft: 3 }}>
+        {LIBYAN_CURRENCY_LABEL}
+      </Text>
+    </View>
+  );
+}
+
+export function PdfTh({
+  flex,
+  kind = 'text',
+  children,
+}: {
+  flex: number;
+  kind?: 'text' | 'num' | 'money' | 'ref' | 'date';
+  children: string;
+}) {
+  const style =
+    kind === 'money' ? pdfBase.thMoney : kind === 'num' || kind === 'date' || kind === 'ref' ? pdfBase.thNum : pdfBase.th;
+  return (
+    <Text style={[style, { flex }]}>{ar(children)}</Text>
+  );
+}
+
+export function PdfTd({
+  flex,
+  kind = 'text',
+  bold = false,
+  color,
+  children,
+}: {
+  flex: number;
+  kind?: 'text' | 'num' | 'ref' | 'date';
+  bold?: boolean;
+  color?: string;
+  children: string | number;
+}) {
+  const base =
+    kind === 'num' ? pdfBase.tdNum : kind === 'ref' ? pdfBase.tdRef : kind === 'date' ? pdfBase.tdDate : pdfBase.td;
+  const text = kind === 'num' || kind === 'date' ? String(children) : ar(String(children ?? ''));
+  return (
+    <Text
+      style={[
+        base,
+        { flex },
+        bold && { fontWeight: 'bold' },
+        color ? { color } : null,
+      ]}
+    >
+      {text}
+    </Text>
+  );
+}
+
+export function PdfTdMoney({
+  flex,
+  amount,
+  decimals = 2,
+  bold = true,
+  color = PDF.text,
+}: {
+  flex: number;
+  amount: number;
+  decimals?: number;
+  bold?: boolean;
+  color?: string;
+}) {
+  return (
+    <View style={[{ flex }, pdfBase.tdMoneyWrap]}>
+      <PdfMoneyInline amount={amount} decimals={decimals} size={9} color={color} bold={bold} />
+    </View>
+  );
+}
 
 export function PdfTable({
   columns,
@@ -26,12 +122,11 @@ export function PdfTable({
 }) {
   return (
     <View>
-      {/* minPresenceAhead: لا يُطبع رأس الجدول يتيماً أسفل الصفحة دون صفوف تليه */}
       <View style={pdfBase.tableHead} minPresenceAhead={40}>
         {columns.map((c) => (
-          <Text key={c.key} style={[pdfBase.th, { flex: c.flex, textAlign: c.align ?? 'right' }]}>
-            {ar(c.label)}
-          </Text>
+          <PdfTh key={c.key} flex={c.flex} kind={c.kind ?? (c.align === 'left' ? 'money' : c.align === 'center' ? 'num' : 'text')}>
+            {c.label}
+          </PdfTh>
         ))}
       </View>
 
@@ -43,7 +138,9 @@ export function PdfTable({
             {columns.map((c) => (
               <View key={c.key} style={{ flex: c.flex }}>
                 {typeof row[c.key] === 'string' || typeof row[c.key] === 'number' ? (
-                  <Text style={[pdfBase.td, { textAlign: c.align ?? 'right' }]}>{ar(String(row[c.key] ?? ''))}</Text>
+                  <PdfTd flex={1} kind={c.kind === 'money' ? 'num' : c.kind} bold={false}>
+                    {String(row[c.key] ?? '')}
+                  </PdfTd>
                 ) : (
                   row[c.key]
                 )}
@@ -53,7 +150,11 @@ export function PdfTable({
         ))
       )}
 
-      {footer ? <View style={pdfBase.tableFoot} wrap={false}>{footer}</View> : null}
+      {footer ? (
+        <View style={pdfBase.tableFoot} wrap={false} minPresenceAhead={52}>
+          {footer}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -62,6 +163,21 @@ export function PdfSectionTitle({ children }: { children: string }) {
   return <Text style={pdfBase.sectionTitle}>{ar(children)}</Text>;
 }
 
+export function PdfKeepTogether({
+  children,
+  minAhead = 120,
+}: {
+  children: React.ReactNode;
+  minAhead?: number;
+}) {
+  return (
+    <View wrap={false} minPresenceAhead={minAhead}>
+      {children}
+    </View>
+  );
+}
+
+/** @deprecated استخدم PdfTdMoney */
 export function PdfMoneyCell({
   amount,
   color = PDF.text,
@@ -71,9 +187,6 @@ export function PdfMoneyCell({
   color?: string;
   bold?: boolean;
 }) {
-  return (
-    <Text style={[pdfBase.td, { textAlign: 'left', color, fontWeight: bold ? 'bold' : 'normal' }]}>
-      {ar(String(amount))}
-    </Text>
-  );
+  const n = typeof amount === 'number' ? amount : parseFloat(String(amount).replace(/,/g, ''));
+  return <PdfMoneyInline amount={Number.isFinite(n) ? n : 0} color={color} bold={bold} />;
 }

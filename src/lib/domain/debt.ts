@@ -178,3 +178,52 @@ export function defaultDebtDirection(partyKind: DebtPartyKind): DebtDirection {
   if (partyKind === "customer" || partyKind === "employee") return "receivable";
   return "payable";
 }
+
+/** ربط تسجيل الدين بحركة نقدية فورية. */
+export type DebtCashMode = "none" | "disburse" | "collect";
+
+export const DEBT_CASH_MODE_LABELS: Record<DebtCashMode, string> = {
+  none: "تسجيل محاسبي فقط",
+  disburse: "صرف من الخزينة",
+  collect: "إيداع في الخزينة",
+};
+
+/** اتجاه الحركة النقدية عند تسجيل الدين. */
+export function debtRecordCashDirection(
+  cashMode: DebtCashMode,
+): "out" | "in" | null {
+  if (cashMode === "disburse") return "out";
+  if (cashMode === "collect") return "in";
+  return null;
+}
+
+/**
+ * مبلغ التسوية الفورية عند التسجيل مع خزينة:
+ * - صرف + «له» = دفع جزء/كل الدين (يُخفَّض الرصيد).
+ * - تحصيل + «عليه» = تحصيل جزء/كل الدين.
+ * - صرف + «عليه» = سلفة (لا تسوية — يبقى الدين كاملاً).
+ */
+export function debtRecordSettleAmount(
+  direction: DebtDirection,
+  cashMode: "disburse" | "collect",
+  debtAmount: number,
+  cashAmount: number,
+): number {
+  const cash = Math.max(0, cashAmount);
+  const debt = Math.max(0, debtAmount);
+  if (cashMode === "disburse" && direction === "payable") {
+    return Math.min(debt, cash);
+  }
+  if (cashMode === "collect" && direction === "receivable") {
+    return Math.min(debt, cash);
+  }
+  return 0;
+}
+
+/** سلفة نقدية عند التسجيل (صرف + عليه) — قيد واحد بدون قيد افتتاحي منفصل. */
+export function debtRecordIsAdvanceDisbursement(
+  direction: DebtDirection,
+  cashMode: DebtCashMode,
+): boolean {
+  return cashMode === "disburse" && direction === "receivable";
+}

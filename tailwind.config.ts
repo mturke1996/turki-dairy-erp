@@ -186,12 +186,22 @@ const config: Config = {
           '0%, 100%': { transform: 'translate3d(0, 0, 0)' },
           '50%': { transform: 'translate3d(0, -5px, 0)' },
         },
+        'splash-dot': {
+          '0%, 80%, 100%': { opacity: '0.35', transform: 'scale(0.85)' },
+          '40%': { opacity: '1', transform: 'scale(1)' },
+        },
+        'splash-progress': {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(400%)' },
+        },
       },
       animation: {
         'fade-up': 'fade-up 600ms cubic-bezier(0.16, 1, 0.3, 1) both',
         'fade-in': 'fade-in 400ms cubic-bezier(0.16, 1, 0.3, 1) both',
         shimmer: 'shimmer 1.8s linear infinite',
         drift: 'drift 16s ease-in-out infinite',
+        'splash-dot': 'splash-dot 1.2s ease-in-out infinite both',
+        'splash-progress': 'splash-progress 1.6s ease-in-out infinite',
       },
       transitionTimingFunction: {
         'out-quart': 'cubic-bezier(0.25, 1, 0.5, 1)',

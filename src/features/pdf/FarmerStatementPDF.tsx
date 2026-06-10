@@ -3,33 +3,15 @@ import React from 'react';
 import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
-import { PDF } from './pdfBase';
-import { PdfMoneyText, PdfInfoGrid, pdfFmtNum, pdfFmtDate, pdfFmtLiters, pdfFmtMoneyLibyan } from './pdfBrandKit';
-import { PdfSectionTitle } from './PdfTable';
+import { PDF, pdfBase } from './pdfBase';
+import { PdfMoneyText, PdfInfoGrid, pdfFmtDate, pdfFmtLiters, pdfFmtMoneyLibyan } from './pdfBrandKit';
+import { PdfSectionTitle, PdfKeepTogether, PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 import { MILK_SHIFT_LABELS, QUALITY_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import type { FarmerStats } from '@/lib/domain/calculations';
 import type { Payment, SupplyTransaction } from '@/lib/domain/types';
 
 const s = StyleSheet.create({
-  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.primary, paddingVertical: 9, paddingHorizontal: 9, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: PDF.accent },
-  th: { color: PDF.white, fontSize: 8.5, fontWeight: 'bold', textAlign: 'center', lineHeight: 1.4 },
-  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 7.5, paddingHorizontal: 9, borderBottomWidth: 0.5, borderBottomColor: PDF.border, alignItems: 'center' },
-  rowAlt: { backgroundColor: PDF.rowAlt },
-  td: { fontSize: 8.5, color: PDF.text, textAlign: 'center', lineHeight: 1.45 },
-
-  totalRow: {
-    direction: 'rtl',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: PDF.logoGreenSoft,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderTopWidth: 1.5,
-    borderTopColor: PDF.accent,
-  },
   totalLabel: { fontSize: 9.5, fontWeight: 'bold', color: PDF.logoGreen, lineHeight: 1.4 },
-
   balanceBox: {
     marginTop: 20,
     paddingVertical: 16,
@@ -54,7 +36,6 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
   const sortedSupplies = [...supplies].sort((a, b) => a.date.localeCompare(b.date));
   const sortedPayments = [...payments].sort((a, b) => a.date.localeCompare(b.date));
 
-  // الإجماليات تُحسب من الصفوف المعروضة نفسها كي تتطابق دائماً مع الجدول
   const suppliesTotal = sortedSupplies.reduce((sum, x) => sum + x.total, 0);
   const paymentsTotal = sortedPayments.reduce((sum, x) => sum + x.amount, 0);
 
@@ -77,71 +58,71 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
           { label: 'المصرف', value: farmer.bankName ?? '—' },
           { label: 'رقم الحساب', value: farmer.bankAccount ?? '—', ltr: true },
           { label: 'رقم الآيبان', value: farmer.iban ?? '—', ltr: true },
-          { label: 'متوسط سعر اللتر', value: pdfFmtMoneyLibyan(farmer.avgPrice, 3) },
-          { label: 'إجمالي المدفوع', value: pdfFmtMoneyLibyan(farmer.paidTotal) },
+          { label: 'متوسط سعر اللتر', moneyAmount: farmer.avgPrice, decimals: 3 },
+          { label: 'إجمالي المدفوع', moneyAmount: farmer.paidTotal },
           { label: 'عدد عمليات الاستلام', value: String(farmer.supplyCount) },
         ]}
       />
 
       <PdfSectionTitle>سجلّ الاستلام</PdfSectionTitle>
-      <View style={s.head} minPresenceAhead={40}>
-        <Text style={[s.th, { flex: 1.2 }]}>{ar('التاريخ')}</Text>
-        <Text style={[s.th, { flex: 1.4 }]}>{ar('المرجع')}</Text>
-        <Text style={[s.th, { flex: 0.9 }]}>{ar('الوجبة')}</Text>
-        <Text style={[s.th, { flex: 1 }]}>{ar('الكمية (لتر)')}</Text>
-        <Text style={[s.th, { flex: 1 }]}>{ar('السعر')}</Text>
-        <Text style={[s.th, { flex: 0.9 }]}>{ar('الجودة')}</Text>
-        <Text style={[s.th, { flex: 1.2 }]}>{ar('الإجمالي')}</Text>
+      <View style={pdfBase.tableHead} minPresenceAhead={40}>
+        <PdfTh flex={1.2} kind="date">التاريخ</PdfTh>
+        <PdfTh flex={1.4} kind="ref">المرجع</PdfTh>
+        <PdfTh flex={0.9}>الوجبة</PdfTh>
+        <PdfTh flex={1} kind="num">الكمية (لتر)</PdfTh>
+        <PdfTh flex={1} kind="money">السعر</PdfTh>
+        <PdfTh flex={0.9}>الجودة</PdfTh>
+        <PdfTh flex={1.2} kind="money">الإجمالي</PdfTh>
       </View>
       {sortedSupplies.map((sup, i) => (
-        <View key={sup.id} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
-          <Text style={[s.td, { flex: 1.2 }]}>{ar(pdfFmtDate(sup.date))}</Text>
-          <Text style={[s.td, { flex: 1.4, direction: 'ltr' }]}>{ar(sup.ref)}</Text>
-          <Text style={[s.td, { flex: 0.9 }]}>{ar(MILK_SHIFT_LABELS[sup.milkShift ?? 'morning'])}</Text>
-          <Text style={[s.td, { flex: 1 }]}>{ar(pdfFmtNum(sup.quantity, 1))}</Text>
-          <Text style={[s.td, { flex: 1 }]}>{ar(pdfFmtNum(sup.unitPrice, 3))}</Text>
-          <Text style={[s.td, { flex: 0.9 }]}>{ar(QUALITY_LABELS[sup.qualityTier] ?? sup.qualityTier)}</Text>
-          <Text style={[s.td, { flex: 1.2, fontWeight: 'bold' }]}>{ar(pdfFmtNum(sup.total))}</Text>
+        <View key={sup.id} style={[pdfBase.tableRow, i % 2 === 1 && pdfBase.rowEven]} wrap={false}>
+          <PdfTd flex={1.2} kind="date">{pdfFmtDate(sup.date)}</PdfTd>
+          <PdfTd flex={1.4} kind="ref">{sup.ref}</PdfTd>
+          <PdfTd flex={0.9}>{MILK_SHIFT_LABELS[sup.milkShift ?? 'morning']}</PdfTd>
+          <PdfTd flex={1} kind="num">{sup.quantity.toFixed(1)}</PdfTd>
+          <PdfTdMoney flex={1} amount={sup.unitPrice} decimals={3} />
+          <PdfTd flex={0.9}>{QUALITY_LABELS[sup.qualityTier] ?? sup.qualityTier}</PdfTd>
+          <PdfTdMoney flex={1.2} amount={sup.total} bold />
         </View>
       ))}
-      <View style={s.totalRow} wrap={false}>
+      <View style={pdfBase.totalRowBar} minPresenceAhead={52}>
         <Text style={s.totalLabel}>{ar('إجمالي قيمة الاستلام المعروض')}</Text>
         <PdfMoneyText amount={suppliesTotal} size="md" />
       </View>
 
-      {/* المدفوعات */}
       {sortedPayments.length > 0 && (
         <>
           <PdfSectionTitle>الدفعات</PdfSectionTitle>
-          <View style={s.head} minPresenceAhead={40}>
-            <Text style={[s.th, { flex: 1.4 }]}>{ar('التاريخ')}</Text>
-            <Text style={[s.th, { flex: 1.6 }]}>{ar('المرجع')}</Text>
-            <Text style={[s.th, { flex: 1.2 }]}>{ar('الطريقة')}</Text>
-            <Text style={[s.th, { flex: 1.4 }]}>{ar('المبلغ')}</Text>
+          <View style={pdfBase.tableHead} minPresenceAhead={40}>
+            <PdfTh flex={1.4} kind="date">التاريخ</PdfTh>
+            <PdfTh flex={1.6} kind="ref">المرجع</PdfTh>
+            <PdfTh flex={1.2}>الطريقة</PdfTh>
+            <PdfTh flex={1.4} kind="money">المبلغ</PdfTh>
           </View>
           {sortedPayments.map((p, i) => (
-            <View key={p.id} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
-              <Text style={[s.td, { flex: 1.4 }]}>{ar(pdfFmtDate(p.date))}</Text>
-              <Text style={[s.td, { flex: 1.6, direction: 'ltr' }]}>{ar(p.ref)}</Text>
-              <Text style={[s.td, { flex: 1.2 }]}>{ar(PAYMENT_METHOD_LABELS[p.method])}</Text>
-              <Text style={[s.td, { flex: 1.4, fontWeight: 'bold' }]}>{ar(pdfFmtNum(p.amount))}</Text>
+            <View key={p.id} style={[pdfBase.tableRow, i % 2 === 1 && pdfBase.rowEven]} wrap={false}>
+              <PdfTd flex={1.4} kind="date">{pdfFmtDate(p.date)}</PdfTd>
+              <PdfTd flex={1.6} kind="ref">{p.ref}</PdfTd>
+              <PdfTd flex={1.2}>{PAYMENT_METHOD_LABELS[p.method]}</PdfTd>
+              <PdfTdMoney flex={1.4} amount={p.amount} color={PDF.logoGreen} bold />
             </View>
           ))}
-          <View style={s.totalRow} wrap={false}>
+          <View style={pdfBase.totalRowBar} minPresenceAhead={52}>
             <Text style={s.totalLabel}>{ar('إجمالي المدفوع المعروض')}</Text>
             <PdfMoneyText amount={paymentsTotal} size="md" color={PDF.logoGreen} />
           </View>
         </>
       )}
 
-      {/* الرصيد النهائي */}
-      <View style={s.balanceBox} wrap={false}>
-        <Text style={{ fontSize: 9, color: PDF.muted, marginBottom: 4, lineHeight: 1.4 }}>{ar('الرصيد المستحق للفلاح')}</Text>
-        <PdfMoneyText amount={farmer.creditBalance} size="lg" />
-        <Text style={{ fontSize: 8, color: PDF.muted, marginTop: 6, lineHeight: 1.4 }}>
-          {ar('وفق سجلات النظام شاملاً الأرصدة الافتتاحية والتسويات')}
-        </Text>
-      </View>
+      <PdfKeepTogether minAhead={130}>
+        <View style={s.balanceBox}>
+          <Text style={{ fontSize: 9, color: PDF.muted, marginBottom: 4, lineHeight: 1.4 }}>{ar('الرصيد المستحق للفلاح')}</Text>
+          <PdfMoneyText amount={farmer.creditBalance} size="lg" />
+          <Text style={{ fontSize: 8, color: PDF.muted, marginTop: 6, lineHeight: 1.4 }}>
+            {ar('وفق سجلات النظام شاملاً الأرصدة الافتتاحية والتسويات')}
+          </Text>
+        </View>
+      </PdfKeepTogether>
     </ReportShell>
   );
 }

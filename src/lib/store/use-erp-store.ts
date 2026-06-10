@@ -16,10 +16,13 @@ import {
   allocatePaymentToPartyDebts,
   applySettlementToEntry,
   defaultDebtDirection,
+  debtRecordCashDirection,
+  debtRecordSettleAmount,
   debtRemainingAmount,
   debtSettlementIsCashOut,
   isDebtFullySettled,
   reversePaymentDebtAllocation,
+  type DebtCashMode,
 } from "@/lib/domain/debt";
 import type {
   AccountSourceType,
@@ -243,6 +246,13 @@ interface ErpState {
     direction?: DebtDirection;
     date?: string;
     description?: string;
+    /** ربط فوري بالخزينة — صرف أو تحصيل أو محاسبي فقط */
+    cashMode?: DebtCashMode;
+    method?: Payment["method"];
+    sourceType?: AccountSourceType;
+    sourceId?: string;
+    /** مبلغ النقد الفعلي (للتسوية الجزئية عند الصرف/التحصيل) */
+    cashAmount?: number;
   }) => Promise<MutationResult>;
   updateDebtEntry: (
     id: string,
@@ -1903,6 +1913,12 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     if (input.amount <= 0)
       return { ok: false, error: "المبلغ يجب أن يكون أكبر من صفر." };
 
+    const cashMode = input.cashMode ?? "none";
+    const useSource = cashMode !== "none";
+    if (useSource && (!input.sourceType || !input.sourceId)) {
+      return { ok: false, error: "اختر الخزينة أو البنك للحركة النقدية." };
+    }
+
     const direction = input.direction ?? defaultDebtDirection(input.partyKind);
     let partyName = input.partyName?.trim() ?? "";
     let partyId = input.partyId;
@@ -1925,9 +1941,51 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     }
 
     const amount = round(input.amount);
+    const cashDirection = debtRecordCashDirection(cashMode);
+    const cashAmount = round(
+      input.cashAmount != null && input.cashAmount > 0
+        ? input.cashAmount
+        : amount,
+    );
+    if (useSource && cashAmount <= 0) {
+      return { ok: false, error: "أدخل مبلغ الحركة النقدية." };
+    }
+    if (useSource && cashAmount > amount + 0.01) {
+      return {
+        ok: false,
+        error: "مبلغ النقد لا يمكن أن يتجاوز قيمة الدين.",
+      };
+    }
+
+    const settleOnCreate = useSource
+      ? debtRecordSettleAmount(
+          direction,
+          cashMode as "disburse" | "collect",
+          amount,
+          cashAmount,
+        )
+      : 0;
+
+    if (useSource && cashDirection === "out") {
+      const bal = accountBalance(
+        input.sourceType!,
+        input.sourceId!,
+        state.vaults,
+        state.banks,
+        state.cashMovements,
+      );
+      if (cashAmount > bal + 0.001) {
+        return {
+          ok: false,
+          error: `الرصيد المتاح (${formatMoney(Math.floor(bal), { decimals: 0 })}) لا يكفي.`,
+        };
+      }
+    }
+
     const dateRaw = input.date ?? new Date().toISOString();
-    const entry: DebtEntry = {
-      id: uid("deb-"),
+    const entryId = uid("deb-");
+    let entry: DebtEntry = {
+      id: entryId,
       ref: nextRef("DEB", state.debtEntries),
       sessionId: state.activeSessionId,
       date: dateRaw.slice(0, 10),
@@ -1941,6 +1999,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       createdBy: state.auth?.name,
     };
 
+    if (settleOnCreate > 0.001) {
+      entry = applySettlementToEntry(entry, settleOnCreate);
+    }
+
     const kindLabel =
       input.partyKind === "farmer"
         ? "فلاح"
@@ -1949,26 +2011,130 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           : input.partyKind === "employee"
             ? "موظف"
             : "خارجي";
+
+    const cashNote =
+      cashMode === "disburse"
+        ? " — صرف نقدي"
+        : cashMode === "collect"
+          ? " — تحصيل نقدي"
+          : "";
+
+    let linkedPayment: Payment | null = null;
+    if (settleOnCreate > 0.001 && input.partyKind === "farmer" && partyId) {
+      linkedPayment = {
+        id: uid("pay-"),
+        ref: nextRef(
+          "PAY",
+          state.payments.filter((p) => p.kind === "farmer_payment"),
+        ),
+        kind: "farmer_payment",
+        partyId,
+        sessionId: state.activeSessionId,
+        date: dateRaw,
+        amount: settleOnCreate,
+        method: input.method ?? "cash",
+        paidFromType: input.sourceType,
+        paidFromId: input.sourceId,
+        reference: entry.ref,
+        notes: `تسجيل دين مع صرف — ${entry.ref}`,
+        debtSettledAmount: settleOnCreate,
+        createdAt: new Date().toISOString(),
+        createdBy: state.auth?.name,
+      };
+    } else if (
+      settleOnCreate > 0.001 &&
+      input.partyKind === "customer" &&
+      partyId
+    ) {
+      linkedPayment = {
+        id: uid("pay-"),
+        ref: nextRef(
+          "RCV",
+          state.payments.filter((p) => p.kind === "customer_payment"),
+        ),
+        kind: "customer_payment",
+        partyId,
+        sessionId: state.activeSessionId,
+        date: dateRaw,
+        amount: settleOnCreate,
+        method: input.method ?? "cash",
+        paidFromType: input.sourceType,
+        paidFromId: input.sourceId,
+        reference: entry.ref,
+        notes: `تسجيل دين مع تحصيل — ${entry.ref}`,
+        debtSettledAmount: settleOnCreate,
+        createdAt: new Date().toISOString(),
+        createdBy: state.auth?.name,
+      };
+    }
+
+    let movement: CashMovement | null = null;
+    if (useSource && cashDirection) {
+      const cashOut = cashDirection === "out";
+      const movementType =
+        input.partyKind === "farmer" && cashOut
+          ? "farmer_payout"
+          : input.partyKind === "customer" && !cashOut
+            ? "sale_payment"
+            : cashOut
+              ? "expense"
+              : "income";
+      movement = {
+        id: uid("cm-"),
+        ref: nextRef("CM", state.cashMovements),
+        movementType,
+        sourceType: input.sourceType!,
+        sourceId: input.sourceId!,
+        amount: cashAmount,
+        direction: cashDirection,
+        referenceType: linkedPayment ? "payment" : "debt",
+        referenceId: linkedPayment?.id ?? entry.id,
+        description: `تسجيل دين ${entry.ref}${cashNote} — ${partyName}`,
+        sessionId: state.activeSessionId,
+        date: dateRaw,
+        createdAt: new Date().toISOString(),
+        createdBy: state.auth?.name,
+      };
+    }
+
     const audit = makeAudit(
       state,
       "debt",
       entry.id,
       "create",
-      `تسجيل دين — ${kindLabel} ${partyName}: ${formatMoney(amount, { decimals: 0 })}${entry.description ? ` (${entry.description})` : ""}`,
+      `تسجيل دين — ${kindLabel} ${partyName}: ${formatMoney(amount, { decimals: 0 })}${entry.description ? ` (${entry.description})` : ""}${cashNote}`,
     );
+
+    const dbRows: { table: string; rows: Record<string, unknown>[] }[] = [
+      {
+        table: "debt_entries",
+        rows: [entry as unknown as Record<string, unknown>],
+      },
+    ];
+    if (linkedPayment) {
+      dbRows.push({
+        table: "payments",
+        rows: [linkedPayment as unknown as Record<string, unknown>],
+      });
+    }
+    if (movement) {
+      dbRows.push({
+        table: "cash_movements",
+        rows: [movement as unknown as Record<string, unknown>],
+      });
+    }
 
     const res = await mutateWithDb(
       () =>
         set((s) => ({
           debtEntries: [entry, ...s.debtEntries],
+          payments: linkedPayment ? [linkedPayment, ...s.payments] : s.payments,
+          cashMovements: movement
+            ? [movement, ...s.cashMovements]
+            : s.cashMovements,
           auditLogs: [audit, ...s.auditLogs],
         })),
-      [
-        {
-          table: "debt_entries",
-          rows: [entry as unknown as Record<string, unknown>],
-        },
-      ],
+      dbRows,
     );
     return res.ok ? { ok: true, id: entry.id } : res;
   },
@@ -2220,13 +2386,22 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const quantity = round(input.quantity);
     const reasonKind: AdjustmentReasonKind =
       input.reasonKind ?? resolveAdjustmentReasonKind(input.reason, quantity);
+    const ledgerNow = buildInventoryLedger(
+      state.supplies,
+      state.sales,
+      state.adjustments,
+      state.sessions,
+    );
+    const wacNow =
+      ledgerNow.currentStock > 0 ? round(ledgerNow.currentWac, 3) : round(input.unitCost, 3);
+    const unitCost = quantity < 0 ? wacNow : round(input.unitCost, 3);
     const tx: InventoryAdjustment = {
       id: uid("adj-"),
       ref: nextRef("ADJ", state.adjustments),
       sessionId: state.activeSessionId,
       date: input.date ?? new Date().toISOString(),
       quantity,
-      unitCost: round(input.unitCost, 3),
+      unitCost,
       reason: input.reason,
       reasonKind,
       createdAt: new Date().toISOString(),
@@ -2297,23 +2472,28 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     }
 
     const quantity = round(patch.quantity ?? existing.quantity);
-    const unitCost = round(patch.unitCost ?? existing.unitCost, 3);
     const reason = (patch.reason ?? existing.reason).trim();
     if (quantity === 0) return { ok: false, error: "حدّد كمية التسوية." };
     if (!reason) return { ok: false, error: "أدخل سبب التسوية." };
 
-    const baseStock = buildInventoryLedger(
+    const baseLedger = buildInventoryLedger(
       state.supplies,
       state.sales,
       state.adjustments.filter((a) => a.id !== id),
       state.sessions,
-    ).currentStock;
-    if (baseStock + quantity < -0.001) {
+    );
+    if (baseLedger.currentStock + quantity < -0.001) {
       return {
         ok: false,
-        error: `كمية النقص تتجاوز المخزون المتاح (${formatLiters(Math.floor(baseStock), 0, false)}).`,
+        error: `كمية النقص تتجاوز المخزون المتاح (${formatLiters(Math.floor(baseLedger.currentStock), 0, false)}).`,
       };
     }
+
+    const wacNow =
+      baseLedger.currentStock > 0
+        ? round(baseLedger.currentWac, 3)
+        : round(patch.unitCost ?? existing.unitCost, 3);
+    const unitCost = quantity < 0 ? wacNow : round(patch.unitCost ?? existing.unitCost, 3);
 
     const reasonKind: AdjustmentReasonKind =
       patch.reasonKind ?? resolveAdjustmentReasonKind(reason, quantity);

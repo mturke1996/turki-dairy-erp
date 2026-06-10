@@ -46,39 +46,45 @@ export function NetPositionCard({ position }: { position: AdjustedNetPosition })
   return (
     <section
       className={cn(
-        'relative overflow-hidden rounded-2xl border shadow-whisper',
-        positive ? 'border-meadow-200/70 bg-gradient-to-br from-card via-card to-meadow-50/50' : 'border-rose-200/60 bg-gradient-to-br from-card via-card to-rose-50/40',
+        'relative overflow-hidden rounded-xl border lg:rounded-2xl',
+        positive
+          ? 'border-meadow-200/70 bg-gradient-to-br from-card via-card to-meadow-50/40'
+          : 'border-rose-200/60 bg-gradient-to-br from-card via-card to-rose-50/35',
       )}
     >
       <div
         className={cn(
-          'pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full blur-3xl',
+          'pointer-events-none absolute -left-12 -top-12 h-32 w-32 rounded-full blur-3xl sm:-left-16 sm:-top-16 sm:h-48 sm:w-48',
           positive ? 'bg-meadow-200/30' : 'bg-rose-200/25',
         )}
       />
       <div
         className={cn(
-          'pointer-events-none absolute -bottom-20 -right-10 h-56 w-56 rounded-full blur-3xl',
+          'pointer-events-none absolute -bottom-16 -right-8 h-40 w-40 rounded-full blur-3xl sm:-bottom-20 sm:-right-10 sm:h-56 sm:w-56',
           positive ? 'bg-navy-100/25' : 'bg-rose-100/20',
         )}
       />
 
-      <div className="relative p-5 sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 flex-1 space-y-3">
+      <div className="relative p-4 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-5">
+          <div className="min-w-0 flex-1 space-y-2 sm:space-y-3">
             <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-meadow-100 text-meadow-800 ring-1 ring-meadow-200">
-                  <Scale className="h-5 w-5 stroke-[1.7]" />
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-meadow-100 text-meadow-800 ring-1 ring-meadow-200 sm:h-10 sm:w-10">
+                  <Scale className="h-4.5 w-4.5 stroke-[1.7] sm:h-5 sm:w-5" />
                 </span>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-meadow-700">المركز المالي</p>
-                  <h2 className="text-[15px] font-bold text-foreground sm:text-[16px]">الرصيد النهائي بعد التسويات</h2>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-meadow-700 sm:text-[11px]">
+                    المركز المالي
+                  </p>
+                  <h2 className="truncate text-[14px] font-bold text-foreground sm:text-[16px]">
+                    الرصيد النهائي بعد التسويات
+                  </h2>
                 </div>
               </div>
               <Link
                 href="/treasury"
-                className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-[12px] font-semibold text-muted-foreground transition-colors hover:bg-canvas-sunken hover:text-foreground"
+                className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-canvas-sunken hover:text-foreground sm:text-[12px]"
               >
                 التفاصيل
                 <ChevronLeft className="h-4 w-4" />
@@ -89,38 +95,63 @@ export function NetPositionCard({ position }: { position: AdjustedNetPosition })
               <Money
                 value={position.finalBalance}
                 decimals={0}
-                className={cn('text-[32px] font-bold tracking-tight sm:text-[38px]', positive ? 'text-meadow-900' : 'text-rose-800')}
+                className={cn(
+                  'text-[26px] font-bold tracking-tight sm:text-[32px] lg:text-[38px]',
+                  positive ? 'text-meadow-900' : 'text-rose-800',
+                )}
               />
-              <p className="mt-1 text-[12.5px] text-muted-foreground">
+              <p className="mt-1 text-[11.5px] text-muted-foreground sm:text-[12.5px]">
                 {positive ? 'مركز مالي إيجابي بعد احتساب الأصول والالتزامات' : 'عجز بعد تسوية الديون والمخزون'}
               </p>
             </div>
           </div>
 
-          {/* شريط المعادلة */}
-          <div className="w-full lg:max-w-xl">
+          {/* جوال: شبكة 2×2 بدل الشريط الأفقي الطويل */}
+          <div className="w-full lg:hidden">
+            <p className="mb-2 text-[11px] font-medium text-muted-foreground">مكوّنات المركز</p>
+            <div className="grid grid-cols-2 gap-2">
+              {FORMULA_PARTS.map((part) => {
+                const Icon = part.icon;
+                const value = partValue(position, part.key);
+                return (
+                  <div key={part.key} className={cn('flex flex-col rounded-xl px-2.5 py-2 ring-1', part.tone)}>
+                    <span className="flex items-center gap-1 text-[10px] font-semibold">
+                      <Icon className="h-3 w-3 shrink-0" />
+                      {part.label}
+                    </span>
+                    <Money value={value} decimals={0} className="mt-0.5 text-[13px] font-bold" />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* سطح المكتب: شريط المعادلة الأفقي */}
+          <div className="hidden w-full lg:block lg:max-w-xl">
             <p className="mb-2 text-[11px] font-medium text-muted-foreground">المعادلة المتسلسلة</p>
-            <div className="-mx-1 flex items-stretch gap-1 overflow-x-auto px-1 pb-1 no-scrollbar sm:gap-1.5">
+            <div className="-mx-1 flex items-stretch gap-1.5 overflow-x-auto px-1 pb-1 no-scrollbar">
               {FORMULA_PARTS.map((part, i) => {
                 const Icon = part.icon;
                 const value = partValue(position, part.key);
                 const op = i === 0 ? '=' : i === 3 ? '−' : '+';
                 return (
-                  <div key={part.key} className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+                  <div key={part.key} className="flex shrink-0 items-center gap-1.5">
                     {i > 0 ? (
-                      <span className="flex h-6 w-6 items-center justify-center text-[13px] font-bold text-muted-foreground">{op}</span>
+                      <span className="flex h-6 w-6 items-center justify-center text-[13px] font-bold text-muted-foreground">
+                        {op}
+                      </span>
                     ) : null}
-                    <div className={cn('flex min-w-[88px] flex-col rounded-xl px-2.5 py-2 ring-1 sm:min-w-[96px] sm:px-3', part.tone)}>
+                    <div className={cn('flex min-w-[96px] flex-col rounded-xl px-3 py-2 ring-1', part.tone)}>
                       <span className="flex items-center gap-1 text-[10px] font-semibold">
                         <Icon className="h-3 w-3 shrink-0" />
                         {part.label}
                       </span>
-                      <Money value={value} decimals={0} className="mt-0.5 text-[13px] font-bold sm:text-[14px]" />
+                      <Money value={value} decimals={0} className="mt-0.5 text-[14px] font-bold" />
                     </div>
                   </div>
                 );
               })}
-              <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+              <div className="flex shrink-0 items-center gap-1.5">
                 <span className="flex h-6 w-6 items-center justify-center text-[13px] font-bold text-muted-foreground">=</span>
                 <div
                   className={cn(
@@ -139,14 +170,14 @@ export function NetPositionCard({ position }: { position: AdjustedNetPosition })
         <Button
           type="button"
           variant="ghost"
-          className="mt-4 h-9 w-full justify-between px-2 text-[12.5px] font-semibold lg:hidden"
+          className="mt-3 h-9 w-full justify-between px-2 text-[12px] font-semibold lg:hidden"
           onClick={() => setStepsOpen((o) => !o)}
         >
           خطوات الحساب المتسلسل
           <ChevronDown className={cn('h-4 w-4 transition-transform', stepsOpen && 'rotate-180')} />
         </Button>
 
-        <div className={cn('mt-3 grid gap-2 sm:grid-cols-2 lg:mt-5 lg:grid-cols-4', !stepsOpen && 'hidden lg:grid')}>
+        <div className={cn('mt-2 grid gap-2 sm:grid-cols-2 lg:mt-5 lg:grid-cols-4', !stepsOpen && 'hidden lg:grid')}>
           {position.steps.map((step) => {
             const Icon = step.op === 'base' ? Equal : step.op === 'add' ? Plus : Minus;
             return (

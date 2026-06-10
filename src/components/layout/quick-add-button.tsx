@@ -96,7 +96,7 @@ export function QuickAddButton() {
   if (!actions.length) return null;
 
   return (
-    <div className="fixed bottom-[74px] left-4 z-50 lg:bottom-6 lg:left-6">
+    <div className="fixed bottom-[98px] left-4 z-50 lg:bottom-8 lg:left-auto lg:right-6">
       <DropdownMenu>
         <DropdownMenuTrigger
           className={cn(

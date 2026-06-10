@@ -2,9 +2,10 @@
 import React from 'react';
 import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
-import { ar } from './arabicPDF';
-import { PDF } from './pdfBase';
-import { pdfFmtNum, pdfFmtLiters, pdfFmtMoneyLibyan } from './pdfBrandKit';
+import { ar, pdfDisplayValue } from './arabicPDF';
+import { PDF, pdfBase } from './pdfBase';
+import { PdfMoneyText, pdfFmtNum, pdfFmtLiters } from './pdfBrandKit';
+import { PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 import type { SessionSummary } from '@/lib/domain/calculations';
 
 const s = StyleSheet.create({
@@ -25,15 +26,9 @@ const s = StyleSheet.create({
 
   section: { fontSize: 11.5, fontWeight: 'bold', color: PDF.primary, marginTop: 20, marginBottom: 10, textAlign: 'right', borderBottomWidth: 0.75, borderBottomColor: PDF.border, borderRightWidth: 3, borderRightColor: PDF.accent, paddingBottom: 5, paddingRight: 8, lineHeight: 1.35 },
 
-  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.primary, paddingVertical: 9, paddingHorizontal: 9, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: PDF.accent },
-  th: { color: PDF.white, fontSize: 8.5, fontWeight: 'bold', lineHeight: 1.4 },
-  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 7, paddingHorizontal: 9, borderBottomWidth: 0.5, borderBottomColor: PDF.border, alignItems: 'center' },
-  rowAlt: { backgroundColor: PDF.rowAlt },
-  td: { fontSize: 8.5, color: PDF.text, lineHeight: 1.45 },
-
   carry: {
-    direction: 'rtl',
-    flexDirection: 'row',
+    direction: 'ltr',
+    flexDirection: 'row-reverse',
     gap: 0,
     marginTop: 20,
     borderWidth: 0.75,
@@ -44,7 +39,7 @@ const s = StyleSheet.create({
   },
   carryCell: { flex: 1, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 10, borderLeftWidth: 0.5, borderLeftColor: PDF.border },
   carryLabel: { fontSize: 7.5, color: PDF.muted, marginBottom: 5, lineHeight: 1.3 },
-  carryValue: { fontSize: 13, fontWeight: 'bold', color: PDF.primary, lineHeight: 1.3 },
+  carryValue: { fontSize: 13, fontWeight: 'bold', color: PDF.primary, lineHeight: 1.3, direction: 'ltr', textAlign: 'center' },
 });
 
 export type SessionClosingProps = {
@@ -55,11 +50,17 @@ export type SessionClosingProps = {
   employeeBalances?: { name: string; balance: number }[];
 };
 
-function Stat({ title, value, sub, color = PDF.primary }: any) {
+function Stat({ title, value, sub, color = PDF.primary, moneyAmount }: { title: string; value?: string; sub?: string; color?: string; moneyAmount?: number }) {
   return (
     <View style={s.stat} wrap={false}>
       <Text style={s.statTitle}>{ar(title)}</Text>
-      <Text style={[s.statValue, { color }]}>{ar(value)}</Text>
+      {moneyAmount != null && Number.isFinite(moneyAmount) ? (
+        <View style={{ alignItems: 'flex-end' }}>
+          <PdfMoneyText amount={moneyAmount} size="sm" color={color} />
+        </View>
+      ) : (
+        <Text style={[s.statValue, { color, direction: 'ltr', textAlign: 'right' }]}>{pdfDisplayValue(value ?? '')}</Text>
+      )}
       {sub ? <Text style={s.statSub}>{ar(sub)}</Text> : null}
     </View>
   );
@@ -81,32 +82,32 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       <Text style={s.section}>{ar('الملخص التشغيلي')}</Text>
       <View style={s.grid}>
         <Stat title="عدد عمليات الاستلام" value={pdfFmtNum(summary.supplyCount, 0)} sub={pdfFmtLiters(summary.supplyQty, 0)} color={PDF.logoGreen} />
-        <Stat title="تكلفة الاستلام" value={pdfFmtMoneyLibyan(summary.supplyCost, 0)} sub="إجمالي المشتريات" />
+        <Stat title="تكلفة الاستلام" moneyAmount={summary.supplyCost} sub="إجمالي المشتريات" />
         <Stat title="عدد عمليات البيع" value={pdfFmtNum(summary.salesCount, 0)} sub={pdfFmtLiters(summary.salesQty, 0)} />
-        <Stat title="تكلفة البضاعة المباعة" value={pdfFmtMoneyLibyan(summary.cogs, 0)} sub="COGS" />
-        <Stat title="الربح الإجمالي" value={pdfFmtMoneyLibyan(summary.grossProfit, 0)} sub={`هامش ${pdfFmtNum(summary.marginPct, 1)}%`} color={PDF.logoGreen} />
+        <Stat title="تكلفة البضاعة المباعة" moneyAmount={summary.cogs} sub="COGS" />
+        <Stat title="الربح الإجمالي" moneyAmount={summary.grossProfit} sub={`هامش ${pdfFmtNum(summary.marginPct, 1)}%`} color={PDF.logoGreen} />
         <Stat title="حركة المخزون" value={`${pdfFmtNum(summary.openingStock, 0)} ← ${pdfFmtNum(summary.closingStock, 0)}`} sub="افتتاحي ← ختامي" />
       </View>
 
       <Text style={s.section}>{ar('الحركة النقدية')}</Text>
       <View style={s.grid}>
-        <Stat title="مدفوعات للفلاحين" value={pdfFmtMoneyLibyan(summary.farmerPayments, 0)} />
-        <Stat title="تحصيلات من العملاء" value={pdfFmtMoneyLibyan(summary.customerReceipts, 0)} color={PDF.logoGreen} />
-        <Stat title="صافي التدفق" value={pdfFmtMoneyLibyan(summary.customerReceipts - summary.farmerPayments, 0)} color={summary.customerReceipts - summary.farmerPayments >= 0 ? PDF.logoGreen : PDF.danger} />
+        <Stat title="مدفوعات للفلاحين" moneyAmount={summary.farmerPayments} />
+        <Stat title="تحصيلات من العملاء" moneyAmount={summary.customerReceipts} color={PDF.logoGreen} />
+        <Stat title="صافي التدفق" moneyAmount={summary.customerReceipts - summary.farmerPayments} color={summary.customerReceipts - summary.farmerPayments >= 0 ? PDF.logoGreen : PDF.danger} />
       </View>
 
       {/* أرصدة مُرحّلة */}
       {farmerBalances.length > 0 && (
         <>
           <Text style={s.section}>{ar('ديون الفلاحين')}</Text>
-          <View style={s.head} minPresenceAhead={40}>
-            <Text style={[s.th, { flex: 3, textAlign: 'right' }]}>{ar('الفلاح')}</Text>
-            <Text style={[s.th, { flex: 1.4, textAlign: 'left' }]}>{ar('الرصيد (د.ل)')}</Text>
+          <View style={pdfBase.tableHead} minPresenceAhead={40}>
+            <PdfTh flex={3}>الفلاح</PdfTh>
+            <PdfTh flex={1.4} kind="money">الرصيد</PdfTh>
           </View>
           {farmerBalances.slice(0, 12).map((b, i) => (
-            <View key={i} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
-              <Text style={[s.td, { flex: 3, textAlign: 'right' }]}>{ar(b.name)}</Text>
-              <Text style={[s.td, { flex: 1.4, textAlign: 'left', fontWeight: 'bold' }]}>{ar(pdfFmtNum(b.balance))}</Text>
+            <View key={i} style={[pdfBase.tableRow, i % 2 === 1 && pdfBase.rowEven]} wrap={false}>
+              <PdfTd flex={3}>{b.name}</PdfTd>
+              <PdfTdMoney flex={1.4} amount={b.balance} />
             </View>
           ))}
         </>
@@ -115,14 +116,14 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       {customerBalances.length > 0 && (
         <>
           <Text style={s.section}>{ar('أرصدة العملاء المدينة')}</Text>
-          <View style={s.head} minPresenceAhead={40}>
-            <Text style={[s.th, { flex: 3, textAlign: 'right' }]}>{ar('العميل')}</Text>
-            <Text style={[s.th, { flex: 1.4, textAlign: 'left' }]}>{ar('الرصيد (د.ل)')}</Text>
+          <View style={pdfBase.tableHead} minPresenceAhead={40}>
+            <PdfTh flex={3}>العميل</PdfTh>
+            <PdfTh flex={1.4} kind="money">الرصيد</PdfTh>
           </View>
           {customerBalances.slice(0, 12).map((b, i) => (
-            <View key={i} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
-              <Text style={[s.td, { flex: 3, textAlign: 'right' }]}>{ar(b.name)}</Text>
-              <Text style={[s.td, { flex: 1.4, textAlign: 'left', fontWeight: 'bold' }]}>{ar(pdfFmtNum(b.balance))}</Text>
+            <View key={i} style={[pdfBase.tableRow, i % 2 === 1 && pdfBase.rowEven]} wrap={false}>
+              <PdfTd flex={3}>{b.name}</PdfTd>
+              <PdfTdMoney flex={1.4} amount={b.balance} />
             </View>
           ))}
         </>
@@ -131,14 +132,14 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       {employeeBalances.length > 0 && (
         <>
           <Text style={s.section}>{ar('سلف الموظفين المُرحّلة')}</Text>
-          <View style={s.head} minPresenceAhead={40}>
-            <Text style={[s.th, { flex: 3, textAlign: 'right' }]}>{ar('الموظف')}</Text>
-            <Text style={[s.th, { flex: 1.4, textAlign: 'left' }]}>{ar('الرصيد (د.ل)')}</Text>
+          <View style={pdfBase.tableHead} minPresenceAhead={40}>
+            <PdfTh flex={3}>الموظف</PdfTh>
+            <PdfTh flex={1.4} kind="money">الرصيد</PdfTh>
           </View>
           {employeeBalances.slice(0, 12).map((b, i) => (
-            <View key={i} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
-              <Text style={[s.td, { flex: 3, textAlign: 'right' }]}>{ar(b.name)}</Text>
-              <Text style={[s.td, { flex: 1.4, textAlign: 'left', fontWeight: 'bold' }]}>{ar(pdfFmtNum(b.balance))}</Text>
+            <View key={i} style={[pdfBase.tableRow, i % 2 === 1 && pdfBase.rowEven]} wrap={false}>
+              <PdfTd flex={3}>{b.name}</PdfTd>
+              <PdfTdMoney flex={1.4} amount={b.balance} />
             </View>
           ))}
         </>
@@ -148,15 +149,15 @@ export function SessionClosingPDF({ summary, carryForward, farmerBalances = [], 
       <View style={s.carry} wrap={false}>
         <View style={s.carryCell}>
           <Text style={s.carryLabel}>{ar('مخزون مُرحّل')}</Text>
-          <Text style={s.carryValue} dir="ltr">{ar(pdfFmtLiters(carryForward.openingStock, 0))}</Text>
+          <Text style={s.carryValue}>{pdfFmtLiters(carryForward.openingStock, 0)}</Text>
         </View>
         <View style={s.carryCell}>
           <Text style={s.carryLabel}>{ar('ديون الفلاحين')}</Text>
-          <Text style={s.carryValue} dir="ltr">{ar(pdfFmtMoneyLibyan(carryForward.payables, 0))}</Text>
+          <PdfMoneyText amount={carryForward.payables} size="sm" />
         </View>
         <View style={s.carryCell}>
           <Text style={s.carryLabel}>{ar('ديون لنا')}</Text>
-          <Text style={s.carryValue} dir="ltr">{ar(pdfFmtMoneyLibyan(carryForward.receivables, 0))}</Text>
+          <PdfMoneyText amount={carryForward.receivables} size="sm" />
         </View>
       </View>
     </ReportShell>

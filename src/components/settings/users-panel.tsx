@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ROLE_LABELS } from '@/lib/domain/constants';
 import { isAuthRequired } from '@/lib/supabase/config';
 import type { Role } from '@/lib/domain/types';
@@ -103,8 +104,11 @@ export function UsersPanel() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="space-y-2.5 py-2" aria-busy="true" aria-label="جارٍ تحميل المستخدمين">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-11 w-full" />
+              <Skeleton className="h-11 w-full" />
+              <Skeleton className="h-11 w-5/6" />
             </div>
           ) : users.length ? (
             <Table>

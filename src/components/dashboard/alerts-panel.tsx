@@ -33,21 +33,36 @@ function countByLevel(alerts: SystemAlert[], level: SystemAlert['level']) {
   return alerts.filter((a) => a.level === level).length;
 }
 
-export function AlertsPanel({ alerts, className }: { alerts: SystemAlert[]; className?: string }) {
+export function AlertsPanel({
+  alerts,
+  className,
+  limit,
+  compact,
+}: {
+  alerts: SystemAlert[];
+  className?: string;
+  /** يحدّد عدد التنبيهات المعروضة (للجوال) */
+  limit?: number;
+  compact?: boolean;
+}) {
   const danger = countByLevel(alerts, 'danger');
   const warning = countByLevel(alerts, 'warning');
   const info = countByLevel(alerts, 'info');
 
+  const visible = limit ? alerts.slice(0, limit) : alerts;
+
   return (
-    <Card id="alerts" className={cn('scroll-mt-24', className)}>
-      <CardHeader>
+    <Card id="alerts" className={cn('scroll-mt-24', compact && 'border-0 shadow-none', className)}>
+      <CardHeader className={cn(compact && 'px-0 pt-0')}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="h-4.5 w-4.5 text-sun-600" />
+            <CardTitle className={cn('flex items-center gap-2', compact && 'text-[14px]')}>
+              <Bell className="h-4 w-4 text-sun-600" />
               التنبيهات
             </CardTitle>
-            <CardDescription>مراقبة تلقائية للمخزون والهدر والنقد والديون والفترة</CardDescription>
+            {!compact ? (
+              <CardDescription>مراقبة تلقائية للمخزون والهدر والنقد والديون والفترة</CardDescription>
+            ) : null}
           </div>
           {alerts.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
@@ -63,9 +78,9 @@ export function AlertsPanel({ alerts, className }: { alerts: SystemAlert[]; clas
           )}
         </div>
       </CardHeader>
-      <CardContent className="space-y-2.5">
-        {alerts.length ? (
-          alerts.map((a) => {
+      <CardContent className={cn('space-y-2.5', compact && 'px-0 pb-0')}>
+        {visible.length ? (
+          visible.map((a) => {
             const meta = LEVEL_META[a.level];
             const body = (
               <div
@@ -102,6 +117,14 @@ export function AlertsPanel({ alerts, className }: { alerts: SystemAlert[]; clas
             description="لا توجد تنبيهات — المخزون والنقد والديون ضمن الحدود المعتادة."
           />
         )}
+        {limit && alerts.length > limit ? (
+          <Link
+            href="#alerts"
+            className="block rounded-lg bg-canvas-sunken px-3 py-2 text-center text-[12px] font-semibold text-muted-foreground transition-colors active:bg-canvas-sunken/80"
+          >
+            عرض كل التنبيهات ({alerts.length})
+          </Link>
+        ) : null}
       </CardContent>
     </Card>
   );

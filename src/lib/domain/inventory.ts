@@ -205,6 +205,18 @@ export function carryForwardEntry(session: Session): InventoryLedgerEntry | null
 }
 
 /** دفتر حركة دورة واحدة مع صف الترحيل. */
+/** تكلفة تسوية نقص من دفتر المخزون (متوسط مرجّح وقت التسجيل). */
+export function adjustmentLossValueFromLedger(
+  inv: InventoryResult,
+  adjustmentId: string,
+): number | null {
+  const entry = inv.entries.find(
+    (e) => e.sourceKind === 'adjustment' && e.sourceId === adjustmentId && e.quantityOut > 0,
+  );
+  if (!entry) return null;
+  return round(entry.quantityOut * entry.unitCost);
+}
+
 export function sessionLedgerEntries(
   session: Session,
   allEntries: InventoryLedgerEntry[],

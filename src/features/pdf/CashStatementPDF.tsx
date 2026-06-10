@@ -1,18 +1,10 @@
 // @ts-nocheck
 import React from 'react';
-import { Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Text, View } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
-import { PDF } from './pdfBase';
-import { pdfFmtNum } from './pdfBrandKit';
-
-const s = StyleSheet.create({
-  head: { direction: 'rtl', flexDirection: 'row', backgroundColor: PDF.primary, paddingVertical: 9, paddingHorizontal: 9, marginTop: 4, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: PDF.accent },
-  th: { color: PDF.white, fontSize: 8, fontWeight: 'bold', lineHeight: 1.4 },
-  row: { direction: 'rtl', flexDirection: 'row', paddingVertical: 7.5, paddingHorizontal: 9, borderBottomWidth: 0.5, borderBottomColor: PDF.border, alignItems: 'center' },
-  rowAlt: { backgroundColor: PDF.rowAlt },
-  td: { fontSize: 8, color: PDF.text, lineHeight: 1.45 },
-});
+import { PDF, pdfBase } from './pdfBase';
+import { PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 
 export type CashStatementRow = {
   date: string;
@@ -47,23 +39,31 @@ export function CashStatementPDF({ accountName, accountTypeLabel, opening, total
         { label: 'الرصيد الحالي', moneyAmount: closing },
       ]}
     >
-      <View style={s.head} minPresenceAhead={40}>
-        <Text style={[s.th, { flex: 1.1, textAlign: 'left' }]}>{ar('التاريخ')}</Text>
-        <Text style={[s.th, { flex: 2.6, textAlign: 'right' }]}>{ar('البيان')}</Text>
-        <Text style={[s.th, { flex: 1.2, textAlign: 'left' }]}>{ar('وارد')}</Text>
-        <Text style={[s.th, { flex: 1.2, textAlign: 'left' }]}>{ar('صادر')}</Text>
-        <Text style={[s.th, { flex: 1.3, textAlign: 'left' }]}>{ar('الرصيد')}</Text>
+      <View style={[pdfBase.tableHead, { marginTop: 4 }]} minPresenceAhead={40}>
+        <PdfTh flex={1.1} kind="date">التاريخ</PdfTh>
+        <PdfTh flex={2.6}>البيان</PdfTh>
+        <PdfTh flex={1.2} kind="money">وارد</PdfTh>
+        <PdfTh flex={1.2} kind="money">صادر</PdfTh>
+        <PdfTh flex={1.3} kind="money">الرصيد</PdfTh>
       </View>
       {rows.map((r, i) => (
-        <View key={`${r.ref}-${i}`} style={[s.row, i % 2 === 1 && s.rowAlt]} wrap={false}>
-          <Text style={[s.td, { flex: 1.1, textAlign: 'left', direction: 'ltr' }]}>{r.date}</Text>
+        <View key={`${r.ref}-${i}`} style={[pdfBase.tableRow, i % 2 === 1 && pdfBase.rowEven]} wrap={false}>
+          <PdfTd flex={1.1} kind="date">{r.date}</PdfTd>
           <View style={{ flex: 2.6 }}>
-            <Text style={[s.td, { textAlign: 'right', fontWeight: 'bold' }]}>{ar(r.typeLabel)}</Text>
-            <Text style={[s.td, { textAlign: 'right', fontSize: 7, color: PDF.muted }]}>{ar(r.description)}</Text>
+            <Text style={[pdfBase.tdBold, { textAlign: 'right' }]}>{ar(r.typeLabel)}</Text>
+            <Text style={[pdfBase.td, { textAlign: 'right', fontSize: 7, color: PDF.muted }]}>{ar(r.description)}</Text>
           </View>
-          <Text style={[s.td, { flex: 1.2, textAlign: 'left', color: PDF.logoGreen, fontWeight: 'bold' }]}>{r.direction === 'in' ? ar(pdfFmtNum(r.amount, 0)) : '—'}</Text>
-          <Text style={[s.td, { flex: 1.2, textAlign: 'left', color: PDF.danger, fontWeight: 'bold' }]}>{r.direction === 'out' ? ar(pdfFmtNum(r.amount, 0)) : '—'}</Text>
-          <Text style={[s.td, { flex: 1.3, textAlign: 'left', fontWeight: 'bold' }]}>{ar(pdfFmtNum(r.balance, 0))}</Text>
+          {r.direction === 'in' ? (
+            <PdfTdMoney flex={1.2} amount={r.amount} decimals={0} color={PDF.logoGreen} bold />
+          ) : (
+            <PdfTd flex={1.2} kind="num">—</PdfTd>
+          )}
+          {r.direction === 'out' ? (
+            <PdfTdMoney flex={1.2} amount={r.amount} decimals={0} color={PDF.danger} bold />
+          ) : (
+            <PdfTd flex={1.2} kind="num">—</PdfTd>
+          )}
+          <PdfTdMoney flex={1.3} amount={r.balance} decimals={0} bold />
         </View>
       ))}
       {rows.length === 0 ? (

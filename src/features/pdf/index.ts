@@ -2,12 +2,23 @@
 // ============================================================
 
 // Core
-export { registerPdfFonts, PDF_FONT_FAMILY } from './pdfFonts';
-export { ar, arMoney, arDate, arDateParts } from './arabicPDF';
+export { registerPdfFonts, ensurePdfFontsLoaded, PDF_FONT_FAMILY } from './pdfFonts';
+export { ar, arMoney, arDate, arDateParts, pdfDisplayValue, ltrAmountCurrency } from './arabicPDF';
 export { ReportShell, type ReportShellMetaCell } from './ReportShell';
-export { PdfTable, PdfSectionTitle, PdfMoneyCell, type PdfTableColumn, type PdfTableRow } from './PdfTable';
+export {
+  PdfTable,
+  PdfSectionTitle,
+  PdfKeepTogether,
+  PdfMoneyCell,
+  PdfMoneyInline,
+  PdfTh,
+  PdfTd,
+  PdfTdMoney,
+  type PdfTableColumn,
+  type PdfTableRow,
+} from './PdfTable';
 export { TurkiPdfToolbar } from './pdf-toolbar';
-export { renderPdfBlob, savePdfBlob } from './pdf-blob-utils';
+export { renderPdfBlob, savePdfBlob, openPdfInNewTab, canSharePdfFiles } from './pdf-blob-utils';
 
 // Brand Kit
 export {

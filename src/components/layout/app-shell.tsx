@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* المحتوى */}
       <div className="lg:pr-64">
         <Topbar onMenuClick={() => setMobileOpen(true)} />
-        <main className="mx-auto w-full max-w-[1400px] px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8 lg:pb-8">
+        <main className="mx-auto w-full max-w-[1400px] px-4 py-6 pb-44 sm:px-6 lg:px-8 lg:py-8 lg:pb-8">
           {children}
         </main>
       </div>

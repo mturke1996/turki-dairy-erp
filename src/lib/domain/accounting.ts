@@ -210,7 +210,7 @@ export function journalForDebtSettlement(cm: CashMovement, debt: DebtEntry | und
     cm.direction === 'out'
       ? dir === 'payable'
         ? [line(payableAccount(debt), amount, 0), line('cash', 0, amount)]
-        : [line('cash', amount, 0), line(receivableAccount(debt), 0, amount)]
+        : [line(receivableAccount(debt), amount, 0), line('cash', 0, amount)]
       : dir === 'receivable'
         ? [line('cash', amount, 0), line(receivableAccount(debt), 0, amount)]
         : [line(payableAccount(debt), amount, 0), line('cash', 0, amount)];

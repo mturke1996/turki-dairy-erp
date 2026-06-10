@@ -64,112 +64,124 @@ export function OperationsCommandCenter() {
     ? Math.min(100, (d.totals.currentStock / data.settings.minStockThreshold) * 100)
     : 100;
 
-  const stockState = d.totals.currentStock <= data.settings.minStockThreshold
-    ? 'قريب من حد التنبيه'
-    : 'مستقر فوق حد التنبيه';
+  const stockLow = d.totals.currentStock <= data.settings.minStockThreshold;
+  const netToday = today.revenue - today.suppliedValue;
+
+  const metrics = [
+    {
+      icon: ArrowDownToLine,
+      label: 'وارد اليوم',
+      value: <Liters value={today.suppliedQty} />,
+      hint: <Money value={today.suppliedValue} decimals={0} muted />,
+      tone: 'meadow' as const,
+    },
+    {
+      icon: ShoppingCart,
+      label: 'مبيعات اليوم',
+      value: <Liters value={today.soldQty} />,
+      hint: <Money value={today.revenue} decimals={0} muted />,
+      tone: 'navy' as const,
+    },
+    {
+      icon: Gauge,
+      label: 'تقدّم الدورة',
+      value: `${formatNumber(cycle.progress.pct, 0)}%`,
+      hint: `اليوم ${cycle.progress.daysElapsed} من ${cycle.progress.daysTotal}`,
+      tone: 'sun' as const,
+    },
+    {
+      icon: History,
+      label: 'نشاط اليوم',
+      value: formatNumber(today.actions),
+      hint: 'عملية موثّقة',
+      tone: 'rose' as const,
+    },
+  ];
 
   return (
-    <section className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-whisper sm:rounded-3xl">
-        <div className="p-4 sm:p-6">
-          <div className="flex items-center justify-between gap-3">
+    <section className="grid gap-3 lg:grid-cols-[1.25fr_0.75fr] lg:gap-4">
+      <div className="overflow-hidden rounded-xl border border-border bg-card lg:rounded-2xl">
+        <div className="p-3.5 sm:p-5 lg:p-6">
+          <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <h2 className="flex items-center gap-2 text-[16px] font-bold tracking-tight text-foreground sm:text-[20px]">
-                <Activity className="h-4.5 w-4.5 text-meadow-600" />
+              <h2 className="flex items-center gap-2 text-[15px] font-bold tracking-tight text-foreground sm:text-[18px] lg:text-[20px]">
+                <Activity className="h-4 w-4 text-meadow-600" />
                 نبض اليوم
               </h2>
-              <p className="mt-0.5 text-[11.5px] text-muted-foreground sm:text-[12.5px]">
-                وارد وصادر اليوم مع حالة الدورة والمخزون
+              <p className="mt-0.5 text-[11px] text-muted-foreground sm:text-[12px]">
+                وارد وصادر اليوم
               </p>
             </div>
             <Link
               href="/audit"
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1.5 text-[11.5px] font-semibold text-muted-foreground transition-colors hover:bg-canvas-sunken hover:text-foreground sm:px-3 sm:text-[12px]"
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors active:bg-canvas-sunken sm:rounded-full sm:px-2.5 sm:text-[11.5px]"
             >
-              سجل النشاط
+              السجل
               <ChevronLeft className="h-3.5 w-3.5" />
             </Link>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
-            <PulseMetric
-              icon={ArrowDownToLine}
-              label="وارد اليوم"
-              value={<Liters value={today.suppliedQty} />}
-              hint={<Money value={today.suppliedValue} decimals={0} muted />}
-              tone="meadow"
-            />
-            <PulseMetric
-              icon={ShoppingCart}
-              label="مبيعات اليوم"
-              value={<Liters value={today.soldQty} />}
-              hint={<Money value={today.revenue} decimals={0} muted />}
-              tone="navy"
-            />
-            <PulseMetric
-              icon={Gauge}
-              label="تقدّم الدورة"
-              value={`${formatNumber(cycle.progress.pct, 0)}%`}
-              hint={`اليوم ${cycle.progress.daysElapsed} من ${cycle.progress.daysTotal}`}
-              tone="sun"
-            />
-            <PulseMetric
-              icon={History}
-              label="نشاط اليوم"
-              value={formatNumber(today.actions)}
-              hint="عملية موثّقة"
-              tone="rose"
-            />
+          {/* جوال: شريط أفقي — سطح المكتب: شبكة */}
+          <div className="-mx-3.5 mt-3 flex gap-2 overflow-x-auto px-3.5 pb-0.5 snap-x snap-mandatory no-scrollbar sm:-mx-5 sm:mt-4 sm:gap-2.5 sm:px-5 lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 lg:pb-0 xl:grid-cols-4">
+            {metrics.map((m) => (
+              <div key={m.label} className="w-[8.75rem] shrink-0 snap-start sm:w-[9.5rem] lg:w-auto lg:shrink">
+                <PulseMetric {...m} />
+              </div>
+            ))}
           </div>
 
-          <div className="mt-3 grid gap-2.5 sm:mt-4 sm:gap-3 md:grid-cols-2">
-            <div className="rounded-xl border border-border bg-canvas-sunken/55 p-3.5 sm:rounded-2xl sm:p-4">
-              <div className="flex items-center justify-between gap-3 text-[12px]">
-                <span className="flex items-center gap-2 font-semibold text-foreground">
-                  <Warehouse className="h-4 w-4 text-meadow-600" />
-                  مخزون الحليب الحالي
+          {/* جوال: شريط حالة واحد مضغوط */}
+          <div className="mt-3 space-y-2 lg:mt-4 lg:grid lg:grid-cols-2 lg:gap-3">
+            <div className="rounded-xl border border-border bg-canvas-sunken/50 p-3 lg:p-4">
+              <div className="flex items-center justify-between gap-2 text-[12px]">
+                <span className="flex min-w-0 items-center gap-1.5 font-semibold text-foreground">
+                  <Warehouse className="h-4 w-4 shrink-0 text-meadow-600" />
+                  <span className="truncate">مخزون الحليب</span>
                 </span>
-                <Liters value={d.totals.currentStock} className="font-bold" />
+                <Liters value={d.totals.currentStock} className="shrink-0 font-bold" />
               </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-card">
+              <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-card">
                 <div
-                  className={cn('h-full rounded-full', d.totals.currentStock <= data.settings.minStockThreshold ? 'bg-sun-500' : 'bg-meadow-500')}
+                  className={cn('h-full rounded-full transition-[width] duration-300 ease-out', stockLow ? 'bg-sun-500' : 'bg-meadow-500')}
                   style={{ width: `${stockRatio}%` }}
                 />
               </div>
-              <p className="mt-2 text-[11px] text-muted-foreground sm:text-[11.5px]">{stockState}</p>
+              <p className="mt-1.5 text-[10.5px] text-muted-foreground">
+                {stockLow ? 'قريب من حد التنبيه' : 'مستقر'}
+              </p>
             </div>
-            <div className="rounded-xl border border-border bg-canvas-sunken/55 p-3.5 sm:rounded-2xl sm:p-4">
-              <div className="flex items-center justify-between gap-3 text-[12px]">
-                <span className="flex items-center gap-2 font-semibold text-foreground">
-                  <ArrowUpFromLine className="h-4 w-4 text-navy-600" />
-                  صافي اليوم التجاري
+
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-canvas-sunken/50 px-3 py-2.5 lg:block lg:p-4">
+              <div className="flex min-w-0 items-center gap-1.5 text-[12px] font-semibold text-foreground lg:justify-between">
+                <span className="flex items-center gap-1.5">
+                  <ArrowUpFromLine className="h-4 w-4 shrink-0 text-navy-600" />
+                  صافي اليوم
                 </span>
-                <Money value={today.revenue - today.suppliedValue} decimals={0} className="font-bold" />
+                <Money value={netToday} decimals={0} className="shrink-0 font-bold lg:mt-0" />
               </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground sm:mt-3 sm:text-[11.5px]">
-                إيراد مبيعات اليوم ناقص تكلفة الاستلام المسجّلة اليوم.
+              <p className="hidden text-[11px] leading-relaxed text-muted-foreground lg:mt-2 lg:block">
+                إيراد المبيعات ناقص تكلفة الاستلام المسجّلة اليوم.
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-whisper sm:rounded-3xl sm:p-5">
+      <div className="hidden rounded-2xl border border-border bg-card p-4 lg:block lg:p-5">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-[15px] font-bold text-foreground sm:text-[16px]">آخر ما حدث</h3>
+          <h3 className="text-[15px] font-bold text-foreground">آخر ما حدث</h3>
           <History className="h-4.5 w-4.5 text-muted-foreground" />
         </div>
 
-        <div className="mt-3 space-y-2 sm:mt-4">
+        <div className="mt-3 space-y-2">
           {latest.length ? (
             latest.map((log) => (
               <Link
                 key={log.id}
                 href="/audit"
-                className="group flex items-start gap-2.5 rounded-xl border border-border/70 bg-canvas-sunken/45 p-2.5 transition-colors hover:bg-canvas-sunken sm:gap-3 sm:rounded-2xl sm:p-3"
+                className="group flex items-start gap-2.5 rounded-xl border border-border/70 bg-canvas-sunken/45 p-2.5 transition-colors hover:bg-canvas-sunken"
               >
-                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-meadow-500 ring-4 ring-meadow-100 dark:ring-meadow-500/20" />
+                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-meadow-500 ring-4 ring-meadow-100" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[12.5px] font-semibold text-foreground">{log.summary}</span>
                   <span className="mt-0.5 block text-[11px] text-muted-foreground">
@@ -180,7 +192,7 @@ export function OperationsCommandCenter() {
               </Link>
             ))
           ) : (
-            <div className="rounded-2xl border border-dashed border-border p-5 text-center text-[12px] text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border p-4 text-center text-[12px] text-muted-foreground">
               سيظهر هنا آخر نشاط بعد أول عملية.
             </div>
           )}
@@ -211,17 +223,19 @@ function PulseMetric({
   }[tone];
 
   return (
-    <div className="rounded-xl border border-border bg-card/80 p-3 sm:rounded-2xl sm:p-3.5">
-      <div className="flex items-start justify-between gap-2 sm:gap-3">
+    <div className="h-full rounded-xl border border-border bg-card/90 p-2.5 transition-transform duration-150 ease-out active:scale-[0.98] sm:p-3 lg:rounded-2xl lg:p-3.5">
+      <div className="flex items-start justify-between gap-1.5">
         <div className="min-w-0">
-          <p className="truncate text-[11px] font-medium text-muted-foreground sm:text-[11.5px]">{label}</p>
-          <div className="mt-1 truncate text-[17px] font-bold leading-tight tracking-tight text-foreground sm:text-[20px]">{value}</div>
+          <p className="truncate text-[10.5px] font-medium text-muted-foreground sm:text-[11px]">{label}</p>
+          <div className="mt-0.5 truncate text-[16px] font-bold leading-tight text-foreground sm:text-[18px] lg:text-[20px]">
+            {value}
+          </div>
         </div>
-        <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 sm:h-9 sm:w-9 sm:rounded-xl', toneClass)}>
-          <Icon className="h-4 w-4 stroke-[1.7]" />
+        <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 sm:h-8 sm:w-8 lg:h-9 lg:w-9', toneClass)}>
+          <Icon className="h-3.5 w-3.5 stroke-[1.7] sm:h-4 sm:w-4" />
         </span>
       </div>
-      <div className="mt-1.5 truncate text-[10.5px] text-muted-foreground sm:mt-2 sm:text-[11px]">{hint}</div>
+      <div className="mt-1 truncate text-[10px] text-muted-foreground sm:text-[10.5px]">{hint}</div>
     </div>
   );
 }

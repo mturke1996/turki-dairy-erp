@@ -6,8 +6,8 @@
  * مساحات تنفّس واسعة، ولا صناديق متراكبة. الهوية تظهر في خط الترويسة
  * الثلاثي (كحلي/أخضر/شمسي) وفي شريط الملخص أعلى الوثيقة فقط.
  *
- * الاتجاه: الصفحة rtl للنص؛ الصفوف الأفقية المتعددة الخلايا تستخدم
- * row-reverse + ltr لأن Yoga لا يعكس محور flex مع rtl كالمتصفح.
+ * الاتجاه: الصفحة rtl للنص؛ صفوف الجداول تستخدم direction:ltr +
+ * flexDirection:row-reverse لأن Yoga لا يعكس المحور مع rtl — أول عمود في JSX = يمين الورقة.
  */
 
 import { PDF_FONT_FAMILY } from './pdfFonts';
@@ -50,7 +50,7 @@ export const pdfBase = {
     // الترويسة المثبتة تنتهي عند ~118pt — نبدأ المحتوى بعدها بهواء كافٍ
     paddingTop: 134,
     // التذييل الجديد منخفض الارتفاع (~46pt من أسفل الورقة)
-    paddingBottom: 72,
+    paddingBottom: 88,
     paddingHorizontal: 40,
   },
 
@@ -245,10 +245,10 @@ export const pdfBase = {
   luxeMoneyRow: { flexDirection: 'row', direction: 'ltr' },
   luxeMoneyCurrency: { fontSize: 11, fontWeight: 'bold', color: PDF.primary },
 
-  /* ── الجداول ── */
+  /* ── الجداول العربية: row-reverse → التاريخ يميناً، المبالغ يساراً ── */
   tableHead: {
-    direction: 'rtl',
-    flexDirection: 'row',
+    direction: 'ltr',
+    flexDirection: 'row-reverse',
     backgroundColor: PDF.primary,
     paddingVertical: 9,
     paddingHorizontal: 10,
@@ -265,9 +265,25 @@ export const pdfBase = {
     lineHeight: 1.4,
   },
 
+  thNum: {
+    color: PDF.white,
+    fontSize: 8.5,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 1.4,
+  },
+
+  thMoney: {
+    color: PDF.white,
+    fontSize: 8.5,
+    fontWeight: 'bold',
+    textAlign: 'left',
+    lineHeight: 1.4,
+  },
+
   tableRow: {
-    direction: 'rtl',
-    flexDirection: 'row',
+    direction: 'ltr',
+    flexDirection: 'row-reverse',
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderBottomWidth: 0.5,
@@ -280,15 +296,31 @@ export const pdfBase = {
   },
 
   tableFoot: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    direction: 'ltr',
+    flexDirection: 'row-reverse',
+    justifyContent: 'flex-start',
     alignItems: 'center',
+    gap: 14,
     backgroundColor: PDF.logoGreenSoft,
     paddingVertical: 9,
     paddingHorizontal: 12,
     borderTopWidth: 1.5,
     borderTopColor: PDF.accent,
     marginTop: 2,
+  },
+
+  /** شريط إجمالي — التسمية يميناً ثم المبلغ (رقم + د.ل) */
+  totalRowBar: {
+    direction: 'ltr',
+    flexDirection: 'row-reverse',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: PDF.logoGreenSoft,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderTopWidth: 1.5,
+    borderTopColor: PDF.accent,
   },
 
   footLabel: {
@@ -310,7 +342,10 @@ export const pdfBase = {
   td: { fontSize: 9, color: PDF.text, textAlign: 'right', lineHeight: 1.45 },
   tdMuted: { fontSize: 9, color: PDF.muted, textAlign: 'center', paddingVertical: 14, lineHeight: 1.45 },
   tdBold: { fontSize: 9, fontWeight: 'bold', color: PDF.text, textAlign: 'right', lineHeight: 1.45 },
-  tdNum: { fontSize: 9, color: PDF.text, textAlign: 'center', lineHeight: 1.45 },
+  tdNum: { fontSize: 9, color: PDF.text, textAlign: 'center', direction: 'ltr', lineHeight: 1.45 },
+  tdRef: { fontSize: 9, color: PDF.text, textAlign: 'center', direction: 'ltr', lineHeight: 1.45 },
+  tdDate: { fontSize: 9, color: PDF.text, textAlign: 'center', direction: 'ltr', lineHeight: 1.45 },
+  tdMoneyWrap: { justifyContent: 'center', alignItems: 'flex-start' },
 
   /* رقم الصفحة — منتصف أسفل الورقة، تحت التذييل */
   pageNumber: {

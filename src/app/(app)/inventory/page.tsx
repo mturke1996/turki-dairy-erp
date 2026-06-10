@@ -104,13 +104,13 @@ export default function InventoryPage() {
   }, [data.adjustments, sessionId]);
 
   const wasteView = useMemo(() => {
-    const targetSession = sessionId === 'all' ? (d.activeSession?.id ?? '') : sessionId;
-    return computeWasteSummary(data.adjustments, targetSession);
-  }, [data.adjustments, sessionId, d.activeSession?.id]);
+    const targetSession = sessionId === 'all' ? null : sessionId;
+    return computeWasteSummary(data.adjustments, targetSession, d.inv);
+  }, [data.adjustments, sessionId, d.inv]);
 
-  const wasteSessionId = sessionId === 'all' ? (d.activeSession?.id ?? '') : sessionId;
+  const wasteSessionId = sessionId === 'all' ? null : sessionId;
   const wasteSessionLabel =
-    sessionId === 'all' ? (d.activeSession?.label ?? 'الفترة') : (session?.label ?? 'الفترة');
+    sessionId === 'all' ? 'كل الفترات' : (session?.label ?? 'الفترة');
 
   return (
     <div className="space-y-6">

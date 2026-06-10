@@ -1,27 +1,46 @@
 // @ts-nocheck
 /**
- * مساعدات النصوص العربية والأرقام والتواريخ لمستندات react-pdf.
- * النص يُكتب مباشرة (Unicode منطقي) ويعرضه الخط المضمّن بشكل صحيح دون تشكيل يدوي.
+ * مساعدات النص العربي لمستندات react-pdf + Tajawal.
+ *
+ * لا نستخدم Arabic Presentation Forms (U+FE70+) — Tajawal يفتقد بعضها
+ * (مثل U+FE8F) فيتعطل textkit في المتصفح: Cannot read properties of undefined (reading 'id').
+ *
+ * نعتمد الحروف العربية المنطقية (U+0600) مع direction:'rtl' على الحاويات.
  */
 
+const HAS_ARABIC = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+
+/** نص عربي — Unicode منطقي كما كُتب (لا تشكيل يدوي ولا عكس). */
 export function ar(text: string | number | null | undefined): string {
   if (text == null) return '';
   return String(text);
 }
 
-export function arMoney(amount: number, currency = 'د.ل'): string {
-  const formatted = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-    amount || 0,
-  );
-  return `${formatted} ${currency}`;
+/**
+ * مبلغ + عملة — نص واحد باتجاه LTR (بدون أحرف bidi U+202A).
+ * يُفضّل PdfMoneyText؛ هذا للحقول النصية فقط.
+ */
+export function ltrAmountCurrency(amount: number, currency = 'د.ل', decimals = 2): string {
+  const formatted = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(Number.isFinite(amount) ? amount : 0);
+  const curr = String(currency ?? '').trim();
+  return `${formatted}\u00A0${curr}`;
 }
 
-export function ltrAmountCurrency(amount: number, currency = 'د.ل'): string {
-  const formatted = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-    amount || 0,
-  );
-  const curr = String(currency ?? '').trim();
-  return `\u202A${formatted}\u00A0${curr}\u202C`;
+export function arMoney(amount: number, currency = 'د.ل', decimals = 2): string {
+  return ltrAmountCurrency(amount, currency, decimals);
+}
+
+/** قيمة إحصائية — أرقام/مبالغ كما هي؛ عربي فقط يمرّ عبر ar */
+export function pdfDisplayValue(text: string | number | null | undefined): string {
+  if (text == null) return '';
+  const str = String(text);
+  if (!str) return '';
+  if (!HAS_ARABIC.test(str)) return str;
+  if (/[0-9]/.test(str)) return str;
+  return ar(str);
 }
 
 export function arDate(date: Date | string): string {

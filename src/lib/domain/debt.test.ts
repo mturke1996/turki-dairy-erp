@@ -3,6 +3,7 @@ import {
   allocatePaymentToPartyDebts,
   applySettlementToEntry,
   debtBalanceContribution,
+  debtRecordSettleAmount,
   debtRemainingAmount,
   isDebtFullySettled,
   paymentNetOfDebtSettlement,
@@ -59,5 +60,11 @@ describe('debt settlement', () => {
   it('paymentNetOfDebtSettlement avoids double-counting debt payments', () => {
     expect(paymentNetOfDebtSettlement({ amount: 500, debtSettledAmount: 500 })).toBe(0);
     expect(paymentNetOfDebtSettlement({ amount: 800, debtSettledAmount: 300 })).toBe(500);
+  });
+
+  it('debtRecordSettleAmount handles advance vs payment on create', () => {
+    expect(debtRecordSettleAmount('receivable', 'disburse', 5000, 5000)).toBe(0);
+    expect(debtRecordSettleAmount('payable', 'disburse', 5000, 2000)).toBe(2000);
+    expect(debtRecordSettleAmount('receivable', 'collect', 10000, 3000)).toBe(3000);
   });
 });

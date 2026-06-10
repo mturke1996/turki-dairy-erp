@@ -7,7 +7,7 @@ import {
   TurkiPdfFooter,
   PdfBrandIdentity,
   PdfFactoryContactBar,
-  pdfFmtMoneyLibyan,
+  PdfMoneyText,
 } from './pdfBrandKit';
 import { BRAND } from '@/lib/brand';
 
@@ -121,9 +121,7 @@ export function ReportShell({
               <View key={`sum-cell-${i}`} style={pdfBase.summaryCell}>
                 <Text style={pdfBase.summaryEyebrow}>{ar(c.label)}</Text>
                 {c.moneyAmount != null && Number.isFinite(c.moneyAmount) ? (
-                  <Text style={[pdfBase.summaryValue, { direction: 'ltr' }]}>
-                    {pdfFmtMoneyLibyan(c.moneyAmount)}
-                  </Text>
+                  <PdfMoneyText amount={c.moneyAmount} size="sm" />
                 ) : (
                   <Text
                     style={[
@@ -142,7 +140,7 @@ export function ReportShell({
         <View style={pdfBase.contentLayer}>{children}</View>
 
         {showSignature ? (
-          <View style={pdfBase.signatureStrip} wrap={false}>
+          <View style={pdfBase.signatureStrip} wrap={false} minPresenceAhead={90}>
             <View style={pdfBase.signatureCell}>
               <Text style={pdfBase.signatureLabel}>{ar('التوقيع المعتمد')}</Text>
               <View style={pdfBase.signatureLine} />
@@ -160,7 +158,9 @@ export function ReportShell({
 
         <Text
           style={pdfBase.pageNumber}
-          render={({ pageNumber, totalPages }) => ar(`صفحة ${pageNumber ?? 1} من ${totalPages ?? 1}`)}
+          render={({ pageNumber, totalPages }) =>
+            `${ar('صفحة')} ${pageNumber ?? 1} ${ar('من')} ${totalPages ?? 1}`
+          }
           fixed
         />
       </Page>

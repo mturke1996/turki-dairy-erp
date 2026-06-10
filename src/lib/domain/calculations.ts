@@ -18,7 +18,7 @@ import {
   type ProfitAndLoss,
 } from './accounting';
 import { resolveAdjustmentReasonKind } from './constants';
-import { buildInventoryLedger, round, type InventoryResult } from './inventory';
+import { adjustmentLossValueFromLedger, buildInventoryLedger, round, type InventoryResult } from './inventory';
 import { computeTreasury, computeAdjustedNetPosition, type AdjustedNetPosition } from './treasury';
 import { debtBalanceContribution, paymentNetOfDebtSettlement, resolveDebtDirection } from './debt';
 import type {
@@ -671,6 +671,14 @@ export function buildAllJournals(data: ErpData, saleCogs: Record<string, number>
   }
   for (const a of data.adjustments) entries.push(journalForAdjustment(a));
   for (const d of data.debtEntries ?? []) {
+    const advanceDisburse = (data.cashMovements ?? []).some(
+      (cm) =>
+        cm.referenceType === 'debt' &&
+        cm.referenceId === d.id &&
+        cm.direction === 'out' &&
+        resolveDebtDirection(d) === 'receivable',
+    );
+    if (advanceDisburse) continue;
     const je = journalForDebtEntry(d);
     if (je) entries.push(je);
   }
@@ -794,25 +802,29 @@ function adjustmentIsLoss(a: InventoryAdjustment): boolean {
   return kind === 'loss';
 }
 
-function toWasteLine(a: InventoryAdjustment): WasteLineItem {
+function toWasteLine(a: InventoryAdjustment, inv?: InventoryResult): WasteLineItem {
   const abs = Math.abs(a.quantity);
+  const ledgerValue = inv ? adjustmentLossValueFromLedger(inv, a.id) : null;
   return {
     id: a.id,
     ref: a.ref,
     date: a.date,
     sessionId: a.sessionId,
     quantity: round(abs),
-    value: round(abs * a.unitCost),
+    value: ledgerValue ?? round(abs * a.unitCost),
     reason: a.reason,
   };
 }
 
+/** sessionId = null → إحصاء كل الفترات (لعرض «الكل» في المخزون). */
 export function computeWasteSummary(
   adjustments: InventoryAdjustment[],
-  activeSessionId: string,
+  sessionId: string | null,
+  inv?: InventoryResult,
 ): WasteSummary {
-  const lossLines = adjustments.filter(adjustmentIsLoss).map(toWasteLine);
-  const sessionLines = lossLines.filter((l) => l.sessionId === activeSessionId);
+  const lossLines = adjustments.filter(adjustmentIsLoss).map((a) => toWasteLine(a, inv));
+  const sessionLines =
+    sessionId === null ? lossLines : lossLines.filter((l) => l.sessionId === sessionId);
 
   const byReasonMap = new Map<string, { qty: number; value: number }>();
   for (const l of sessionLines) {
@@ -930,7 +942,7 @@ export function computeDerived(data: ErpData): DerivedData {
     },
   );
 
-  const wasteSummary = computeWasteSummary(data.adjustments, data.activeSessionId);
+  const wasteSummary = computeWasteSummary(data.adjustments, data.activeSessionId, inv);
 
   const alerts = buildAlerts({
     inv,

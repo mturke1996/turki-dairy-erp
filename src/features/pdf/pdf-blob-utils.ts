@@ -1,10 +1,10 @@
 import type { ReactElement } from 'react';
 import { pdf } from '@react-pdf/renderer';
-import { registerPdfFonts } from './pdfFonts';
+import { ensurePdfFontsLoaded } from './pdfFonts';
 import { preparePdfTree } from './prepare-pdf-tree';
 
 export async function renderPdfBlob(render: () => Promise<ReactElement>): Promise<Blob> {
-  registerPdfFonts();
+  await ensurePdfFontsLoaded();
   const wrapped = await preparePdfTree(await render());
   const instance = pdf();
   instance.updateContainer(wrapped);
@@ -21,21 +21,46 @@ export function buildPdfViewerUrl(blobUrl: string): string {
   return `${base}#view=FitH&navpanes=0&scrollbar=1`;
 }
 
+export function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
+/** على iPhone/Android نفتح التبويب مباشرة — embed داخل Dialog ضعيف */
 export function shouldUseInAppPdfViewer(): boolean {
-  if (typeof navigator === 'undefined') return true;
-  return true;
+  return !isMobileDevice();
+}
+
+export function canSharePdfFiles(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
+  try {
+    const probe = new File([''], 'probe.pdf', { type: 'application/pdf' });
+    return navigator.canShare({ files: [probe] });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * فتح PDF في تبويب جديد — نفس أسلوب Etlala (ممتاز على iPhone).
+ * يُبقي الرابط حياً دقيقتين لتحميل التبويب.
+ */
+export function openPdfInNewTab(blob: Blob): string {
+  const url = URL.createObjectURL(blob);
+  const tab = window.open(url, '_blank', 'noopener,noreferrer');
+  if (!tab) {
+    window.location.href = url;
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  return url;
 }
 
 export async function savePdfBlob(blob: Blob, fileName: string): Promise<'share' | 'download'> {
   const name = normalizePdfFileName(fileName);
   const file = new File([blob], name, { type: 'application/pdf' });
 
-  if (
-    typeof navigator !== 'undefined' &&
-    typeof navigator.share === 'function' &&
-    typeof navigator.canShare === 'function' &&
-    navigator.canShare({ files: [file] })
-  ) {
+  if (canSharePdfFiles() && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: name.replace(/\.pdf$/i, '') });
       return 'share';

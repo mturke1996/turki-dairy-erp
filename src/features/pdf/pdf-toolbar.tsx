@@ -1,12 +1,19 @@
 'use client';
 
 import { useState, useRef, useCallback, type ReactElement } from 'react';
-import { FileDown, FileText, Loader2 } from 'lucide-react';
+import { FileDown, FileText, Loader2, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { usePermission } from '@/lib/store/use-permission';
-import { renderPdfBlob, savePdfBlob } from './pdf-blob-utils';
+import {
+  renderPdfBlob,
+  savePdfBlob,
+  openPdfInNewTab,
+  canSharePdfFiles,
+  shouldUseInAppPdfViewer,
+  buildPdfViewerUrl,
+} from './pdf-blob-utils';
 import { PdfPreviewDialog } from './pdf-preview-dialog';
 
 type Props = {
@@ -26,7 +33,7 @@ export function TurkiPdfToolbar({
   render,
   disabled,
   showDownload = true,
-  label = 'عرض PDF',
+  label = 'فتح PDF',
   variant = 'default',
   size = 'sm',
   className,
@@ -40,10 +47,7 @@ export function TurkiPdfToolbar({
   const blobRef = useRef<Blob | null>(null);
   const previewUrlRef = useRef<string | null>(null);
 
-  const canShareFiles =
-    typeof navigator !== 'undefined' &&
-    typeof navigator.share === 'function' &&
-    typeof navigator.canShare === 'function';
+  const canShare = canSharePdfFiles();
 
   const revokePreviewUrl = useCallback(() => {
     if (previewUrlRef.current) {
@@ -71,21 +75,34 @@ export function TurkiPdfToolbar({
     return blob;
   }
 
+  /** فتح PDF — تبويب جديد على الهاتف (مثل Etlala)، معاينة داخل التطبيق على سطح المكتب */
   async function handleOpen() {
     if (openBusy || disabled) return;
     setOpenBusy(true);
     const id = toast.loading('جاري إنشاء ملف PDF…');
     try {
       const blob = await ensureBlob();
-      revokePreviewUrl();
-      const url = URL.createObjectURL(blob);
-      previewUrlRef.current = url;
-      setPreviewUrl(url);
-      setPreviewOpen(true);
-      toast.success('تم تجهيز PDF للعرض', { id });
+
+      if (shouldUseInAppPdfViewer()) {
+        revokePreviewUrl();
+        const url = URL.createObjectURL(blob);
+        previewUrlRef.current = url;
+        setPreviewUrl(buildPdfViewerUrl(url));
+        setPreviewOpen(true);
+        toast.success('تم تجهيز PDF للعرض', { id });
+      } else {
+        openPdfInNewTab(blob);
+        toast.success('تم فتح PDF', { id });
+      }
     } catch (e) {
-      console.error(e);
-      toast.error('تعذّر إنشاء PDF', { id, description: e instanceof Error ? e.message : undefined });
+      console.error('[PDF]', e);
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error('تعذّر إنشاء PDF', {
+        id,
+        description: msg.includes('textkit') || msg.includes("'id'")
+          ? 'خطأ في تنسيق النص — أعد تحميل الصفحة وحاول مجدداً'
+          : msg,
+      });
     } finally {
       setOpenBusy(false);
     }
@@ -110,11 +127,22 @@ export function TurkiPdfToolbar({
   async function handleShare() {
     if (shareBusy || disabled) return;
     setShareBusy(true);
+    const id = toast.loading('جاري تحضير الملف للمشاركة…');
     try {
       const blob = await ensureBlob();
-      await savePdfBlob(blob, fileName);
+      const mode = await savePdfBlob(blob, fileName);
+      if (mode === 'share') {
+        toast.success('تمت المشاركة', { id });
+      } else {
+        openPdfInNewTab(blob);
+        toast.success('تم فتح PDF', { id });
+      }
     } catch (e) {
-      if (!(e instanceof Error && e.name === 'AbortError')) toast.error('تعذّر مشاركة الملف');
+      if (!(e instanceof Error && e.name === 'AbortError')) {
+        toast.error('تعذّر مشاركة الملف', { id });
+      } else {
+        toast.dismiss(id);
+      }
     } finally {
       setShareBusy(false);
     }
@@ -129,6 +157,14 @@ export function TurkiPdfToolbar({
           {openBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
           {label}
         </Button>
+
+        {canShare ? (
+          <Button type="button" variant="outline" size={size} disabled={disabled || shareBusy} onClick={handleShare}>
+            {shareBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+            مشاركة
+          </Button>
+        ) : null}
+
         {showDownload ? (
           <Button type="button" variant="outline" size={size} disabled={disabled || dlBusy} onClick={handleDownload}>
             {dlBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
@@ -137,17 +173,19 @@ export function TurkiPdfToolbar({
         ) : null}
       </div>
 
-      <PdfPreviewDialog
-        open={previewOpen}
-        onOpenChange={closePreview}
-        url={previewUrl}
-        fileName={fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`}
-        onDownload={handleDownload}
-        downloadBusy={dlBusy}
-        canShare={canShareFiles}
-        onShare={handleShare}
-        shareBusy={shareBusy}
-      />
+      {shouldUseInAppPdfViewer() ? (
+        <PdfPreviewDialog
+          open={previewOpen}
+          onOpenChange={closePreview}
+          url={previewUrl}
+          fileName={fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`}
+          onDownload={handleDownload}
+          downloadBusy={dlBusy}
+          canShare={canShare}
+          onShare={handleShare}
+          shareBusy={shareBusy}
+        />
+      ) : null}
     </>
   );
 }

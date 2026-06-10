@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, Receipt } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -27,6 +27,12 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
   const [direction, setDirection] = useState<'decrease' | 'increase'>('decrease');
   const [quantity, setQuantity] = useState('');
   const [unitCost, setUnitCost] = useState(() => String(Number(wac.toFixed(3)) || 0));
+
+  useEffect(() => {
+    if (open) setUnitCost(String(Number(wac.toFixed(3)) || 0));
+  }, [open, wac]);
+
+  const effectiveUnitCost = direction === 'decrease' ? wac : Number(unitCost) || wac;
   const reasons = direction === 'decrease' ? ADJUSTMENT_DECREASE_REASONS : ADJUSTMENT_INCREASE_REASONS;
   const [reasonValue, setReasonValue] = useState(reasons[0].value);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -41,7 +47,7 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
   const signed = direction === 'decrease' ? -qtyAbs : qtyAbs;
   const projected = currentStock + signed;
   const isLoss = direction === 'decrease' && selectedReason.kind === 'loss';
-  const lossValue = Math.round(qtyAbs * (Number(unitCost) || wac));
+  const lossValue = Math.round(qtyAbs * effectiveUnitCost);
 
   function changeDirection(v: 'decrease' | 'increase') {
     setDirection(v);
@@ -58,7 +64,7 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
     try {
       const res = await addAdjustment({
         quantity: signed,
-        unitCost: Number(unitCost) || wac,
+        unitCost: effectiveUnitCost,
         reason: selectedReason.value,
         reasonKind: selectedReason.kind,
         date: new Date(date + 'T11:00:00').toISOString(),
@@ -103,8 +109,15 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
             <Field label="الكمية" required>
               <VolumeInput value={quantity} onChange={setQuantity} />
             </Field>
-            <Field label="تكلفة الوحدة">
-              <AmountInput value={unitCost} onChange={setUnitCost} placeholder="0.000" />
+            <Field label="تكلفة الوحدة" hint={direction === 'decrease' ? 'متوسط التكلفة المرجّح — يُطبَّق تلقائياً' : undefined}>
+              {direction === 'decrease' ? (
+                <div className="flex h-10 items-center rounded-md border border-input bg-canvas-sunken/50 px-3 text-[13px] font-semibold tabular-nums text-foreground">
+                  <Money value={wac} decimals={3} className="inline text-[13px]" />
+                  <span className="mr-1.5 text-muted-foreground">/ لتر</span>
+                </div>
+              ) : (
+                <AmountInput value={unitCost} onChange={setUnitCost} placeholder="0.000" />
+              )}
             </Field>
           </div>
           <Field label="السبب">

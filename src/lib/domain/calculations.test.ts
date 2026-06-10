@@ -5,6 +5,7 @@ import {
   computeDerived,
   computeWasteSummary,
 } from '@/lib/domain/calculations';
+import { buildInventoryLedger } from '@/lib/domain/inventory';
 import { resolveAdjustmentReasonKind } from '@/lib/domain/constants';
 import type {
   Expense,
@@ -346,6 +347,43 @@ describe('computeWasteSummary and alerts', () => {
     expect(w.sessionValue).toBe(30);
     expect(w.byReason).toHaveLength(1);
     expect(w.byReason[0].reason).toBe('تلف وفساد');
+  });
+
+  it('uses ledger WAC for waste value when stored unitCost differs', () => {
+    const supplies: SupplyTransaction[] = [
+      {
+        id: 'sup-a', ref: 'SUP-A', farmerId: 'f1', sessionId: 'sw2', date: '2026-06-01',
+        quantity: 100, unitPrice: 2, total: 200, qualityTier: 'A', createdAt: '2026-06-01',
+      },
+      {
+        id: 'sup-b', ref: 'SUP-B', farmerId: 'f1', sessionId: 'sw2', date: '2026-06-02',
+        quantity: 100, unitPrice: 4, total: 400, qualityTier: 'A', createdAt: '2026-06-02',
+      },
+    ];
+    const staleUnitCostAdj: InventoryAdjustment = {
+      ...lossAdj,
+      id: 'adj-stale',
+      quantity: -10,
+      unitCost: 2,
+    };
+    const inv = buildInventoryLedger(supplies, [], [staleUnitCostAdj], [session]);
+    const w = computeWasteSummary([staleUnitCostAdj], 'sw2', inv);
+    expect(w.sessionQty).toBe(10);
+    expect(w.sessionValue).toBe(30);
+  });
+
+  it('aggregates all sessions when sessionId is null', () => {
+    const otherSession: Session = { ...session, id: 'sw3', label: 'يوليو' };
+    const otherLoss: InventoryAdjustment = {
+      ...lossAdj,
+      id: 'adj-other',
+      sessionId: 'sw3',
+      quantity: -5,
+    };
+    const w = computeWasteSummary([lossAdj, otherLoss], null);
+    expect(w.sessionQty).toBe(20);
+    expect(w.sessionValue).toBe(40);
+    expect(w.totalQty).toBe(20);
   });
 
   it('surfaces milk-waste alert when session has waste', () => {
