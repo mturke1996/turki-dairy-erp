@@ -18,7 +18,7 @@ import {
   type ProfitAndLoss,
 } from './accounting';
 import { resolveAdjustmentReasonKind } from './constants';
-import { adjustmentLossValueFromLedger, adjustmentOutQtyFromLedger, buildInventoryLedger, round, uniqueAdjustments, type InventoryResult } from './inventory';
+import { adjustmentDecreaseBasis, adjustmentLossValueFromLedger, adjustmentOutQtyFromLedger, buildInventoryLedger, round, uniqueAdjustments, type InventoryResult } from './inventory';
 import { computeTreasury, computeAdjustedNetPosition, type AdjustedNetPosition } from './treasury';
 import { debtBalanceContribution, paymentNetOfDebtSettlement, resolveDebtDirection } from './debt';
 import { employeePeriodPackage, isPayrollLinePaid, payrollBatchSettledLines } from './payroll';
@@ -702,7 +702,14 @@ export function buildDebtSummary(
 // ============================================================
 // القيود المحاسبية الكاملة
 // ============================================================
-export function buildAllJournals(data: ErpData, saleCogs: Record<string, number>): JournalEntry[] {
+export function buildAllJournals(
+  data: ErpData,
+  saleCogs: Record<string, number>,
+  inv?: InventoryResult,
+): JournalEntry[] {
+  const ledger =
+    inv ??
+    buildInventoryLedger(data.supplies, data.sales, data.adjustments, data.sessions);
   const entries: JournalEntry[] = [];
   for (const s of data.supplies) entries.push(journalForSupply(s));
   for (const s of data.sales) entries.push(journalForSale(s, saleCogs[s.id] ?? 0));
@@ -725,7 +732,11 @@ export function buildAllJournals(data: ErpData, saleCogs: Record<string, number>
       }),
     );
   }
-  for (const a of data.adjustments) entries.push(journalForAdjustment(a));
+  for (const a of data.adjustments) {
+    const decreaseValue =
+      a.quantity < 0 ? adjustmentDecreaseBasis(ledger, a).value : undefined;
+    entries.push(journalForAdjustment(a, decreaseValue));
+  }
   for (const d of data.debtEntries ?? []) {
     const advanceDisburse = (data.cashMovements ?? []).some(
       (cm) =>
@@ -790,7 +801,15 @@ export function computeSessionSummary(
   );
   const cogs = sum(sal.map((s) => inv.saleCogs[s.id] ?? 0));
   const approvedExpenses = data.expenses.filter((e) => e.sessionId === session.id && e.status === 'approved');
-  const wasteLosses = sum(approvedExpenses.filter((e) => isNonCashExpense(e)).map((e) => e.amount));
+  const sessionLossAdjs = uniqueAdjustments(
+    data.adjustments.filter((a) => a.sessionId === session.id),
+  ).filter(adjustmentIsLoss);
+  const wasteLosses = sum(
+    sessionLossAdjs.map((a) => {
+      const ledgerVal = adjustmentLossValueFromLedger(inv, a.id);
+      return ledgerVal ?? round(Math.abs(a.quantity) * a.unitCost);
+    }),
+  );
   const operatingExpenses = sum(approvedExpenses.filter((e) => !isNonCashExpense(e)).map((e) => e.amount));
   const salaries = sum(
     data.payrollBatches.filter((b) => b.sessionId === session.id && b.status === 'paid').map((b) => b.totalAmount),
@@ -978,7 +997,7 @@ export interface DerivedData {
 
 export function computeDerived(data: ErpData): DerivedData {
   const inv = buildInventoryLedger(data.supplies, data.sales, data.adjustments, data.sessions);
-  const journals = buildAllJournals(data, inv.saleCogs);
+  const journals = buildAllJournals(data, inv.saleCogs, inv);
   const trialBalance = buildTrialBalance(journals);
   const farmers = allFarmerStats(data);
   const customers = allCustomerStats(data);

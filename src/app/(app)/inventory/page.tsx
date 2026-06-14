@@ -428,6 +428,13 @@ export default function InventoryPage() {
         onOpenChange={(o) => !o && setEditAdjustment(null)}
         adjustment={editAdjustment}
         stockBase={editAdjustment ? stockBaseForAdjustment(editAdjustment.id) : d.totals.currentStock}
+        wac={
+          editAdjustment && editAdjustment.quantity < 0
+            ? (d.inv.entries.find(
+                (e) => e.sourceKind === 'adjustment' && e.sourceId === editAdjustment.id,
+              )?.unitCost ?? d.totals.wac)
+            : d.totals.wac
+        }
       />
       <SupplyEditDialog open={!!editSupply} onOpenChange={(o) => !o && setEditSupply(null)} supply={editSupply} />
       <SaleEditDialog open={!!editSale} onOpenChange={(o) => !o && setEditSale(null)} sale={editSale} />

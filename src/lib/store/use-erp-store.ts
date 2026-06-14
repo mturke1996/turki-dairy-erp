@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { buildInventoryLedger, round } from "@/lib/domain/inventory";
+import { buildInventoryLedger, round, adjustmentDecreaseBasis } from "@/lib/domain/inventory";
 import {
   computeSessionSummary,
   computeFarmerSessionStats,
@@ -756,8 +756,9 @@ function adjustmentIsLoss(
 function buildWasteExpense(
   state: { expenses: { ref: string }[]; auth: AuthUser | null },
   adjustment: InventoryAdjustment,
+  amount?: number,
 ): Expense {
-  const value = round(Math.abs(adjustment.quantity) * adjustment.unitCost);
+  const value = amount ?? round(Math.abs(adjustment.quantity) * adjustment.unitCost);
   return {
     id: uid("exp-"),
     ref: nextRef("EXP", state.expenses),
@@ -2781,26 +2782,40 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const quantity = round(input.quantity);
     const reasonKind: AdjustmentReasonKind =
       input.reasonKind ?? resolveAdjustmentReasonKind(input.reason, quantity);
-    const ledgerNow = buildInventoryLedger(
+    const ledgerBefore = buildInventoryLedger(
       state.supplies,
       state.sales,
       state.adjustments,
       state.sessions,
     );
-    const wacNow =
-      ledgerNow.currentStock > 0 ? round(ledgerNow.currentWac, 3) : round(input.unitCost, 3);
-    const unitCost = quantity < 0 ? wacNow : round(input.unitCost, 3);
-    const tx: InventoryAdjustment = {
+    if (quantity < 0 && ledgerBefore.currentStock + quantity < -0.001) {
+      return {
+        ok: false,
+        error: `كمية النقص تتجاوز المخزون المتاح (${formatLiters(Math.floor(ledgerBefore.currentStock), 0, false)}).`,
+      };
+    }
+    let tx: InventoryAdjustment = {
       id: uid("adj-"),
       ref: nextRef("ADJ", state.adjustments),
       sessionId: state.activeSessionId,
       date: input.date ?? new Date().toISOString(),
       quantity,
-      unitCost,
+      unitCost: round(input.unitCost, 3),
       reason: input.reason,
       reasonKind,
       createdAt: new Date().toISOString(),
     };
+    let lossBasis: { unitCost: number; value: number } | null = null;
+    if (quantity < 0) {
+      const ledgerAfter = buildInventoryLedger(
+        state.supplies,
+        state.sales,
+        [...state.adjustments, tx],
+        state.sessions,
+      );
+      lossBasis = adjustmentDecreaseBasis(ledgerAfter, tx);
+      tx = { ...tx, unitCost: lossBasis.unitCost };
+    }
     const audit = makeAudit(
       state,
       "adjustment",
@@ -2811,7 +2826,9 @@ export const useErpStore = create<ErpState>()((set, get) => ({
 
     // خسارة هدر → مصروف غير نقدي تلقائي (لا يختفي ثمن الحليب)
     const isLoss = adjustmentIsLoss(quantity, input.reason, reasonKind);
-    const wasteExpense = isLoss ? buildWasteExpense(state, tx) : null;
+    const wasteExpense = isLoss
+      ? buildWasteExpense(state, tx, lossBasis?.value)
+      : null;
     const needsCategory =
       isLoss &&
       !state.expenseCategories.some((c) => c.id === WASTE_EXPENSE_CATEGORY_ID);
@@ -2886,22 +2903,31 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       };
     }
 
-    const wacNow =
-      baseLedger.currentStock > 0
-        ? round(baseLedger.currentWac, 3)
-        : round(patch.unitCost ?? existing.unitCost, 3);
-    const unitCost = quantity < 0 ? wacNow : round(patch.unitCost ?? existing.unitCost, 3);
-
     const reasonKind: AdjustmentReasonKind =
       patch.reasonKind ?? resolveAdjustmentReasonKind(reason, quantity);
-    const updated: InventoryAdjustment = {
+    let updated: InventoryAdjustment = {
       ...existing,
       quantity,
-      unitCost,
+      unitCost:
+        quantity < 0
+          ? existing.unitCost
+          : round(patch.unitCost ?? existing.unitCost, 3),
       reason,
       reasonKind,
       date: patch.date ?? existing.date,
     };
+    const ledgerAfter = buildInventoryLedger(
+      state.supplies,
+      state.sales,
+      state.adjustments.map((a) => (a.id === id ? updated : a)),
+      state.sessions,
+    );
+    let wasteValue = round(Math.abs(quantity) * updated.unitCost);
+    if (quantity < 0) {
+      const basis = adjustmentDecreaseBasis(ledgerAfter, updated);
+      updated = { ...updated, unitCost: basis.unitCost };
+      wasteValue = basis.value;
+    }
     const audit = makeAudit(
       state,
       "adjustment",
@@ -2915,8 +2941,6 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       (e) => e.sourceAdjustmentId === id,
     );
     const isLoss = adjustmentIsLoss(quantity, reason, reasonKind);
-    const wasteValue = round(Math.abs(quantity) * unitCost);
-
     let nextExpense: Expense | null = null;
     let removeExpenseId: string | null = null;
     let needsCategory = false;
@@ -2933,7 +2957,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           description: `هدر مخزون: ${reason} — ${formatLiters(Math.abs(quantity), 0, false)}`,
         };
       } else {
-        nextExpense = buildWasteExpense(state, updated);
+        nextExpense = buildWasteExpense(state, updated, wasteValue);
       }
     } else if (linkedExpense) {
       removeExpenseId = linkedExpense.id;

@@ -242,6 +242,23 @@ export function adjustmentLossValueFromLedger(
   return round(outs.reduce((s, e) => s + e.quantityOut * e.unitCost, 0));
 }
 
+/**
+ * تكلفة نقص التسوية من دفتر المخزون — مصدر الحقيقة لقيمة الهدر.
+ * يضمن أن الخسارة = لترات × WAC وقت التسجيل (لا تُضخَّم بتكلفة يدوية أعلى).
+ */
+export function adjustmentDecreaseBasis(
+  inv: InventoryResult,
+  adjustment: InventoryAdjustment,
+): { quantity: number; unitCost: number; value: number } {
+  const absQty = round(Math.abs(adjustment.quantity));
+  const ledgerQty = adjustmentOutQtyFromLedger(inv, adjustment.id);
+  const ledgerValue = adjustmentLossValueFromLedger(inv, adjustment.id);
+  const quantity = ledgerQty ?? absQty;
+  const value = ledgerValue ?? round(quantity * adjustment.unitCost);
+  const unitCost = quantity > 0 ? round(value / quantity, 3) : round(adjustment.unitCost, 3);
+  return { quantity, unitCost, value };
+}
+
 export function sessionLedgerEntries(
   session: Session,
   allEntries: InventoryLedgerEntry[],

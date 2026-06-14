@@ -143,9 +143,12 @@ export function journalForPayroll(batch: PayrollBatch): JournalEntry {
   };
 }
 
-export function journalForAdjustment(a: InventoryAdjustment): JournalEntry {
+export function journalForAdjustment(a: InventoryAdjustment, decreaseValue?: number): JournalEntry {
   const absQty = Math.abs(a.quantity);
-  const value = round(absQty * a.unitCost);
+  const value =
+    a.quantity < 0 && decreaseValue != null
+      ? round(decreaseValue)
+      : round(absQty * a.unitCost);
   if (a.quantity > 0) {
     return {
       id: `JE-${a.id}`,

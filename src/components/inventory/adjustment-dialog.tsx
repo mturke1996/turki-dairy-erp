@@ -47,7 +47,7 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
   const signed = direction === 'decrease' ? -qtyAbs : qtyAbs;
   const projected = currentStock + signed;
   const isLoss = direction === 'decrease' && selectedReason.kind === 'loss';
-  const lossValue = Math.round(qtyAbs * effectiveUnitCost);
+  const lossValue = qtyAbs * effectiveUnitCost;
 
   function changeDirection(v: 'decrease' | 'increase') {
     setDirection(v);
@@ -151,7 +151,7 @@ export function AdjustmentDialog({ open, onOpenChange, currentStock, wac }: Prop
               <div className="space-y-0.5">
                 <p className="font-semibold">
                   سيُسجَّل كمصروف هدر غير نقدي:{' '}
-                  <Money value={lossValue} decimals={0} className="inline font-bold" />
+                  <Money value={lossValue} decimals={2} className="inline font-bold" />
                 </p>
                 <p className="text-[11px] leading-relaxed text-sun-800">
                   لا يُخصم من الخزنة (ثمن الحليب دُفع سابقاً) — يظهر في «المصاريف» لتتبّع الخسارة، وتُخصم الكمية من المخزون المرحّل.

@@ -135,7 +135,7 @@ export function WasteLossSection({
                   hasSessionWaste ? 'text-rose-800' : 'text-foreground',
                 )}
               >
-                <Money value={waste.sessionValue} decimals={0} className="text-[22px]" />
+                <Money value={waste.sessionValue} decimals={2} className="text-[22px]" />
               </div>
               {hasSessionWaste && avgUnitCost > 0 ? (
                 <p className="mt-1 text-[10px] text-muted-foreground">
@@ -159,7 +159,7 @@ export function WasteLossSection({
                   {waste.totalValue > 0 ? (
                     <Money
                       value={waste.totalValue}
-                      decimals={0}
+                      decimals={2}
                       className="text-[13px] font-semibold text-muted-foreground"
                     />
                   ) : null}
@@ -182,7 +182,7 @@ export function WasteLossSection({
                       {r.value > 0 ? (
                         <>
                           {' · '}
-                          <Money value={r.value} decimals={0} className="inline text-[11px]" />
+                          <Money value={r.value} decimals={2} className="inline text-[11px]" />
                         </>
                       ) : null}
                     </span>
@@ -241,7 +241,7 @@ export function WasteLossSection({
                         {' · '}
                         <Money
                           value={w.value}
-                          decimals={0}
+                          decimals={2}
                           className="inline text-[11px] font-semibold text-rose-700"
                         />
                       </td>

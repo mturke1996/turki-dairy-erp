@@ -546,6 +546,44 @@ describe('computeWasteSummary and alerts', () => {
     expect(w.sessionValue).toBe(30);
   });
 
+  it('waste expense matches ledger cost — never inflated by stored unitCost', () => {
+    const supplies: SupplyTransaction[] = [
+      {
+        id: 'sup-a', ref: 'SUP-A', farmerId: 'f1', sessionId: 'sw2', date: '2026-06-01',
+        quantity: 100, unitPrice: 2, total: 200, qualityTier: 'A', createdAt: '2026-06-01',
+      },
+      {
+        id: 'sup-b', ref: 'SUP-B', farmerId: 'f1', sessionId: 'sw2', date: '2026-06-02',
+        quantity: 100, unitPrice: 4, total: 400, qualityTier: 'A', createdAt: '2026-06-02',
+      },
+    ];
+    const staleAdj: InventoryAdjustment = {
+      ...lossAdj,
+      id: 'adj-stale2',
+      quantity: -10,
+      unitCost: 99,
+    };
+    const inv = buildInventoryLedger(supplies, [], [staleAdj], [session]);
+    const inflatedExpense: Expense = {
+      id: 'exp-bad', ref: 'EXP-BAD', categoryId: 'cat-waste', amount: 990,
+      description: 'هدر', date: '2026-06-05', sessionId: 'sw2', status: 'approved',
+      nonCash: true, sourceAdjustmentId: 'adj-stale2', createdAt: '2026-06-05',
+    };
+    const d = computeDerived({
+      sessions: [session], activeSessionId: 'sw2',
+      farmers: [farmer], customers: [], employees: [],
+      supplies, sales: [], payments: [], debtEntries: [],
+      adjustments: [staleAdj], expenses: [inflatedExpense], payrollBatches: [],
+      vaults: [], banks: [], cashMovements: [], externalIncomes: [],
+      settings: { minStockThreshold: 0, defaultBuyPrice: 2, defaultSellPrice: 2.5 },
+    });
+    const w = computeWasteSummary([staleAdj], 'sw2', inv);
+    expect(w.sessionValue).toBe(30);
+    expect(d.incomeStatement.wasteLosses).toBe(30);
+    const adjJournal = d.journals.find((j) => j.sourceId === 'adj-stale2');
+    expect(adjJournal?.lines.find((l) => l.account === 'operating_expense')?.debit).toBe(30);
+  });
+
   it('aggregates all sessions when sessionId is null', () => {
     const otherLoss: InventoryAdjustment = {
       ...lossAdj,

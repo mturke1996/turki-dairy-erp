@@ -25,11 +25,14 @@ export function AdjustmentEditDialog({
   onOpenChange,
   adjustment,
   stockBase,
+  wac,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   adjustment: InventoryAdjustment | null;
   stockBase: number;
+  /** متوسط التكلفة المرجّح — يُطبَّق تلقائياً على نقص الهدر */
+  wac: number;
 }) {
   const updateAdjustment = useErpStore((s) => s.updateAdjustment);
   const [direction, setDirection] = useState<'decrease' | 'increase'>('decrease');
@@ -64,7 +67,8 @@ export function AdjustmentEditDialog({
   const projected = stockBase + signed;
   const reasonKind = selectedReason.kind ?? resolveAdjustmentReasonKind(selectedReason.value, signed);
   const isLoss = direction === 'decrease' && reasonKind === 'loss';
-  const lossValue = Math.round(qtyAbs * (Number(unitCost) || adjustment.unitCost));
+  const effectiveUnitCost = direction === 'decrease' ? wac : Number(unitCost) || adjustment.unitCost;
+  const lossValue = qtyAbs * effectiveUnitCost;
 
   function changeDirection(v: 'decrease' | 'increase') {
     setDirection(v);
@@ -81,7 +85,9 @@ export function AdjustmentEditDialog({
     try {
       const res = await updateAdjustment(adjustment!.id, {
         quantity: signed,
-        unitCost: Number(unitCost) || adjustment!.unitCost,
+        ...(direction === 'increase'
+          ? { unitCost: Number(unitCost) || adjustment!.unitCost }
+          : {}),
         reason: selectedReason.value,
         reasonKind: selectedReason.kind,
         date: new Date(date + 'T11:00:00').toISOString(),
@@ -119,8 +125,18 @@ export function AdjustmentEditDialog({
             <Field label="الكمية" required>
               <VolumeInput value={quantity} onChange={setQuantity} />
             </Field>
-            <Field label="تكلفة الوحدة">
-              <AmountInput value={unitCost} onChange={setUnitCost} placeholder="0.000" />
+            <Field
+              label="تكلفة الوحدة"
+              hint={direction === 'decrease' ? 'متوسط التكلفة المرجّح — يُطبَّق تلقائياً' : undefined}
+            >
+              {direction === 'decrease' ? (
+                <div className="flex h-10 items-center rounded-md border border-input bg-canvas-sunken/50 px-3 text-[13px] font-semibold tabular-nums text-foreground">
+                  <Money value={wac} decimals={3} className="inline text-[13px]" />
+                  <span className="mr-1.5 text-muted-foreground">/ لتر</span>
+                </div>
+              ) : (
+                <AmountInput value={unitCost} onChange={setUnitCost} placeholder="0.000" />
+              )}
             </Field>
           </div>
           <Field label="السبب">
@@ -153,7 +169,7 @@ export function AdjustmentEditDialog({
               <Receipt className="mt-0.5 h-4 w-4 shrink-0" />
               <p className="font-semibold">
                 مصروف هدر غير نقدي:{' '}
-                <Money value={lossValue} decimals={0} className="inline font-bold" /> — يُحدَّث في «المصاريف» تلقائياً.
+                <Money value={lossValue} decimals={2} className="inline font-bold" /> — يُحدَّث في «المصاريف» تلقائياً.
               </p>
             </div>
           ) : null}
