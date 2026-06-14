@@ -13,7 +13,7 @@ import { CopyableValue } from '@/components/shared/copyable-value';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PaymentDialog } from '@/components/forms/payment-dialog';
 import { FarmerPaymentEditDialog } from '@/components/forms/payment-edit-dialog';
-import { DebtSettleDialog } from '@/components/debts/debt-settle-dialog';
+import { PartyDebtsPanel } from '@/components/debts/party-debts-panel';
 import { FarmerFormDialog } from './farmer-form-dialog';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { FarmerStatementPDF } from '@/features/pdf/FarmerStatementPDF';
@@ -28,7 +28,7 @@ import {
 } from '@/lib/domain/constants';
 import type { FarmerStats } from '@/lib/domain/calculations';
 import type { Payment } from '@/lib/domain/types';
-import { isDebtFullySettled, resolveDebtDirection } from '@/lib/domain/debt';
+import { partyDebts, resolveDebtDirection } from '@/lib/domain/debt';
 import { formatPaymentTreasuryLabel } from '@/lib/domain/treasury-splits';
 import { formatShortDate } from '@/lib/utils';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
@@ -60,9 +60,9 @@ export function FarmerDetailDialog({
   const deletePayment = useErpStore((s) => s.deletePayment);
   const deleteFarmer = useErpStore((s) => s.deleteFarmer);
   const [payOpen, setPayOpen] = useState(false);
-  const [settleOpen, setSettleOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editPayment, setEditPayment] = useState<Payment | null>(null);
+  const [activeTab, setActiveTab] = useState('supplies');
 
   const farmer = d.farmers.find((f) => f.id === farmerId) as FarmerStats | undefined;
   const rawFarmer = data.farmers.find((f) => f.id === farmerId) ?? null;
@@ -79,16 +79,14 @@ export function FarmerDetailDialog({
     [data.payments, farmerId],
   );
 
-  const receivableDebt = useMemo(
-    () =>
-      data.debtEntries.find(
-        (entry) =>
-          entry.partyKind === 'farmer' &&
-          entry.partyId === farmerId &&
-          !isDebtFullySettled(entry) &&
-          resolveDebtDirection(entry) === 'receivable',
-      ) ?? null,
+  const farmerDebts = useMemo(
+    () => partyDebts(data.debtEntries, 'farmer', farmerId ?? undefined, { status: 'open' }),
     [data.debtEntries, farmerId],
+  );
+
+  const receivableDebt = useMemo(
+    () => farmerDebts.find((entry) => resolveDebtDirection(entry) === 'receivable') ?? null,
+    [farmerDebts],
   );
 
   const payableBalance = Math.max(0, farmer?.creditBalance ?? 0);
@@ -153,9 +151,15 @@ export function FarmerDetailDialog({
               </Button>
             ) : null}
             {canPay && receivableDebt ? (
-              <Button size="sm" variant="meadow" onClick={() => setSettleOpen(true)}>
+              <Button size="sm" variant="meadow" onClick={() => setActiveTab('debts')}>
                 <HandCoins className="h-4 w-4" />
-                تحصيل دين (عليه)
+                تحصيل دين ({farmerDebts.length})
+              </Button>
+            ) : null}
+            {canPay && farmerDebts.length > 0 && !receivableDebt ? (
+              <Button size="sm" variant="outline" onClick={() => setActiveTab('debts')}>
+                <HandCoins className="h-4 w-4" />
+                ديون مسجّلة ({farmerDebts.length})
               </Button>
             ) : null}
             <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
@@ -208,11 +212,12 @@ export function FarmerDetailDialog({
               </>
             }
           >
-          <Tabs defaultValue="supplies" className="min-w-0">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
             <ProfileTabsList>
               <TabsList className="h-auto w-full min-w-0 justify-start gap-1 p-1">
                 <TabsTrigger value="supplies" className="shrink-0">عمليات الاستلام ({supplies.length})</TabsTrigger>
                 <TabsTrigger value="payments" className="shrink-0">الدفعات ({payments.length})</TabsTrigger>
+                <TabsTrigger value="debts" className="shrink-0">ديون مسجّلة ({farmerDebts.length})</TabsTrigger>
               </TabsList>
             </ProfileTabsList>
             <TabsContent value="supplies" className="mt-3 min-w-0">
@@ -400,6 +405,14 @@ export function FarmerDetailDialog({
                 <EmptyState title="لا دفعات" />
               )}
             </TabsContent>
+            <TabsContent value="debts" className="mt-3 min-w-0">
+              <PartyDebtsPanel
+                entries={data.debtEntries.filter(
+                  (e) => e.partyKind === 'farmer' && e.partyId === farmerId,
+                )}
+                canSettle={canPay}
+              />
+            </TabsContent>
           </Tabs>
           </ProfileDialogBody>
         </DialogContent>
@@ -420,7 +433,6 @@ export function FarmerDetailDialog({
         payment={editPayment}
         partyName={farmer.fullName}
       />
-      <DebtSettleDialog open={settleOpen} onOpenChange={setSettleOpen} entry={receivableDebt} />
       <FarmerFormDialog open={editOpen} onOpenChange={setEditOpen} farmer={rawFarmer} />
     </>
   );

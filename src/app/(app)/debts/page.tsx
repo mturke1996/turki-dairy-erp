@@ -11,6 +11,8 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Plus,
+  CheckCircle2,
+  HandCoins,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +29,7 @@ import { DebtFormDialog } from '@/components/debts/debt-form-dialog';
 import { DebtEntriesTable } from '@/components/debts/debt-entries-table';
 import { useDerived, useErpData } from '@/lib/store/use-derived';
 import { DEBT_PARTY_LABELS } from '@/lib/domain/constants';
-import { DEBT_DIRECTION_LABELS, debtRemainingAmount, resolveDebtDirection } from '@/lib/domain/debt';
+import { filterDebtsByStatus, DEBT_DIRECTION_LABELS, debtRemainingAmount, resolveDebtDirection } from '@/lib/domain/debt';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { DebtsRegisterPDF } from '@/features/pdf/DebtsRegisterPDF';
 import type { DebtPartyKind, DebtLedgerRow } from '@/lib/domain/calculations';
@@ -181,6 +183,7 @@ export default function DebtsPage() {
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const entriesRef = useRef<HTMLDivElement>(null);
+  const settledRef = useRef<HTMLDivElement>(null);
 
   const payables = useMemo(
     () => d.debts.rows.filter((r) => r.direction === 'payable').sort((a, b) => b.balance - a.balance),
@@ -214,6 +217,16 @@ export default function DebtsPage() {
       external: d.debts.rows.filter((r) => r.kind === 'external').length,
     }),
     [d.debts.rows],
+  );
+
+  const openEntriesCount = useMemo(
+    () => filterDebtsByStatus(d.debts.entries, 'open').length,
+    [d.debts.entries],
+  );
+
+  const settledEntriesCount = useMemo(
+    () => filterDebtsByStatus(d.debts.entries, 'settled').length,
+    [d.debts.entries],
   );
 
   const debtPdfRows = useMemo(
@@ -414,15 +427,43 @@ export default function DebtsPage() {
       </Card>
 
       {d.debts.entries.length > 0 ? (
-        <Card ref={entriesRef}>
-          <CardHeader>
-            <CardTitle className="text-[15px]">سجل الديون المسجّلة</CardTitle>
-            <CardDescription>تعديل، تسوية، أو حذف أي دين يدوي — زر «تسوية» يسدّد الدين ويربط الخزينة</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <DebtEntriesTable entries={d.debts.entries} />
-          </CardContent>
-        </Card>
+        <>
+          <Card ref={entriesRef}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-[15px]">
+                <HandCoins className="h-4 w-4 text-muted-foreground" />
+                الديون القائمة
+              </CardTitle>
+              <CardDescription>
+                {openEntriesCount} دين يحتاج تسوية — تعديل أو سداد من هنا
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DebtEntriesTable
+                entries={d.debts.entries}
+                variant="open"
+                emptyMessage="لا ديون قائمة — سجّل ديناً جديداً أو كل الديون مُسَدَّدة."
+              />
+            </CardContent>
+          </Card>
+
+          {settledEntriesCount > 0 ? (
+            <Card ref={settledRef} className="border-meadow-200/50 bg-meadow-50/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-[15px] text-meadow-900">
+                  <CheckCircle2 className="h-4 w-4 text-meadow-700" />
+                  الديون المُسَدَّدة
+                </CardTitle>
+                <CardDescription>
+                  {settledEntriesCount} دين مُكتمل — سجل منفصل عن الديون القائمة
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DebtEntriesTable entries={d.debts.entries} variant="settled" />
+              </CardContent>
+            </Card>
+          ) : null}
+        </>
       ) : null}
 
       <DebtFormDialog open={addOpen} onOpenChange={setAddOpen} />

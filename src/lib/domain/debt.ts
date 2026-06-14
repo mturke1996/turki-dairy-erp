@@ -28,6 +28,75 @@ export function isDebtFullySettled(
   return entry.amount <= 0.01 || Boolean(entry.settledAt);
 }
 
+/** يُوحّد حالة التسوية — amount المتبقي هو مصدر الحقيقة. */
+export function reconcileDebtEntryStatus(entry: DebtEntry): DebtEntry {
+  const remaining = debtRemainingAmount(entry);
+  if (remaining <= 0.01) {
+    return {
+      ...entry,
+      amount: 0,
+      settledAt: entry.settledAt ?? new Date().toISOString(),
+    };
+  }
+  return {
+    ...entry,
+    settledAt: undefined,
+  };
+}
+
+export type DebtListFilter = "open" | "settled" | "all";
+
+/** فلترة ديون طرف أو قائمة حسب الحالة. */
+export function filterDebtsByStatus(
+  entries: DebtEntry[],
+  status: DebtListFilter,
+): DebtEntry[] {
+  if (status === "all") return entries;
+  return entries.filter((e) =>
+    status === "open" ? !isDebtFullySettled(e) : isDebtFullySettled(e),
+  );
+}
+
+/** ديون طرف مرتّبة (الأقدم أولاً للتسوية). */
+export function partyDebts(
+  entries: DebtEntry[],
+  partyKind: DebtPartyKind,
+  partyId: string | undefined,
+  options?: { status?: DebtListFilter; directions?: DebtDirection[] },
+): DebtEntry[] {
+  const status = options?.status ?? "open";
+  const directions = options?.directions;
+  return filterDebtsByStatus(entries, status)
+    .filter(
+      (e) =>
+        e.partyKind === partyKind &&
+        e.partyId === partyId &&
+        (!directions || directions.includes(resolveDebtDirection(e))),
+    )
+    .sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt),
+    );
+}
+
+/** دفعات التسوية المرتبطة بدين مسجّل (farmer/customer). */
+export function settlementPaymentsForDebt(
+  payments: Payment[],
+  entry: Pick<DebtEntry, "ref" | "partyKind" | "partyId">,
+): Payment[] {
+  if (!entry.partyId) return [];
+  if (entry.partyKind !== "farmer" && entry.partyKind !== "customer") return [];
+  const kind =
+    entry.partyKind === "farmer" ? "farmer_payment" : "customer_payment";
+  return payments.filter(
+    (p) =>
+      p.kind === kind &&
+      p.partyId === entry.partyId &&
+      p.reference === entry.ref &&
+      (p.debtSettledAmount ?? 0) > 0.001,
+  );
+}
+
 /** تطبيق مبلغ تسوية على سجل دين واحد. */
 export function applySettlementToEntry(
   entry: DebtEntry,
@@ -39,12 +108,12 @@ export function applySettlementToEntry(
   const newAmount = Math.max(0, entry.amount - settled);
   const newSettled = (entry.settledAmount ?? 0) + settled;
   const fullySettled = newAmount <= 0.01;
-  return {
+  return reconcileDebtEntryStatus({
     ...entry,
     amount: newAmount,
     settledAmount: newSettled,
-    settledAt: fullySettled ? new Date().toISOString() : entry.settledAt,
-  };
+    settledAt: fullySettled ? new Date().toISOString() : undefined,
+  });
 }
 
 /**

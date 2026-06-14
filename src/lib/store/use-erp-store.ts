@@ -4,10 +4,10 @@ import { create } from "zustand";
 import { buildInventoryLedger, round } from "@/lib/domain/inventory";
 import {
   computeSessionSummary,
-  computeCustomerStats,
   computeFarmerSessionStats,
   computeEmployeeAdvanceBalance,
   buildSessionCarryForwardSnapshot,
+  allCustomerSessionStats,
   type ErpData,
 } from "@/lib/domain/calculations";
 import { accountBalance } from "@/lib/domain/treasury";
@@ -42,7 +42,9 @@ import {
   debtRecordSettleAmount,
   debtSettlementIsCashOut,
   isDebtFullySettled,
+  reconcileDebtEntryStatus,
   reversePaymentDebtAllocation,
+  settlementPaymentsForDebt,
   type DebtCashMode,
 } from "@/lib/domain/debt";
 import type {
@@ -216,6 +218,15 @@ interface ErpState {
     date?: string;
     dueDate?: string;
     notes?: string;
+    /** تحصيل فوري كاش/تحويل عند البيع — يُودَع في الخزينة ويُسجّل دفعة من العميل */
+    immediateReceipt?: {
+      amount: number;
+      method: Payment["method"];
+      sourceType?: AccountSourceType;
+      sourceId?: string;
+      splits?: TreasurySplitPart[];
+      reference?: string;
+    };
   }) => Promise<MutationResult>;
   recordFarmerPayment: (input: {
     farmerId: string;
@@ -477,6 +488,14 @@ interface ErpState {
     employeeId: string,
     source: { type: AccountSourceType; id: string },
   ) => Promise<MutationResult>;
+  payEmployeeSalaryDirect: (input: {
+    employeeId: string;
+    periodFrom: string;
+    periodTo: string;
+    paidFromType: AccountSourceType;
+    paidFromId: string;
+    label?: string;
+  }) => Promise<MutationResult>;
   deletePayrollBatch: (batchId: string) => Promise<MutationResult>;
 
   // settings & demo
@@ -918,9 +937,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         state.debtEntries,
       ),
     );
-    const customerStats = state.customers.map((c) =>
-      computeCustomerStats(c, state.sales, state.payments, state.debtEntries),
-    );
+    const customerSessionStats = allCustomerSessionStats(erpSnapshot, active);
     const payables = carrySnapshot.totals.payables;
     const receivables = carrySnapshot.totals.receivables;
 
@@ -966,15 +983,18 @@ export const useErpStore = create<ErpState>()((set, get) => ({
               balance: f.balance,
               suppliedQty: f.suppliedQty,
               paidAmount: f.paidAmount,
+              carriedForward: f.carriedForward,
               status: f.status === "none" ? "pending" : f.status,
             })),
-          customers: customerStats
-            .filter((c) => Math.abs(c.outstanding) > 0.01)
-            .map((c) => ({
-              id: c.id,
-              name: c.entityName,
-              balance: c.outstanding,
-            })),
+          customers: customerSessionStats.map((c) => ({
+            id: c.customerId,
+            name: c.entityName,
+            balance: c.balance,
+            carriedForward: c.carriedForward,
+            soldValue: c.soldValue,
+            receivedAmount: c.receivedAmount,
+            status: c.status === "none" ? undefined : c.status,
+          })),
           employees: carrySnapshot.employees,
           external: carrySnapshot.external,
         },
@@ -1541,6 +1561,29 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     if (!customer) return { ok: false, error: "العميل غير موجود." };
     if (customer.onHold)
       return { ok: false, error: "حساب العميل مجمّد — لا يمكن البيع له." };
+
+    const ir = input.immediateReceipt;
+    if (ir) {
+      if (ir.amount <= 0)
+        return { ok: false, error: "مبلغ التحصيل الفوري غير صالح." };
+      const irErr = validateTreasurySourceInput({
+        amount: ir.amount,
+        sourceType: ir.sourceType,
+        sourceId: ir.sourceId,
+        splits: ir.splits,
+      });
+      if (irErr) return { ok: false, error: irErr };
+      const irResolved = resolveTreasurySources({
+        amount: ir.amount,
+        sourceType: ir.sourceType,
+        sourceId: ir.sourceId,
+        splits: ir.splits,
+      });
+      if (irResolved.mode === "none") {
+        return { ok: false, error: "اختر حساب الإيداع للتحصيل الفوري." };
+      }
+    }
+
     const stock = currentStockOf(state);
     if (input.quantity > stock + 0.001) {
       return {
@@ -1568,6 +1611,67 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       createdAt: new Date().toISOString(),
       createdBy: state.auth?.name,
     };
+
+    let payment: Payment | null = null;
+    let irMovements: CashMovement[] = [];
+
+    if (ir) {
+      const payId = uid("pay-");
+      const irAmount = round(ir.amount);
+      const irResolved = resolveTreasurySources({
+        amount: irAmount,
+        sourceType: ir.sourceType,
+        sourceId: ir.sourceId,
+        splits: ir.splits,
+      });
+      const irTreasury = paymentTreasuryMeta(irResolved);
+      payment = {
+        id: payId,
+        ref: nextRef(
+          "RCV",
+          state.payments.filter((p) => p.kind === "customer_payment"),
+        ),
+        kind: "customer_payment",
+        partyId: input.customerId,
+        sessionId: state.activeSessionId,
+        date,
+        amount: irAmount,
+        method: ir.method,
+        ...irTreasury,
+        reference: ir.reference ?? tx.ref,
+        notes: "تحصيل فوري عند بيع الحليب",
+        createdAt: new Date().toISOString(),
+        createdBy: state.auth?.name,
+      };
+      if (irResolved.mode !== "none") {
+        irMovements = buildSplitCashMovements({
+          parts: irResolved.parts,
+          totalAmount: irAmount,
+          splitGroupId:
+            irResolved.mode === "split" ? irResolved.splitGroupId : undefined,
+          movementType: "sale_payment",
+          direction: "in",
+          referenceType: "payment",
+          referenceId: payId,
+          baseDescription: `تحصيل فوري — بيع ${customer.entityName}`,
+          sessionId: state.activeSessionId,
+          date,
+          createdBy: state.auth?.name,
+          vaults: state.vaults,
+          banks: state.banks,
+          existingRefs: state.cashMovements,
+          createId: () => uid("cm-"),
+        });
+        const integrity = verifyReferenceMovements(
+          irMovements,
+          "payment",
+          payId,
+          irAmount,
+        );
+        if (!integrity.ok) return integrity;
+      }
+    }
+
     const audit = makeAudit(
       state,
       "sale",
@@ -1575,13 +1679,31 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       "create",
       `بيع لـ ${customer.entityName} — ${formatLiters(tx.quantity, 0, false)}`,
     );
+    const dbOps: { table: string; rows: Record<string, unknown>[] }[] = [
+      { table: "sales", rows: [tx as unknown as Record<string, unknown>] },
+    ];
+    if (payment)
+      dbOps.push({
+        table: "payments",
+        rows: [payment as unknown as Record<string, unknown>],
+      });
+    if (irMovements.length)
+      dbOps.push({
+        table: "cash_movements",
+        rows: irMovements as unknown as Record<string, unknown>[],
+      });
+
     const res = await mutateWithDb(
       () =>
         set((s) => ({
           sales: [tx, ...s.sales],
+          payments: payment ? [payment, ...s.payments] : s.payments,
+          cashMovements: irMovements.length
+            ? [...irMovements, ...s.cashMovements]
+            : s.cashMovements,
           auditLogs: [audit, ...s.auditLogs],
         })),
-      [{ table: "sales", rows: [tx as unknown as Record<string, unknown>] }],
+      dbOps,
     );
     return res.ok ? { ok: true, id: tx.id } : res;
   },
@@ -2452,7 +2574,9 @@ export const useErpStore = create<ErpState>()((set, get) => ({
             : (state.employees.find((e) => e.id === entry.partyId)?.fullName ??
               "موظف");
 
-    const updatedEntry = applySettlementToEntry(entry, amount);
+    const updatedEntry = reconcileDebtEntryStatus(
+      applySettlementToEntry(entry, amount),
+    );
 
     const noteSuffix = input.notes?.trim() ? ` — ${input.notes.trim()}` : "";
     const settlementNote = `تسوية دين ${entry.ref}${noteSuffix}`;
@@ -2588,20 +2712,63 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const state = get();
     const existing = state.debtEntries.find((d) => d.id === id);
     if (!existing) return { ok: false, error: "سجل الدين غير موجود." };
+
+    const settledViaPayroll =
+      existing.partyKind === "employee" &&
+      (existing.settledAmount ?? 0) > 0.01;
+    if (settledViaPayroll) {
+      return {
+        ok: false,
+        error:
+          "لا يمكن حذف دين موظّف بعد خصمه من الراتب. اتركه مُسَدّداً أو عدّل كشف الراتب.",
+      };
+    }
+
+    const linkedPayments = settlementPaymentsForDebt(
+      state.payments,
+      existing,
+    );
+    const paymentIds = linkedPayments.map((p) => p.id);
+    const cmIds = [
+      ...state.cashMovements
+        .filter(
+          (m) =>
+            (m.referenceType === "payment" &&
+              m.referenceId &&
+              paymentIds.includes(m.referenceId)) ||
+            (m.referenceType === "debt" && m.referenceId === id),
+        )
+        .map((m) => m.id),
+    ];
+
     const audit = makeAudit(
       state,
       "debt",
       id,
       "delete",
-      `حذف دين ${existing.ref}`,
+      `حذف دين ${existing.ref}${
+        linkedPayments.length
+          ? ` (${linkedPayments.length} دفعة مرتبطة)`
+          : ""
+      }`,
     );
     const res = await mutateWithDb(
       () =>
         set((s) => ({
           debtEntries: s.debtEntries.filter((d) => d.id !== id),
+          payments: s.payments.filter((p) => !paymentIds.includes(p.id)),
+          cashMovements: s.cashMovements.filter((m) => !cmIds.includes(m.id)),
           auditLogs: [audit, ...s.auditLogs],
         })),
-      [{ table: "debt_entries", deletes: [id] }],
+      [
+        ...(paymentIds.length
+          ? [{ table: "payments", deletes: paymentIds }]
+          : []),
+        ...(cmIds.length
+          ? [{ table: "cash_movements", deletes: cmIds }]
+          : []),
+        { table: "debt_entries", deletes: [id] },
+      ],
     );
     return res.ok ? { ok: true, id } : res;
   },
@@ -2871,14 +3038,37 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const state = get();
     const tx = state.sales.find((s) => s.id === id);
     if (!tx) return { ok: false, error: "عملية البيع غير موجودة." };
+    const linkedPayments = state.payments.filter(
+      (p) =>
+        p.kind === "customer_payment" &&
+        p.partyId === tx.customerId &&
+        p.reference === tx.ref,
+    );
+    const paymentIds = linkedPayments.map((p) => p.id);
+    const cmIds = state.cashMovements
+      .filter(
+        (m) =>
+          m.referenceType === "payment" &&
+          m.referenceId &&
+          paymentIds.includes(m.referenceId),
+      )
+      .map((m) => m.id);
     const audit = makeAudit(state, "sale", id, "delete", `حذف بيع ${tx.ref}`);
     return mutateWithDb(
       () =>
         set((s) => ({
           sales: s.sales.filter((x) => x.id !== id),
+          payments: s.payments.filter((p) => !paymentIds.includes(p.id)),
+          cashMovements: s.cashMovements.filter((m) => !cmIds.includes(m.id)),
           auditLogs: [audit, ...s.auditLogs],
         })),
-      [{ table: "sales", deletes: [id] }],
+      [
+        { table: "sales", deletes: [id] },
+        ...(paymentIds.length
+          ? [{ table: "payments", deletes: paymentIds }]
+          : []),
+        ...(cmIds.length ? [{ table: "cash_movements", deletes: cmIds }] : []),
+      ],
     ).then((r) => (r.ok ? { ok: true, id } : r));
   },
 
@@ -2967,6 +3157,15 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     if (!gate.ok) return gate;
     const existing = state.sales.find((s) => s.id === id);
     if (!existing) return { ok: false, error: "عملية البيع غير موجودة." };
+    const hasLinkedReceipt = state.payments.some(
+      (p) => p.kind === "customer_payment" && p.reference === existing.ref,
+    );
+    if (hasLinkedReceipt) {
+      return {
+        ok: false,
+        error: "لا يمكن تعديل بيع مرتبط بتحصيل فوري — احذفه وأعد التسجيل.",
+      };
+    }
 
     const quantity = round(patch.quantity ?? existing.quantity);
     const unitPrice = round(patch.unitPrice ?? existing.unitPrice, 3);
@@ -4316,6 +4515,38 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       dbRows,
     );
     return res.ok ? { ok: true, id: batchId } : res;
+  },
+
+  payEmployeeSalaryDirect: async (input) => {
+    const state = get();
+    const gate = requireOpenSession(state);
+    if (!gate.ok) return gate;
+    const employee = state.employees.find((e) => e.id === input.employeeId);
+    if (!employee) return { ok: false, error: "الموظف غير موجود." };
+    if (employee.status !== "active")
+      return { ok: false, error: "الموظف غير نشط." };
+
+    const label = input.label ?? `راتب — ${employee.fullName}`;
+    const createRes = await get().createPayrollBatch({
+      label,
+      payrollType: "all",
+      periodFrom: input.periodFrom,
+      periodTo: input.periodTo,
+      employeeIds: [input.employeeId],
+      paidFromType: input.paidFromType,
+      paidFromId: input.paidFromId,
+    });
+    if (!createRes.ok) return createRes;
+
+    const payRes = await get().payPayrollEmployeeLine(createRes.id!, input.employeeId, {
+      type: input.paidFromType,
+      id: input.paidFromId,
+    });
+    if (!payRes.ok) {
+      await get().deletePayrollBatch(createRes.id!);
+      return payRes;
+    }
+    return { ok: true, id: createRes.id };
   },
 
   payPayrollBatch: async (batchId, source) => {

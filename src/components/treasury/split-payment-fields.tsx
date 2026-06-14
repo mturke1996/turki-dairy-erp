@@ -147,6 +147,8 @@ type Props = {
   /** تسمية عند التقسيم — صرف أو إيداع */
   outflow?: boolean;
   allowNone?: boolean;
+  /** false = دفعة واحدة من حساب واحد فقط (بدون تقسيم) */
+  allowSplit?: boolean;
   disabled?: boolean;
   creditBack?: CashMovement[];
   className?: string;
@@ -162,6 +164,7 @@ export function SplitPaymentFields({
   singleLabel,
   outflow = true,
   allowNone = false,
+  allowSplit = true,
   disabled,
   creditBack = [],
   className,
@@ -195,7 +198,8 @@ export function SplitPaymentFields({
       : 0;
 
   const sumParts = (Number(state.part1Amount) || 0) + (Number(state.part2Amount) || 0);
-  const splitValid = state.enabled && total > 0 && Math.abs(sumParts - total) <= 0.02;
+  const splitEnabled = allowSplit && state.enabled;
+  const splitValid = splitEnabled && total > 0 && Math.abs(sumParts - total) <= 0.02;
 
   function setField<K extends keyof SplitPaymentState>(key: K, value: SplitPaymentState[K]) {
     onChange({ ...state, [key]: value });
@@ -209,35 +213,37 @@ export function SplitPaymentFields({
 
   return (
     <div className={cn('space-y-3', className)}>
-      <div className="flex items-center justify-between rounded-lg border border-border bg-canvas-sunken/50 px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          <SplitSquareHorizontal className="h-4 w-4 text-navy-600" aria-hidden />
-          <div>
-            <Label htmlFor="split-toggle" className="text-[13px] font-semibold">
-              تقسيم المبلغ بين حسابين
-            </Label>
-            <p className="text-[11px] text-muted-foreground">مثال: نصف كاش ونصف تحويل بنكي</p>
+      {allowSplit ? (
+        <div className="flex items-center justify-between rounded-lg border border-border bg-canvas-sunken/50 px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <SplitSquareHorizontal className="h-4 w-4 text-navy-600" aria-hidden />
+            <div>
+              <Label htmlFor="split-toggle" className="text-[13px] font-semibold">
+                تقسيم المبلغ بين حسابين
+              </Label>
+              <p className="text-[11px] text-muted-foreground">مثال: نصف كاش ونصف تحويل بنكي</p>
+            </div>
           </div>
+          <Switch
+            id="split-toggle"
+            checked={state.enabled}
+            disabled={disabled || accounts.length < 2}
+            onCheckedChange={(v) => {
+              const next: SplitPaymentState = { ...state, enabled: v };
+              if (v && total > 0) {
+                const [half1, half2] = equalSplitAmounts(total);
+                next.part1Amount = String(half1);
+                next.part2Amount = String(half2);
+                if (!next.part1Source && accounts[0]) next.part1Source = accounts[0].value;
+                if (!next.part2Source && accounts[1]) next.part2Source = accounts[1].value;
+              }
+              onChange(next);
+            }}
+          />
         </div>
-        <Switch
-          id="split-toggle"
-          checked={state.enabled}
-          disabled={disabled || accounts.length < 2}
-          onCheckedChange={(v) => {
-            const next: SplitPaymentState = { ...state, enabled: v };
-            if (v && total > 0) {
-              const [half1, half2] = equalSplitAmounts(total);
-              next.part1Amount = String(half1);
-              next.part2Amount = String(half2);
-              if (!next.part1Source && accounts[0]) next.part1Source = accounts[0].value;
-              if (!next.part2Source && accounts[1]) next.part2Source = accounts[1].value;
-            }
-            onChange(next);
-          }}
-        />
-      </div>
+      ) : null}
 
-      {!state.enabled ? (
+      {!splitEnabled ? (
         <>
           <Field
             label={singleLabel}

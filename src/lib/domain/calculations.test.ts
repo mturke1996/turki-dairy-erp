@@ -166,7 +166,7 @@ describe('computeFarmerSessionStats', () => {
     expect(stats.status).toBe('pending');
   });
 
-  it('marks paid when settlement complete', () => {
+  it('marks paid when balance is fully settled', () => {
     const supplies: SupplyTransaction[] = [
       {
         id: 's1', ref: 'SUP-1', farmerId: 'f1', sessionId: 'sess1', date: '2026-06-01',
@@ -182,6 +182,24 @@ describe('computeFarmerSessionStats', () => {
     const stats = computeFarmerSessionStats(farmer, 'sess1', supplies, payments);
     expect(stats.status).toBe('paid');
     expect(stats.balance).toBe(0);
+  });
+
+  it('stays partial when settlement complete flag set but balance remains', () => {
+    const supplies: SupplyTransaction[] = [
+      {
+        id: 's1', ref: 'SUP-1', farmerId: 'f1', sessionId: 'sess1', date: '2026-06-01',
+        quantity: 50, unitPrice: 2, total: 100, qualityTier: 'A', createdAt: '2026-06-01',
+      },
+    ];
+    const payments: Payment[] = [
+      {
+        id: 'p1', ref: 'PAY-1', kind: 'farmer_payment', partyId: 'f1', sessionId: 'sess1',
+        date: '2026-06-10', amount: 50, method: 'cash', settlementComplete: true, createdAt: '2026-06-10',
+      },
+    ];
+    const stats = computeFarmerSessionStats(farmer, 'sess1', supplies, payments);
+    expect(stats.status).toBe('partial');
+    expect(stats.balance).toBe(50);
   });
 
   it('includes carried forward balance in new session', () => {

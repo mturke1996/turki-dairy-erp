@@ -35,6 +35,8 @@ export {
   pdfFmtDate,
   pdfFmtMoneyLibyan,
   PdfMoneyText,
+  PdfLitersText,
+  pdfFmtLiters,
 } from './pdfBrandKit';
 
 // Base
@@ -45,6 +47,7 @@ export { FarmerStatementPDF, type FarmerStatementProps } from './FarmerStatement
 export { CustomerStatementPDF, type CustomerStatementProps } from './CustomerStatementPDF';
 export { DailyMovementPDF, type DailyMovementProps } from './DailyMovementPDF';
 export { SessionClosingPDF, type SessionClosingProps } from './SessionClosingPDF';
+export type { SessionClosingReportProps } from '@/lib/domain/session-closing-report';
 export { FinancialReportPDF, type FinancialReportProps } from './FinancialReportPDF';
 export { PayrollPDF, type PayrollPdfProps, type PayrollLineRow } from './PayrollPDF';
 export { CashStatementPDF, type CashStatementPdfProps, type CashStatementRow } from './CashStatementPDF';

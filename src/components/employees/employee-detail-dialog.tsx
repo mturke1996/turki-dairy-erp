@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { EmployeeFormDialog } from './employee-form-dialog';
 import { EmployeeAdvanceDialog } from './employee-advance-dialog';
 import { EmployeeDirectPayDialog } from './employee-direct-pay-dialog';
-import { DebtSettleDialog } from '@/components/debts/debt-settle-dialog';
+import { PartyDebtsPanel } from '@/components/debts/party-debts-panel';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { usePermission } from '@/lib/store/use-permission';
@@ -37,7 +37,7 @@ import {
   computeEmployeeDebtBreakdown,
   type EmployeeStats,
 } from '@/lib/domain/calculations';
-import { debtRemainingAmount, isDebtFullySettled, resolveDebtDirection } from '@/lib/domain/debt';
+import { partyDebts } from '@/lib/domain/debt';
 import { formatShortDate } from '@/lib/utils';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
 import { PartyDeleteButton } from '@/components/shared/party-delete-button';
@@ -81,13 +81,11 @@ export function EmployeeDetailDialog({
   const deleteEmployee = useErpStore((s) => s.deleteEmployee);
   const deletePayment = useErpStore((s) => s.deletePayment);
   const recordEmployeeAdvance = useErpStore((s) => s.recordEmployeeAdvance);
-  const createPayrollBatch = useErpStore((s) => s.createPayrollBatch);
-  const payPayrollEmployeeLine = useErpStore((s) => s.payPayrollEmployeeLine);
+  const payEmployeeSalaryDirect = useErpStore((s) => s.payEmployeeSalaryDirect);
   const canPay = usePermission('payroll.pay');
 
   const [editOpen, setEditOpen] = useState(false);
   const [advanceOpen, setAdvanceOpen] = useState(false);
-  const [settleOpen, setSettleOpen] = useState(false);
   const [directPayOpen, setDirectPayOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('payroll');
 
@@ -132,20 +130,12 @@ export function EmployeeDetailDialog({
   );
 
   const registeredDebts = useMemo(
-    () =>
-      data.debtEntries
-        .filter(
-          (entry) =>
-            entry.partyKind === 'employee' &&
-            entry.partyId === employeeId &&
-            !isDebtFullySettled(entry) &&
-            resolveDebtDirection(entry) === 'receivable',
-        )
-        .sort((a, b) => a.date.localeCompare(b.date)),
+    () => partyDebts(data.debtEntries, 'employee', employeeId ?? undefined, {
+      status: 'open',
+      directions: ['receivable'],
+    }),
     [data.debtEntries, employeeId],
   );
-
-  const primaryRegisteredDebt = registeredDebts[0] ?? null;
 
   if (!employee || !raw) {
     return (
@@ -242,13 +232,10 @@ export function EmployeeDetailDialog({
               <Button
                 size="sm"
                 variant="meadow"
-                onClick={() => {
-                  if (primaryRegisteredDebt) setSettleOpen(true);
-                  else setActiveTab('advances');
-                }}
+                onClick={() => setActiveTab(registeredDebts.length ? 'registered-debts' : 'advances')}
               >
                 <HandCoins className="h-4 w-4" />
-                {primaryRegisteredDebt ? 'تسوية دين' : 'الدين'}
+                {registeredDebts.length ? `تسوية ديون (${registeredDebts.length})` : 'الدين'}
               </Button>
             ) : null}
             {canPay && employee.status === 'active' ? (
@@ -490,48 +477,12 @@ export function EmployeeDetailDialog({
               )}
             </TabsContent>
             <TabsContent value="registered-debts" className="mt-3 min-w-0">
-              {registeredDebts.length ? (
-                <>
-                <ProfileTimelineList>
-                  {registeredDebts.map((entry) => (
-                    <ProfileTimelineCard
-                      key={`${entry.id}-m`}
-                      title={formatShortDate(entry.date)}
-                      subtitle={entry.description ?? entry.ref}
-                      amount={<Money value={debtRemainingAmount(entry)} decimals={0} />}
-                    />
-                  ))}
-                </ProfileTimelineList>
-                <ProfileDesktopTable>
-                <div className="max-h-72 overflow-auto rounded-lg border border-border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>التاريخ</TableHead>
-                      <TableHead className="text-left">المتبقي</TableHead>
-                      <TableHead>الوصف</TableHead>
-                      <TableHead />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {registeredDebts.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell className="text-[12px]" dir="ltr">{formatShortDate(entry.date)}</TableCell>
-                        <TableCell className="text-left">
-                          <Money value={debtRemainingAmount(entry)} decimals={0} className="font-semibold" />
-                        </TableCell>
-                        <TableCell className="text-[12px] text-muted-foreground">{entry.description ?? entry.ref}</TableCell>
-                        <TableCell />
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                </div>
-                </ProfileDesktopTable>
-                </>
-              ) : (
-                <EmptyState icon={HandCoins} title="لا ديون مسجّلة" description="يُخصم الدين المسجّل تلقائياً عند صرف الراتب، أو يُسوّى نقداً." />
-              )}
+              <PartyDebtsPanel
+                entries={data.debtEntries.filter(
+                  (e) => e.partyKind === 'employee' && e.partyId === employeeId,
+                )}
+                canSettle={canPay}
+              />
             </TabsContent>
           </Tabs>
           </ProfileUnifiedScroll>
@@ -572,8 +523,6 @@ export function EmployeeDetailDialog({
           })();
         }}
       />
-      <DebtSettleDialog open={settleOpen} onOpenChange={setSettleOpen} entry={primaryRegisteredDebt} />
-
       <EmployeeDirectPayDialog
         open={directPayOpen}
         onOpenChange={setDirectPayOpen}
@@ -583,30 +532,20 @@ export function EmployeeDetailDialog({
         cashMovements={cashMovements}
         advanceBalance={employee.advanceBalance}
         onPay={async (input) => {
-          const label = `راتب — ${employee.fullName}`;
-          const createRes = await createPayrollBatch({
-            label,
+          const res = await payEmployeeSalaryDirect({
+            employeeId: raw.id,
             periodFrom: input.periodFrom,
             periodTo: input.periodTo,
-            payrollType: 'all',
-            employeeIds: [raw.id],
             paidFromType: input.paidFromType,
             paidFromId: input.paidFromId,
+            label: `راتب — ${employee.fullName}`,
           });
-          if (!createRes.ok) {
-            toast.error(createRes.error ?? 'تعذّر إنشاء الكشف');
-            throw new Error(createRes.error);
-          }
-          const payRes = await payPayrollEmployeeLine(createRes.id!, raw.id, {
-            type: input.paidFromType,
-            id: input.paidFromId,
-          });
-          if (payRes.ok) {
+          if (res.ok) {
             toast.success('تم دفع الراتب');
             setDirectPayOpen(false);
           } else {
-            toast.error(payRes.error ?? 'تعذّر الصرف');
-            throw new Error(payRes.error);
+            toast.error(res.error ?? 'تعذّر الصرف');
+            throw new Error(res.error);
           }
         }}
       />

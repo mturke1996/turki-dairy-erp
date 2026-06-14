@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Field } from '@/components/shared/field';
+import { SinglePartyPicker, type SinglePartyOption } from '@/components/shared/single-party-picker';
 import { StatTile } from '@/components/shared/stat-tile';
 import { Money, Liters } from '@/components/shared/money';
 import { VolumeInput } from '@/components/shared/volume-input';
@@ -56,6 +57,17 @@ export default function SupplyPage() {
   const activeFarmers = useMemo(
     () => data.farmers.filter((f) => f.status === 'active').sort((a, b) => a.fullName.localeCompare(b.fullName, 'ar')),
     [data.farmers],
+  );
+
+  const farmerOptions = useMemo<SinglePartyOption[]>(
+    () =>
+      activeFarmers.map((f) => ({
+        id: f.id,
+        label: f.fullName,
+        sublabel: `${f.code} · ${f.region}`,
+        meta: `سعر افتراضي ${f.defaultBuyPrice.toFixed(3)} / لتر`,
+      })),
+    [activeFarmers],
   );
 
   const [farmerId, setFarmerId] = useState('');
@@ -103,6 +115,15 @@ export default function SupplyPage() {
       const from = new Date(to.getTime() - 14 * 86_400_000);
       setPeriodFrom(from.toISOString().slice(0, 10));
       setPeriodTo(to.toISOString().slice(0, 10));
+    }
+  }
+
+  function onPayNowChange(checked: boolean) {
+    setPayNow(checked);
+    if (checked && total > 0) setPayAmount(String(Math.round(total)));
+    if (!checked) {
+      setPayAmount('');
+      setPayTreasury(EMPTY_SPLIT_STATE);
     }
   }
 
@@ -224,14 +245,16 @@ export default function SupplyPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Field label={C.farmer} required>
-              <Select value={farmerId} onValueChange={onFarmerChange} disabled={!canSupply || sessionLocked}>
-                <SelectTrigger><SelectValue placeholder="اختر الفلاح" /></SelectTrigger>
-                <SelectContent>
-                  {activeFarmers.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>{f.fullName} · {f.code}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SinglePartyPicker
+                value={farmerId}
+                onChange={onFarmerChange}
+                options={farmerOptions}
+                partyLabel="فلاح"
+                placeholder="اختر الفلاح المورّد"
+                searchPlaceholder="بحث بالاسم أو الكود أو المنطقة…"
+                emptyMessage="لا فلاحين نشطين مطابقين."
+                disabled={!canSupply || sessionLocked}
+              />
             </Field>
 
             <Field label="طريقة التسجيل" required>
@@ -354,14 +377,24 @@ export default function SupplyPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Wallet className="h-4 w-4 text-muted-foreground" />
-                  <Label htmlFor="pay-now" className="text-[13px] font-semibold">دفع فوري (كاش/تحويل)</Label>
+                  <div>
+                    <Label htmlFor="pay-now" className="text-[13px] font-semibold">دفعة واحدة للفلاح</Label>
+                    <p className="text-[11px] text-muted-foreground">دفع فوري من حساب واحد عند التسجيل</p>
+                  </div>
                 </div>
-                <Switch id="pay-now" checked={payNow} onCheckedChange={setPayNow} disabled={!canSupply || sessionLocked} />
+                <Switch id="pay-now" checked={payNow} onCheckedChange={onPayNowChange} disabled={!canSupply || sessionLocked} />
               </div>
               {payNow ? (
                 <div className="space-y-3 border-t border-border pt-3">
-                  <Field label="المبلغ" required>
-                    <AmountInput value={payAmount} onChange={setPayAmount} placeholder={String(total || 0)} />
+                  <Field label="المبلغ" required hint={total > 0 ? `إجمالي الاستلام: ${formatMoney(total, { decimals: 0, isolate: false })}` : undefined}>
+                    <div className="flex gap-2">
+                      <AmountInput value={payAmount} onChange={setPayAmount} placeholder={String(total || 0)} className="flex-1" />
+                      {total > 0 ? (
+                        <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => setPayAmount(String(Math.round(total)))}>
+                          ملء الإجمالي
+                        </Button>
+                      ) : null}
+                    </div>
                   </Field>
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="طريقة الدفع">
@@ -384,6 +417,7 @@ export default function SupplyPage() {
                     onChange={setPayTreasury}
                     singleLabel="الصرف من حساب"
                     outflow
+                    allowSplit={false}
                   />
                   <div className="flex items-center gap-2">
                     <Switch id="settle-full" checked={settleFull} onCheckedChange={setSettleFull} />

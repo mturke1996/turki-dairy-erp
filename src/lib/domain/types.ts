@@ -228,8 +228,16 @@ export interface SessionArchive {
     cash: { farmerPayments: number; customerReceipts: number };
   };
   balancesSnapshot: {
-    farmers: { id: string; name: string; balance: number; suppliedQty?: number; paidAmount?: number; status?: 'pending' | 'partial' | 'paid' }[];
-    customers: { id: string; name: string; balance: number }[];
+    farmers: { id: string; name: string; balance: number; suppliedQty?: number; paidAmount?: number; carriedForward?: number; status?: 'pending' | 'partial' | 'paid' }[];
+    customers: {
+      id: string;
+      name: string;
+      balance: number;
+      carriedForward?: number;
+      soldValue?: number;
+      receivedAmount?: number;
+      status?: 'pending' | 'partial' | 'paid';
+    }[];
     employees: { id: string; name: string; balance: number }[];
     external: { id: string; name: string; balance: number; direction: 'payable' | 'receivable' }[];
   };

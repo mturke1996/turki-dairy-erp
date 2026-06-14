@@ -18,6 +18,7 @@ import { CustomerCycleSettlement } from '@/components/customers/customer-cycle-s
 import { CarryForwardBanner } from '@/components/sessions/carry-forward-banner';
 import { CreateSessionDialog } from '@/components/sessions/create-session-dialog';
 import { buildSessionCarryForwardSnapshot } from '@/lib/domain/calculations';
+import { buildSessionClosingReportProps } from '@/lib/domain/session-closing-report';
 import { resolveAdjustmentReasonKind } from '@/lib/domain/constants';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
@@ -43,6 +44,20 @@ export default function SessionsPage() {
 
   const active = d.activeSession;
   const summary = d.activeSummary;
+
+  const calendarMismatch = useMemo(() => {
+    if (!active || active.status !== 'open') return false;
+    const fmt = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+    return (
+      active.periodFrom !== fmt(cycle.window.from) ||
+      active.periodTo !== fmt(cycle.window.to)
+    );
+  }, [active, cycle.window]);
 
   const wasteThisCycle = useMemo(() => {
     if (!active) return { qty: 0, value: 0 };
@@ -89,17 +104,7 @@ export default function SessionsPage() {
   const sortedSessions = [...data.sessions].sort((a, b) => b.periodFrom.localeCompare(a.periodFrom));
 
   function buildClosingProps(session: Session, sum: SessionSummary) {
-    if (session.archive) {
-      const snap = session.archive.balancesSnapshot;
-      return {
-        summary: sum,
-        carryForward: session.archive.carryForward,
-        farmerBalances: snap.farmers.map((f) => ({ name: f.name, balance: f.balance })),
-        customerBalances: snap.customers.map((c) => ({ name: c.name, balance: c.balance })),
-        employeeBalances: (snap.employees ?? []).map((e) => ({ name: e.name, balance: e.balance })),
-      };
-    }
-    const preview = buildSessionCarryForwardSnapshot(
+    return buildSessionClosingReportProps(
       {
         sessions: data.sessions,
         activeSessionId: data.activeSessionId,
@@ -120,15 +125,8 @@ export default function SessionsPage() {
         settings: data.settings,
       },
       session,
-      sum.closingStock,
+      sum,
     );
-    return {
-      summary: sum,
-      carryForward: preview.totals,
-      farmerBalances: preview.farmers.map((f) => ({ name: f.name, balance: f.balance })),
-      customerBalances: preview.customers.map((c) => ({ name: c.name, balance: c.balance })),
-      employeeBalances: preview.employees.map((e) => ({ name: e.name, balance: e.balance })),
-    };
   }
 
   async function doClose() {
@@ -190,6 +188,16 @@ export default function SessionsPage() {
           ) : undefined
         }
       />
+
+      {calendarMismatch && active && (
+        <div
+          role="status"
+          className="rounded-xl border border-sun-200 bg-sun-50/80 px-4 py-3 text-[13px] text-sun-900"
+        >
+          الدورة النشطة «{active.label}» ({formatDate(active.periodFrom)} — {formatDate(active.periodTo)})
+          تختلف عن تقويم اليوم «{cycle.window.label}» — إحصاءات البطاقة اليسرى حسب التقويم وليست الدورة المفتوحة.
+        </div>
+      )}
 
       {/* الدورة نصف الشهرية الحالية */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

@@ -312,11 +312,14 @@ export function pdfFmtMoneyLibyan(n: number, decimals = 2): string {
   return ltrAmountCurrency(n, LIBYAN_CURRENCY_LABEL, decimals);
 }
 
+/** رقم ثم الوحدة — LRM يثبت الترتيب في سياق RTL (لا «لتر» قبل العدد). */
 export function pdfFmtLiters(n: number, decimals = 0): string {
-  return pdfFmtUnit(n, 'لتر', decimals);
+  const num = pdfFmtNum(n, decimals);
+  return `\u200E${num}\u00A0لتر`;
 }
 
 const MONEY_SIZE = { sm: 10, md: 13, lg: 18 };
+const LITERS_SIZE = { sm: 9, md: 11, lg: 14, xl: 18 };
 
 export const PdfMoneyText = ({
   amount,
@@ -338,6 +341,40 @@ export const PdfMoneyText = ({
     </Text>
   </View>
 );
+
+/** لترات — نص LTR واحد: العدد ثم «لتر» (مثل 5,000 لتر). */
+export const PdfLitersText = ({
+  liters,
+  size = 'md',
+  decimals = 0,
+  color = P.primary,
+  bold = true,
+  prefix = '',
+}: {
+  liters: number;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  decimals?: number;
+  color?: string;
+  bold?: boolean;
+  prefix?: string;
+}) => {
+  const fs = LITERS_SIZE[size];
+  const num = pdfFmtNum(liters, decimals);
+  return (
+    <Text
+      style={{
+        direction: 'ltr',
+        textAlign: 'right',
+        fontSize: fs,
+        fontWeight: bold ? 'bold' : 'normal',
+        color,
+        lineHeight: 1.35,
+      }}
+    >
+      {`\u200E${prefix}${num}\u00A0لتر`}
+    </Text>
+  );
+};
 
 /** تذييل رسمي نحيف — خط هوية ثلاثي وسطران هادئان، لا يزاحم المحتوى أبداً. */
 export const TurkiPdfFooter = ({ fixed = true, docRef }: { fixed?: boolean; docRef?: string }) => (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Banknote, Phone, Pencil, CreditCard } from 'lucide-react';
+import { Banknote, Phone, Pencil, CreditCard, HandCoins } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -12,11 +12,13 @@ import { Money, Liters } from '@/components/shared/money';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PaymentDialog } from '@/components/forms/payment-dialog';
 import { CustomerFormDialog } from './customer-form-dialog';
+import { PartyDebtsPanel } from '@/components/debts/party-debts-panel';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { CustomerStatementPDF } from '@/features/pdf/CustomerStatementPDF';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { usePermission } from '@/lib/store/use-permission';
 import { computeAging } from '@/lib/domain/calculations';
+import { partyDebts } from '@/lib/domain/debt';
 import { CUSTOMER_TYPE_LABELS, PRICE_TIER_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import type { CustomerStats } from '@/lib/domain/calculations';
 import { formatShortDate, formatNumber } from '@/lib/utils';
@@ -48,6 +50,7 @@ export function CustomerDetailDialog({
   const deleteCustomer = useErpStore((s) => s.deleteCustomer);
   const [payOpen, setPayOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('sales');
 
   const customer = d.customers.find((c) => c.id === customerId) as CustomerStats | undefined;
   const rawCustomer = data.customers.find((c) => c.id === customerId) ?? null;
@@ -66,6 +69,11 @@ export function CustomerDetailDialog({
   const aging = useMemo(
     () => (customer ? computeAging(sales, customer.receivedTotal) : null),
     [sales, customer],
+  );
+
+  const customerDebts = useMemo(
+    () => partyDebts(data.debtEntries, 'customer', customerId ?? undefined, { status: 'open' }),
+    [data.debtEntries, customerId],
   );
 
   if (!customer || !aging) {
@@ -147,6 +155,12 @@ export function CustomerDetailDialog({
                 تسجيل تحصيل
               </Button>
             ) : null}
+            {canReceive && customerDebts.length > 0 ? (
+              <Button size="sm" variant="outline" onClick={() => setActiveTab('debts')}>
+                <HandCoins className="h-4 w-4" />
+                تسوية ديون ({customerDebts.length})
+              </Button>
+            ) : null}
             <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
               <Pencil className="h-4 w-4" />
               تعديل
@@ -177,11 +191,12 @@ export function CustomerDetailDialog({
               </>
             }
           >
-          <Tabs defaultValue="sales" className="min-w-0">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
             <ProfileTabsList>
               <TabsList className="h-auto w-full min-w-0 justify-start gap-1 p-1">
                 <TabsTrigger value="sales" className="shrink-0">المبيعات ({sales.length})</TabsTrigger>
                 <TabsTrigger value="receipts" className="shrink-0">التحصيلات ({payments.length})</TabsTrigger>
+                <TabsTrigger value="debts" className="shrink-0">ديون مسجّلة ({customerDebts.length})</TabsTrigger>
               </TabsList>
             </ProfileTabsList>
             <TabsContent value="sales" className="mt-3 min-w-0">
@@ -297,6 +312,14 @@ export function CustomerDetailDialog({
               ) : (
                 <EmptyState title="لا تحصيلات" />
               )}
+            </TabsContent>
+            <TabsContent value="debts" className="mt-3 min-w-0">
+              <PartyDebtsPanel
+                entries={data.debtEntries.filter(
+                  (e) => e.partyKind === 'customer' && e.partyId === customerId,
+                )}
+                canSettle={canReceive}
+              />
             </TabsContent>
           </Tabs>
           </ProfileDialogBody>

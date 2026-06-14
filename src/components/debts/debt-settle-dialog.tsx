@@ -26,6 +26,33 @@ import {
   resolveDebtDirection,
 } from '@/lib/domain/debt';
 import type { DebtEntry, PaymentMethod } from '@/lib/domain/types';
+import { cn } from '@/lib/utils';
+
+function QuickAmountChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'min-h-[44px] flex-1 rounded-xl border px-2 py-2 text-[12px] font-semibold transition-colors',
+        'active:scale-[0.98]',
+        active
+          ? 'border-meadow-600 bg-meadow-50 text-meadow-800'
+          : 'border-border bg-canvas-sunken/50 text-foreground hover:bg-canvas-sunken',
+      )}
+    >
+      {label}
+    </button>
+  );
+}
 
 export function DebtSettleDialog({
   open,
@@ -73,6 +100,11 @@ export function DebtSettleDialog({
     return employees.find((e) => e.id === entry.partyId)?.fullName ?? '—';
   }, [entry, farmers, customers, employees]);
 
+  function pickFraction(fraction: number) {
+    const v = Math.round(remaining * fraction);
+    setAmount(String(Math.max(1, v)));
+  }
+
   async function submit() {
     if (!entry) return;
     if (val <= 0) return toast.error('أدخل مبلغاً صحيحاً.');
@@ -109,92 +141,147 @@ export function DebtSettleDialog({
   if (!entry) return null;
 
   const dir = resolveDebtDirection(entry);
+  const afterSettle = Math.max(0, remaining - val);
+  const isFull = val >= remaining - 0.01 && remaining > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>تسوية دين قائم</DialogTitle>
-          <DialogDescription>
-            {partyLabel} · {DEBT_PARTY_LABELS[entry.partyKind]}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent
+        className={cn(
+          'gap-0 p-0 sm:max-w-md',
+          'max-h-[94dvh] overflow-hidden',
+          'bottom-0 top-auto translate-y-0 rounded-b-none sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-b-2xl',
+        )}
+      >
+        <div className="overflow-y-auto px-5 pb-4 pt-6 sm:px-6 sm:pb-6">
+          <DialogHeader className="text-right">
+            <DialogTitle className="text-base sm:text-lg">
+              {cashOut ? 'صرف / تسوية دين' : 'تحصيل دين'}
+            </DialogTitle>
+            <DialogDescription>
+              {partyLabel} · {DEBT_PARTY_LABELS[entry.partyKind]}
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="flex flex-wrap items-center gap-2 text-[12px]">
-          <Badge variant="neutral" className="font-mono" dir="ltr">
-            {entry.ref}
-          </Badge>
-          <Badge variant={dir === 'payable' ? 'danger' : 'success'}>{DEBT_DIRECTION_LABELS[dir]}</Badge>
-        </div>
-
-        <div className="flex items-center justify-between rounded-xl bg-canvas-sunken px-4 py-3 text-[13px]">
-          <span className="text-muted-foreground">المتبقي على هذا الدين</span>
-          <Money value={remaining} decimals={0} className="font-bold" />
-        </div>
-
-        <div className="space-y-4">
-          <Field label="مبلغ التسوية" required>
-            <AmountInput value={amount} onChange={setAmount} placeholder="0" />
-            {remaining > 0 ? (
-              <button
-                type="button"
-                className="mt-1.5 text-[11px] font-medium text-meadow-700 hover:underline"
-                onClick={() => setAmount(String(Math.round(remaining)))}
-              >
-                تسوية كاملة ({moneyText(remaining, 0)})
-              </button>
-            ) : null}
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="طريقة الدفع">
-              <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {PAYMENT_METHOD_LABELS[k]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="التاريخ">
-              <Input type="date" dir="ltr" value={date} onChange={(e) => setDate(e.target.value)} />
-            </Field>
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px]">
+            <Badge variant="neutral" className="font-mono" dir="ltr">
+              {entry.ref}
+            </Badge>
+            <Badge variant={dir === 'payable' ? 'danger' : 'success'}>
+              {DEBT_DIRECTION_LABELS[dir]}
+            </Badge>
           </div>
 
-          <SplitPaymentFields
-            totalAmount={val}
-            vaults={vaults}
-            banks={banks}
-            cashMovements={cashMovements}
-            state={treasury}
-            onChange={setTreasury}
-            singleLabel={cashOut ? 'الصرف من حساب' : 'الإيداع في حساب'}
-            outflow={cashOut}
-            allowNone
-          />
+          <div className="mt-4 flex items-center justify-between rounded-xl bg-canvas-sunken px-4 py-3.5">
+            <span className="text-[13px] text-muted-foreground">المتبقي</span>
+            <Money value={remaining} decimals={0} className="text-lg font-bold" />
+          </div>
 
-          <Field label="ملاحظة" hint="اختياري">
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="مثال: سداد دين افتتاحي" />
-          </Field>
+          <div className="mt-5 space-y-4">
+            <Field label="مبلغ التسوية" required>
+              <AmountInput
+                value={amount}
+                onChange={setAmount}
+                placeholder="0"
+                className="h-12 text-lg"
+              />
+              {remaining > 0 ? (
+                <div className="mt-3 flex gap-2">
+                  <QuickAmountChip label="25%" onClick={() => pickFraction(0.25)} />
+                  <QuickAmountChip label="50%" onClick={() => pickFraction(0.5)} />
+                  <QuickAmountChip label="75%" onClick={() => pickFraction(0.75)} />
+                  <QuickAmountChip
+                    label="كامل"
+                    active={isFull}
+                    onClick={() => setAmount(String(Math.round(remaining)))}
+                  />
+                </div>
+              ) : null}
+            </Field>
 
-          {val > 0 ? (
-            <div className="flex items-center justify-between rounded-lg border border-dashed border-border px-3 py-2 text-[12.5px]">
-              <span className="text-muted-foreground">المتبقي بعد التسوية</span>
-              <Money value={Math.max(0, remaining - val)} decimals={0} className="font-semibold" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="طريقة الدفع">
+                <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
+                  <SelectTrigger className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((k) => (
+                      <SelectItem key={k} value={k}>
+                        {PAYMENT_METHOD_LABELS[k]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="التاريخ">
+                <Input
+                  type="date"
+                  dir="ltr"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="h-11"
+                />
+              </Field>
             </div>
-          ) : null}
+
+            <SplitPaymentFields
+              totalAmount={val}
+              vaults={vaults}
+              banks={banks}
+              cashMovements={cashMovements}
+              state={treasury}
+              onChange={setTreasury}
+              singleLabel={cashOut ? 'الصرف من حساب' : 'الإيداع في حساب'}
+              outflow={cashOut}
+              allowNone
+            />
+
+            <Field label="ملاحظة" hint="اختياري">
+              <Input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="مثال: سداد دين افتتاحي"
+                className="h-11"
+              />
+            </Field>
+
+            {val > 0 ? (
+              <div
+                className={cn(
+                  'flex items-center justify-between rounded-xl border px-4 py-3 text-[13px]',
+                  afterSettle <= 0.01
+                    ? 'border-meadow-200 bg-meadow-50/60'
+                    : 'border-dashed border-border',
+                )}
+              >
+                <span className="text-muted-foreground">
+                  {afterSettle <= 0.01 ? 'سيُسَدَّد بالكامل' : 'المتبقي بعد التسوية'}
+                </span>
+                <Money
+                  value={afterSettle}
+                  decimals={0}
+                  className={cn('font-bold', afterSettle <= 0.01 && 'text-meadow-800')}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        <DialogFooter>
-          <Button onClick={submit} disabled={busy || remaining <= 0.01}>
-            {busy ? 'جارٍ التسوية…' : 'تأكيد التسوية'}
+        <DialogFooter className="sticky bottom-0 border-t border-border bg-card px-5 py-4 sm:px-6">
+          <Button
+            onClick={submit}
+            disabled={busy || remaining <= 0.01}
+            className="h-12 w-full text-[14px] sm:flex-1"
+          >
+            {busy ? 'جارٍ التسوية…' : `تأكيد ${val > 0 ? moneyText(val, 0) : ''}`}
           </Button>
-          <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
+          <Button
+            variant="ghost"
+            disabled={busy}
+            onClick={() => onOpenChange(false)}
+            className="h-11 w-full sm:w-auto"
+          >
             إلغاء
           </Button>
         </DialogFooter>

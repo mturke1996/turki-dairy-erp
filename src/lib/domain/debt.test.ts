@@ -7,6 +7,7 @@ import {
   debtRemainingAmount,
   isDebtFullySettled,
   paymentNetOfDebtSettlement,
+  reconcileDebtEntryStatus,
 } from '@/lib/domain/debt';
 import type { DebtEntry } from '@/lib/domain/types';
 
@@ -66,5 +67,19 @@ describe('debt settlement', () => {
     expect(debtRecordSettleAmount('receivable', 'disburse', 5000, 5000)).toBe(0);
     expect(debtRecordSettleAmount('payable', 'disburse', 5000, 2000)).toBe(2000);
     expect(debtRecordSettleAmount('receivable', 'collect', 10000, 3000)).toBe(3000);
+  });
+
+  it('reconcileDebtEntryStatus clears settledAt when amount remains', () => {
+    const inconsistent = { ...base, amount: 500, settledAt: '2026-06-02' };
+    const fixed = reconcileDebtEntryStatus(inconsistent);
+    expect(fixed.settledAt).toBeUndefined();
+    expect(fixed.amount).toBe(500);
+  });
+
+  it('reconcileDebtEntryStatus sets settledAt when fully paid', () => {
+    const partial = { ...base, amount: 0, settledAmount: 1000 };
+    const fixed = reconcileDebtEntryStatus(partial);
+    expect(fixed.settledAt).toBeTruthy();
+    expect(isDebtFullySettled(fixed)).toBe(true);
   });
 });

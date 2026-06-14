@@ -234,8 +234,8 @@ export function computeFarmerSessionStats(
 
   let status: FarmerSessionStats['status'] = 'none';
   if (suppliedValue > 0.01 || carried > 0.01) {
-    if (balance <= 0.01 || ps.some((p) => p.settlementComplete)) status = 'paid';
-    else if (sum(ps.map((p) => p.amount)) > 0.01) status = 'partial';
+    if (balance <= 0.01) status = 'paid';
+    else if (paidAmount > 0.01) status = 'partial';
     else status = 'pending';
   }
 

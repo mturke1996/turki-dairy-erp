@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -17,20 +19,28 @@ import {
 } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Field } from '@/components/shared/field';
+import { SinglePartyPicker, type SinglePartyOption } from '@/components/shared/single-party-picker';
 import { StatTile } from '@/components/shared/stat-tile';
 import { Money, Liters } from '@/components/shared/money';
 import { VolumeInput } from '@/components/shared/volume-input';
 import { AmountInput } from '@/components/shared/amount-input';
 import { EmptyState } from '@/components/shared/empty-state';
+import {
+  EMPTY_SPLIT_STATE,
+  SplitPaymentFields,
+  treasurySelectionFromState,
+  validateSplitPaymentState,
+  type SplitPaymentState,
+} from '@/components/treasury/split-payment-fields';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { usePermission } from '@/lib/store/use-permission';
-import { CUSTOMER_TYPE_LABELS } from '@/lib/domain/constants';
+import { CUSTOMER_TYPE_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import { formatShortDate, formatNumber } from '@/lib/utils';
 import { formatLiters, formatMoney, formatPricePerLiter } from '@/lib/format-currency';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
 import { SaleEditDialog } from '@/components/sales/sale-edit-dialog';
-import type { SaleTransaction } from '@/lib/domain/types';
+import type { PaymentMethod, SaleTransaction } from '@/lib/domain/types';
 
 export default function SalesPage() {
   const data = useErpData();
@@ -49,16 +59,32 @@ export default function SalesPage() {
     [data.customers],
   );
 
+  const customerOptions = useMemo<SinglePartyOption[]>(
+    () =>
+      sellableCustomers.map((c) => ({
+        id: c.id,
+        label: c.entityName,
+        sublabel: `${c.code} · ${CUSTOMER_TYPE_LABELS[c.entityType]}`,
+        meta: `سعر افتراضي ${c.defaultSellPrice.toFixed(3)} / لتر · ${c.paymentTerms} يوم`,
+      })),
+    [sellableCustomers],
+  );
+
   const [customerId, setCustomerId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
+  const [collectNow, setCollectNow] = useState(false);
+  const [collectAmount, setCollectAmount] = useState('');
+  const [collectMethod, setCollectMethod] = useState<PaymentMethod>('cash');
+  const [collectTreasury, setCollectTreasury] = useState<SplitPaymentState>(EMPTY_SPLIT_STATE);
 
   const selectedCustomer = sellableCustomers.find((c) => c.id === customerId);
   const qty = Number(quantity) || 0;
   const price = Number(unitPrice) || 0;
   const total = qty * price;
+  const collectVal = Number(collectAmount) || 0;
   const estCogs = qty * wac;
   const estProfit = total - estCogs;
   const exceedsStock = qty > stock + 0.001;
@@ -73,17 +99,40 @@ export default function SalesPage() {
     if (c) setUnitPrice(String(c.defaultSellPrice));
   }
 
+  function onCollectNowChange(checked: boolean) {
+    setCollectNow(checked);
+    if (checked && total > 0) setCollectAmount(String(Math.round(total)));
+    if (!checked) {
+      setCollectAmount('');
+      setCollectTreasury(EMPTY_SPLIT_STATE);
+    }
+  }
+
   function reset() {
     setCustomerId('');
     setQuantity('');
     setUnitPrice('');
     setNotes('');
+    setCollectNow(false);
+    setCollectAmount('');
+    setCollectTreasury(EMPTY_SPLIT_STATE);
   }
 
   function submit() {
     if (!customerId) return toast.error('اختر العميل.');
     if (qty <= 0) return toast.error('أدخل كمية صحيحة باللتر.');
     if (price <= 0) return toast.error('أدخل سعر بيع اللتر.');
+
+    if (collectNow) {
+      if (collectVal <= 0) return toast.error('أدخل مبلغ التحصيل الفوري.');
+      const splitErr = validateSplitPaymentState(collectVal, collectTreasury, {
+        vaults: data.vaults,
+        banks: data.banks,
+        cashMovements: data.cashMovements,
+      });
+      if (splitErr) return toast.error(splitErr);
+    }
+
     void (async () => {
       const res = await recordSale({
         customerId,
@@ -91,9 +140,20 @@ export default function SalesPage() {
         unitPrice: price,
         date: new Date(date + 'T09:00:00').toISOString(),
         notes: notes.trim() || undefined,
+        immediateReceipt: collectNow
+          ? {
+              amount: collectVal,
+              method: collectMethod,
+              ...treasurySelectionFromState(collectVal, collectTreasury),
+            }
+          : undefined,
       });
       if (res.ok) {
-        toast.success('تم تسجيل البيع', { description: `${formatLiters(qty, 0, false)} — ${selectedCustomer?.entityName}` });
+        toast.success('تم تسجيل البيع', {
+          description: collectNow
+            ? `${formatLiters(qty, 0, false)} + تحصيل فوري ${formatMoney(collectVal, { decimals: 0 })}`
+            : `${formatLiters(qty, 0, false)} — ${selectedCustomer?.entityName}`,
+        });
         reset();
       } else {
         toast.error(res.error ?? 'تعذّر التسجيل');
@@ -147,18 +207,16 @@ export default function SalesPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Field label="العميل" required>
-              <Select value={customerId} onValueChange={onCustomerChange} disabled={!canSell || sessionLocked}>
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر العميل" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sellableCustomers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.entityName} · {CUSTOMER_TYPE_LABELS[c.entityType]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SinglePartyPicker
+                value={customerId}
+                onChange={onCustomerChange}
+                options={customerOptions}
+                partyLabel="عميل"
+                placeholder="اختر العميل"
+                searchPlaceholder="بحث بالاسم أو الكود…"
+                emptyMessage="لا عملاء متاحين مطابقين."
+                disabled={!canSell || sessionLocked}
+              />
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
@@ -192,6 +250,54 @@ export default function SalesPage() {
               <Input placeholder="ملاحظة قصيرة" value={notes} onChange={(e) => setNotes(e.target.value)} disabled={!canSell || sessionLocked} />
             </Field>
 
+            <div className="space-y-3 rounded-xl border border-border p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <Label htmlFor="collect-now" className="text-[13px] font-semibold">دفعة واحدة من العميل</Label>
+                    <p className="text-[11px] text-muted-foreground">تحصيل فوري في حساب واحد عند التسجيل</p>
+                  </div>
+                </div>
+                <Switch id="collect-now" checked={collectNow} onCheckedChange={onCollectNowChange} disabled={!canSell || sessionLocked} />
+              </div>
+              {collectNow ? (
+                <div className="space-y-3 border-t border-border pt-3">
+                  <Field label="المبلغ" required hint={total > 0 ? `إجمالي البيع: ${formatMoney(total, { decimals: 0, isolate: false })}` : undefined}>
+                    <div className="flex gap-2">
+                      <AmountInput value={collectAmount} onChange={setCollectAmount} placeholder={String(total || 0)} className="flex-1" />
+                      {total > 0 ? (
+                        <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => setCollectAmount(String(Math.round(total)))}>
+                          ملء الإجمالي
+                        </Button>
+                      ) : null}
+                    </div>
+                  </Field>
+                  <Field label="طريقة التحصيل">
+                    <Select value={collectMethod} onValueChange={(v) => setCollectMethod(v as PaymentMethod)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((k) => (
+                          <SelectItem key={k} value={k}>{PAYMENT_METHOD_LABELS[k]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <SplitPaymentFields
+                    totalAmount={collectVal}
+                    vaults={data.vaults}
+                    banks={data.banks}
+                    cashMovements={data.cashMovements}
+                    state={collectTreasury}
+                    onChange={setCollectTreasury}
+                    singleLabel="الإيداع في حساب"
+                    outflow={false}
+                    allowSplit={false}
+                  />
+                </div>
+              ) : null}
+            </div>
+
             <div className="space-y-2 rounded-xl bg-navy-50 px-4 py-3 ring-1 ring-navy-100">
               <div className="flex items-center justify-between text-[12.5px] text-navy-700">
                 <span>الإجمالي</span>
@@ -201,6 +307,12 @@ export default function SalesPage() {
                 <span>تكلفة تقديرية (COGS)</span>
                 <Money value={estCogs} decimals={2} muted />
               </div>
+              {collectNow ? (
+                <div className="flex items-center justify-between text-[11.5px]">
+                  <span className="text-muted-foreground">متبقي على العميل (تقديري)</span>
+                  <Money value={Math.max(0, total - collectVal)} className="font-semibold text-rose-700" />
+                </div>
+              ) : null}
               <div className="flex items-center justify-between text-[11.5px]">
                 <span className="text-muted-foreground">ربح تقديري</span>
                 <Money value={estProfit} className={estProfit >= 0 ? 'font-semibold text-meadow-700' : 'font-semibold text-rose-600'} />

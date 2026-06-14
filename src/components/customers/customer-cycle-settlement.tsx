@@ -28,19 +28,25 @@ export function CustomerCycleSettlement({ session, readonly }: { session: Sessio
     if (archived?.length && session.status === 'archived') {
       return archived.map((c) => {
         const customer = data.customers.find((x) => x.id === c.id);
+        const carriedForward = c.carriedForward ?? 0;
+        const soldValue = c.soldValue ?? 0;
+        const receivedAmount = c.receivedAmount ?? 0;
+        const obligation = carriedForward + soldValue;
+        const status = (c.status ??
+          (c.balance <= 0.01 ? 'paid' : obligation > 0.01 ? 'pending' : 'none')) as CustomerSessionStats['status'];
         return {
           customerId: c.id,
           sessionId: session.id,
           entityName: c.name,
           code: customer?.code ?? '—',
-          carriedForward: 0,
+          carriedForward,
           soldQty: 0,
-          soldValue: 0,
-          receivedAmount: 0,
+          soldValue,
+          receivedAmount,
           balance: c.balance,
-          status: (c.balance <= 0.01 ? 'paid' : 'pending') as CustomerSessionStats['status'],
-          saleCount: 0,
-          paymentCount: 0,
+          status,
+          saleCount: soldValue > 0.01 ? 1 : 0,
+          paymentCount: receivedAmount > 0.01 ? 1 : 0,
         } satisfies CustomerSessionStats;
       });
     }
