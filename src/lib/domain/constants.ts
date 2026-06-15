@@ -220,6 +220,10 @@ export const EXPENSE_STATUS_LABELS: Record<ExpenseStatus, string> = {
 export const WASTE_EXPENSE_CATEGORY_ID = 'cat-waste';
 export const WASTE_EXPENSE_CATEGORY_NAME = 'هدر وتلف الحليب';
 
+/** فئة المصاريف المخصّصة للرواتب والأجور (مصروف انعكاسي مرتبط بكشف الرواتب). */
+export const SALARY_EXPENSE_CATEGORY_ID = 'cat-salary';
+export const SALARY_EXPENSE_CATEGORY_NAME = 'رواتب وأجور';
+
 export interface AdjustmentReasonOption {
   value: string;
   label: string;

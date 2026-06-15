@@ -293,6 +293,10 @@ function ExpensesContent() {
                             <Link href="/inventory" className="text-[11px] font-medium text-meadow-700">
                               من تسوية مخزون ←
                             </Link>
+                          ) : e.sourcePayrollBatchId ? (
+                            <Link href="/hr" className="text-[11px] font-medium text-meadow-700">
+                              من كشف رواتب ←
+                            </Link>
                           ) : (
                             <div className="flex gap-1">
                               <Button type="button" size="icon" variant="ghost" className="h-9 w-9" onClick={() => setEditExpense(e)}>
@@ -344,6 +348,9 @@ function ExpensesContent() {
                           {e.nonCash || !e.paidFromType || !e.paidFromId
                             ? 'غير نقدي · هدر مخزون'
                             : accountLabel(e.paidFromType, e.paidFromId, vaults, banks)}
+                          {e.sourcePayrollBatchId ? (
+                            <Badge variant="neutral" className="mr-1.5 font-normal">راتب</Badge>
+                          ) : null}
                         </TableCell>
                         <TableCell className="text-left"><Money value={e.amount} decimals={0} className="font-semibold text-rose-600" /></TableCell>
                         <TableCell><Badge variant={STATUS_VARIANT[e.status]}>{EXPENSE_STATUS_LABELS[e.status]}</Badge></TableCell>
@@ -352,6 +359,10 @@ function ExpensesContent() {
                           {e.nonCash ? (
                             <Link href="/inventory" className="flex justify-end text-[11px] font-medium text-meadow-700">
                               من تسوية مخزون ←
+                            </Link>
+                          ) : e.sourcePayrollBatchId ? (
+                            <Link href="/hr" className="flex justify-end text-[11px] font-medium text-meadow-700">
+                              من كشف رواتب ←
                             </Link>
                           ) : (
                             <div className="flex justify-end gap-1">

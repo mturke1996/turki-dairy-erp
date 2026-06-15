@@ -79,6 +79,8 @@ import type {
 import {
   WASTE_EXPENSE_CATEGORY_ID,
   WASTE_EXPENSE_CATEGORY_NAME,
+  SALARY_EXPENSE_CATEGORY_ID,
+  SALARY_EXPENSE_CATEGORY_NAME,
   resolveAdjustmentReasonKind,
 } from "@/lib/domain/constants";
 import type { AdjustmentReasonKind } from "@/lib/domain/types";
@@ -770,6 +772,49 @@ function buildWasteExpense(
     status: "approved",
     nonCash: true,
     sourceAdjustmentId: adjustment.id,
+    recordedBy: state.auth?.name,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** صف فئة المصاريف للرواتب (يُنشأ عند الحاجة إن لم يكن موجوداً). */
+function salaryCategoryRow(): ExpenseCategory {
+  return {
+    id: SALARY_EXPENSE_CATEGORY_ID,
+    name: SALARY_EXPENSE_CATEGORY_NAME,
+    group: "labor",
+    isRecurring: true,
+  };
+}
+
+/**
+ * يبني مصروف راتب «انعكاسي» مرتبطاً بكشف الرواتب.
+ * الحركة النقدية والقيد المحاسبي يأتيان من كشف الرواتب — هذا المصروف للعرض
+ * في سجل المصاريف وأرشفته ضمن الدورة فقط (مستثنى من القيود والمصاريف التشغيلية).
+ */
+function buildSalaryExpense(
+  state: { expenses: { ref: string }[]; auth: AuthUser | null },
+  args: {
+    batchId: string;
+    sessionId: string;
+    amount: number;
+    description: string;
+    source: { type: AccountSourceType; id: string };
+    date: string;
+  },
+): Expense {
+  return {
+    id: uid("exp-"),
+    ref: nextRef("EXP", state.expenses),
+    categoryId: SALARY_EXPENSE_CATEGORY_ID,
+    amount: round(args.amount),
+    description: args.description,
+    date: args.date,
+    sessionId: args.sessionId,
+    status: "approved",
+    paidFromType: args.source.type,
+    paidFromId: args.source.id,
+    sourcePayrollBatchId: args.batchId,
     recordedBy: state.auth?.name,
     createdAt: new Date().toISOString(),
   };
@@ -3855,6 +3900,11 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const state = get();
     const existing = state.expenses.find((e) => e.id === id);
     if (!existing) return { ok: false, error: "المصروف غير موجود." };
+    if (existing.sourcePayrollBatchId)
+      return {
+        ok: false,
+        error: "مصروف راتب مرتبط بكشف الرواتب — عدّله من صفحة الموارد البشرية.",
+      };
     let sessionId = existing.sessionId;
     if (patch.sessionId != null && patch.sessionId !== existing.sessionId) {
       const gate = resolveOpenSession(state, patch.sessionId);
@@ -3920,6 +3970,11 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const state = get();
     const existing = state.expenses.find((e) => e.id === id);
     if (!existing) return { ok: false, error: "المصروف غير موجود." };
+    if (existing.sourcePayrollBatchId)
+      return {
+        ok: false,
+        error: "مصروف راتب مرتبط بكشف الرواتب — احذف الكشف من صفحة الموارد البشرية.",
+      };
     const cmIds = state.cashMovements
       .filter((m) => m.referenceId === id)
       .map((m) => m.id);
@@ -4506,6 +4561,18 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       line.advanceDeducted > 0.001
         ? ` · خصم دين ${formatMoney(line.advanceDeducted, { decimals: 0 })}`
         : "";
+    const salaryExpense = buildSalaryExpense(state, {
+      batchId,
+      sessionId: state.activeSessionId,
+      amount: payAmount,
+      description: `راتب ${employee.fullName} — ${batch.label}`,
+      source,
+      date,
+    });
+    const needsSalaryCat = !state.expenseCategories.some(
+      (c) => c.id === SALARY_EXPENSE_CATEGORY_ID,
+    );
+    const salaryCat = needsSalaryCat ? salaryCategoryRow() : null;
     const audit = makeAudit(
       state,
       "payroll",
@@ -4520,6 +4587,16 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       },
       { table: "cash_movements", rows: [cm as unknown as Record<string, unknown>] },
     ];
+    if (salaryCat) {
+      dbRows.push({
+        table: "expense_categories",
+        rows: [salaryCat as unknown as Record<string, unknown>],
+      });
+    }
+    dbRows.push({
+      table: "expenses",
+      rows: [salaryExpense as unknown as Record<string, unknown>],
+    });
     if (debtUpdates.length) {
       dbRows.push({
         table: "debt_entries",
@@ -4534,6 +4611,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           ),
           debtEntries,
           cashMovements: [cm, ...s.cashMovements],
+          expenseCategories: salaryCat
+            ? [...s.expenseCategories, salaryCat]
+            : s.expenseCategories,
+          expenses: [salaryExpense, ...s.expenses],
           auditLogs: [audit, ...s.auditLogs],
         })),
       dbRows,
@@ -4659,6 +4740,18 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       totalDebtSettled > 0.001
         ? ` · تسوية ديون ${formatMoney(totalDebtSettled, { decimals: 0 })}`
         : "";
+    const salaryExpense = buildSalaryExpense(state, {
+      batchId,
+      sessionId: state.activeSessionId,
+      amount: payTotal,
+      description: `رواتب — ${batch.label} (${unpaidLines.length} موظف)`,
+      source,
+      date,
+    });
+    const needsSalaryCat = !state.expenseCategories.some(
+      (c) => c.id === SALARY_EXPENSE_CATEGORY_ID,
+    );
+    const salaryCat = needsSalaryCat ? salaryCategoryRow() : null;
     const audit = makeAudit(
       state,
       "payroll",
@@ -4676,6 +4769,16 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         rows: [cm as unknown as Record<string, unknown>],
       },
     ];
+    if (salaryCat) {
+      dbRows.push({
+        table: "expense_categories",
+        rows: [salaryCat as unknown as Record<string, unknown>],
+      });
+    }
+    dbRows.push({
+      table: "expenses",
+      rows: [salaryExpense as unknown as Record<string, unknown>],
+    });
     if (debtUpdates.length) {
       dbRows.push({
         table: "debt_entries",
@@ -4690,6 +4793,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           ),
           debtEntries: debtEntries,
           cashMovements: [cm, ...s.cashMovements],
+          expenseCategories: salaryCat
+            ? [...s.expenseCategories, salaryCat]
+            : s.expenseCategories,
+          expenses: [salaryExpense, ...s.expenses],
           auditLogs: [audit, ...s.auditLogs],
         })),
       dbRows,
@@ -4743,6 +4850,10 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       }
     }
 
+    const salaryExpenseIds = state.expenses
+      .filter((e) => e.sourcePayrollBatchId === batchId)
+      .map((e) => e.id);
+
     const audit = makeAudit(
       state,
       "payroll",
@@ -4756,6 +4867,9 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           payrollBatches: s.payrollBatches.filter((b) => b.id !== batchId),
           debtEntries,
           cashMovements: s.cashMovements.filter((m) => !cmIds.includes(m.id)),
+          expenses: salaryExpenseIds.length
+            ? s.expenses.filter((e) => !salaryExpenseIds.includes(e.id))
+            : s.expenses,
           auditLogs: [audit, ...s.auditLogs],
         })),
       [
@@ -4763,6 +4877,9 @@ export const useErpStore = create<ErpState>()((set, get) => ({
         ...debtDbRows,
         ...(cmIds.length
           ? [{ table: "cash_movements", deletes: cmIds }]
+          : []),
+        ...(salaryExpenseIds.length
+          ? [{ table: "expenses", deletes: salaryExpenseIds }]
           : []),
       ],
     );

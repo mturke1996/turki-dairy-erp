@@ -439,6 +439,31 @@ describe('income statement — net profit after waste, expenses, and salaries', 
   it('waste is a non-cash loss: cash is identical with or without it', () => {
     expect(build(true).totals.netCash).toBe(build(false).totals.netCash);
   });
+
+  it('salary mirror expense is not double-counted in P&L (counted via salaries only)', () => {
+    const salaryMirror: Expense = {
+      id: 'exp-sal', ref: 'EXP-9', categoryId: 'cat-salary', amount: 40,
+      description: 'راتب موظف — رواتب', date: '2026-06-30', sessionId: 'si',
+      status: 'approved', paidFromType: 'vault', paidFromId: 'v1',
+      sourcePayrollBatchId: 'pr1', createdAt: '2026-06-30',
+    };
+    const d = computeDerived({
+      sessions: [session], activeSessionId: 'si',
+      farmers: [farmer], customers: [], employees: [],
+      supplies, sales, payments: [], debtEntries: [],
+      adjustments: [], expenses: [cashExpense, salaryMirror],
+      payrollBatches: payroll,
+      vaults: [], banks: [], cashMovements: [], externalIncomes: [],
+      settings: { minStockThreshold: 0, defaultBuyPrice: 2, defaultSellPrice: 3 },
+    });
+    expect(d.incomeStatement.operatingExpenses).toBe(30);
+    expect(d.incomeStatement.salaries).toBe(40);
+    expect(d.incomeStatement.netProfit).toBe(-20);
+    const salaryExpenseJournals = d.journals.filter(
+      (j) => j.kind === 'expense' && j.sourceId === 'exp-sal',
+    );
+    expect(salaryExpenseJournals).toHaveLength(0);
+  });
 });
 
 describe('computeWasteSummary and alerts', () => {

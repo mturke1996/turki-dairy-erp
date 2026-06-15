@@ -882,9 +882,19 @@ function adjustmentIsLoss(a: InventoryAdjustment): boolean {
   return kind === 'loss';
 }
 
-/** مصروف هدر غير نقدي — أو مرتبط بتسوية مخزون حتى لو فُقد علم nonCash. */
+/** مصروف راتب «انعكاسي» مرتبط بكشف رواتب — قيده النقدي يأتي من الكشف نفسه. */
+export function isPayrollMirrorExpense(e: Expense): boolean {
+  return !!e.sourcePayrollBatchId;
+}
+
+/**
+ * مصروف لا يُنشئ قيداً محاسبياً منفصلاً ولا يُحتسب ضمن المصاريف التشغيلية،
+ * لأن أثره مُسجَّل في مكان آخر (تفادياً للازدواج):
+ * - هدر مخزون: محسوب ضمن قيد التسوية.
+ * - راتب انعكاسي: محسوب ضمن كشف الرواتب وبند الرواتب في قائمة الدخل.
+ */
 export function isNonCashExpense(e: Expense): boolean {
-  return e.nonCash === true || !!e.sourceAdjustmentId;
+  return e.nonCash === true || !!e.sourceAdjustmentId || isPayrollMirrorExpense(e);
 }
 
 function toWasteLine(a: InventoryAdjustment, inv?: InventoryResult): WasteLineItem {
