@@ -18,7 +18,7 @@ import {
   type ProfitAndLoss,
 } from './accounting';
 import { resolveAdjustmentReasonKind } from './constants';
-import { adjustmentDecreaseBasis, adjustmentLossValueFromLedger, adjustmentOutQtyFromLedger, buildInventoryLedger, round, uniqueAdjustments, type InventoryResult } from './inventory';
+import { adjustmentDecreaseBasis, adjustmentLossValueFromLedger, adjustmentOutQtyFromLedger, buildInventoryLedger, round, sessionClosingStockFromLedger, uniqueAdjustments, type InventoryResult } from './inventory';
 import { computeTreasury, computeAdjustedNetPosition, type AdjustedNetPosition } from './treasury';
 import { debtBalanceContribution, paymentNetOfDebtSettlement, resolveDebtDirection } from './debt';
 import { employeePeriodPackage, isPayrollLinePaid, payrollBatchSettledLines } from './payroll';
@@ -821,8 +821,7 @@ export function computeSessionSummary(
   const customerReceipts = sum(
     data.payments.filter((p) => p.kind === 'customer_payment' && p.sessionId === session.id).map((p) => p.amount),
   );
-  const adjQty = sum(uniqueAdjustments(data.adjustments.filter((a) => a.sessionId === session.id)).map((a) => a.quantity));
-  const closingStock = round(Math.max(0, session.openingStock + supplyQty - salesQty + adjQty));
+  const closingStock = sessionClosingStockFromLedger(session, inv);
   return {
     session,
     supplyQty: round(supplyQty),

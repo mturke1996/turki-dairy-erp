@@ -5,6 +5,7 @@ import {
   computeFarmerSessionStats,
   buildSessionCarryForwardSnapshot,
   computeDerived,
+  computeSessionSummary,
   computeWasteSummary,
 } from '@/lib/domain/calculations';
 import { buildInventoryLedger } from '@/lib/domain/inventory';
@@ -527,6 +528,28 @@ describe('computeWasteSummary and alerts', () => {
     expect(inv.currentStock).toBe(19);
   });
 
+  it('keeps opening stock after supplies and sales when only session.openingStock was set', () => {
+    const sessionWithOpening: Session = {
+      ...session,
+      openingStock: 10000,
+      openingAvgCost: 2,
+    };
+    const supplies: SupplyTransaction[] = [
+      {
+        id: 'sup-open', ref: 'SUP-O', farmerId: 'f1', sessionId: 'sw2', date: '2026-06-02',
+        quantity: 8000, unitPrice: 2, total: 16000, qualityTier: 'A', createdAt: '2026-06-02',
+      },
+    ];
+    const sales: SaleTransaction[] = [
+      {
+        id: 'sal-open', ref: 'SAL-O', customerId: 'c1', sessionId: 'sw2', date: '2026-06-03',
+        quantity: 5000, unitPrice: 3, total: 15000, dueDate: '2026-06-10', createdAt: '2026-06-03',
+      },
+    ];
+    const inv = buildInventoryLedger(supplies, sales, [], [sessionWithOpening]);
+    expect(inv.currentStock).toBe(13000);
+  });
+
   it('does not double-count opening stock with opening adjustment after supplies exist', () => {
     const openingAdj: InventoryAdjustment = {
       id: 'adj-open', ref: 'ADJ-O', sessionId: 'sw2', date: '2026-06-01',
@@ -546,6 +569,33 @@ describe('computeWasteSummary and alerts', () => {
     ];
     const inv = buildInventoryLedger(supplies, [], [openingAdj], [sessionWithOpening]);
     expect(inv.currentStock).toBe(600);
+    const summary = computeSessionSummary(
+      sessionWithOpening,
+      {
+        sessions: [sessionWithOpening],
+        activeSessionId: 'sw2',
+        farmers: [farmer],
+        customers: [],
+        employees: [],
+        supplies,
+        sales: [],
+        payments: [],
+        debtEntries: [],
+        adjustments: [openingAdj],
+        expenses: [],
+        payrollBatches: [],
+        vaults: [],
+        banks: [],
+        cashMovements: [],
+        externalIncomes: [],
+        settings: { minStockThreshold: 0, defaultBuyPrice: 2, defaultSellPrice: 2.5 },
+      },
+      inv,
+    );
+    expect(summary.closingStock).toBe(600);
+    expect(summary.closingStock).not.toBe(
+      sessionWithOpening.openingStock + 100 + openingAdj.quantity,
+    );
   });
 
   it('uses ledger WAC for waste value when stored unitCost differs', () => {

@@ -25,7 +25,7 @@ import { toast } from 'sonner';
 import { usePermission } from '@/lib/store/use-permission';
 import { computeDailyFlow, computeWasteSummary } from '@/lib/domain/calculations';
 import { WasteLossSection } from '@/components/inventory/waste-loss-section';
-import { buildInventoryLedger, sessionLedgerEntries } from '@/lib/domain/inventory';
+import { buildInventoryLedger, sessionLedgerEntries, sessionStockFlowTotals } from '@/lib/domain/inventory';
 import { formatShortDate } from '@/lib/utils';
 import { RowDeleteButton } from '@/components/shared/row-delete-button';
 import type { InventoryAdjustment, InventoryLedgerEntry, SaleTransaction, SupplyTransaction } from '@/lib/domain/types';
@@ -89,12 +89,20 @@ export default function InventoryPage() {
   }, [d.inv.entries, sessionId, session]);
 
   const totals = useMemo(() => {
-    const list = sessionId === 'all' ? d.inv.entries : d.inv.entries.filter((e) => e.sessionId === sessionId);
-    const inQty = list.reduce((s, e) => s + e.quantityIn, 0);
-    const outQty = list.reduce((s, e) => s + e.quantityOut, 0);
-    const opening = sessionId === 'all' ? 0 : session?.openingStock ?? 0;
-    return { inQty, outQty, opening, closing: opening + inQty - outQty };
-  }, [d.inv.entries, sessionId, session]);
+    if (sessionId === 'all') {
+      const inQty = d.inv.entries.reduce((s, e) => s + e.quantityIn, 0);
+      const outQty = d.inv.entries.reduce((s, e) => s + e.quantityOut, 0);
+      return { inQty, outQty, opening: 0, closing: d.inv.currentStock };
+    }
+    if (!session) return { inQty: 0, outQty: 0, opening: 0, closing: 0 };
+    return sessionStockFlowTotals(
+      session,
+      data.supplies,
+      data.sales,
+      data.adjustments,
+      d.inv,
+    );
+  }, [sessionId, session, data.supplies, data.sales, data.adjustments, d.inv]);
 
   const flow = computeDailyFlow(sessionId, d.inv);
 

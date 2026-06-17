@@ -3592,12 +3592,6 @@ export const useErpStore = create<ErpState>()((set, get) => ({
 
     const qty = round(input.quantity);
     const cost = round(input.unitCost, 3);
-    const sorted = [...state.sessions].sort((a, b) =>
-      a.periodFrom.localeCompare(b.periodFrom),
-    );
-    const earliest = sorted[0];
-    const hasMovements =
-      state.supplies.length + state.sales.length + state.adjustments.length > 0;
     const stockBefore = buildInventoryLedger(
       state.supplies,
       state.sales,
@@ -3610,24 +3604,21 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       openingStock: qty,
       openingAvgCost: cost,
     };
-    const ledgerOpeningOnly = session.id === earliest?.id && !hasMovements;
     let newAdj: InventoryAdjustment | null = null;
-    if (!ledgerOpeningOnly) {
-      const delta = round(qty - stockBefore);
-      if (Math.abs(delta) > 0.001) {
-        newAdj = {
-          id: uid("adj-"),
-          ref: nextRef("ADJ", state.adjustments),
-          sessionId: session.id,
-          date: `${session.periodFrom}T08:00:00.000Z`,
-          quantity: delta,
-          unitCost: cost,
-          reason:
-            input.note?.trim() ||
-            "رصيد افتتاحي للدورة — متبقي من الدورة السابقة",
-          createdAt: new Date().toISOString(),
-        };
-      }
+    const delta = round(qty - stockBefore);
+    if (Math.abs(delta) > 0.001) {
+      newAdj = {
+        id: uid("adj-"),
+        ref: nextRef("ADJ", state.adjustments),
+        sessionId: session.id,
+        date: `${session.periodFrom}T08:00:00.000Z`,
+        quantity: delta,
+        unitCost: cost,
+        reason:
+          input.note?.trim() ||
+          "رصيد افتتاحي للدورة — متبقي من الدورة السابقة",
+        createdAt: new Date().toISOString(),
+      };
     }
 
     const audit = makeAudit(

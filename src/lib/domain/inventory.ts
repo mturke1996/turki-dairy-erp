@@ -78,11 +78,13 @@ export function buildInventoryLedger(
   // رصيد افتتاحي لأقدم فترة — فقط قبل أي حركة تشغيلية (يتطابق مع setSessionOpeningStock)
   const sorted = [...sessions].sort((a, b) => ts(a.periodFrom, a.createdAt) - ts(b.periodFrom, b.createdAt));
   const earliest = sorted[0];
-  const hasOperationalMovements =
-    supplies.length > 0 ||
-    sales.length > 0 ||
-    uniqueAdj.some((a) => !isOpeningStockAdjustment(a));
-  if (earliest && earliest.openingStock > 0 && !hasOperationalMovements) {
+  const earliestHasOpeningAdj =
+    !!earliest &&
+    uniqueAdj.some(
+      (a) => a.sessionId === earliest.id && isOpeningStockAdjustment(a),
+    );
+  // افتتاحي أقدم دورة — ما لم يكن مُسجَّلاً كتسوية (تفادي ازدواج مع setSessionOpeningStock)
+  if (earliest && earliest.openingStock > 0 && !earliestHasOpeningAdj) {
     events.push({
       t: 'opening',
       date: earliest.periodFrom,
@@ -267,6 +269,58 @@ export function sessionLedgerEntries(
   const inSession = allEntries.filter((e) => e.sessionId === session.id);
   const merged = carry ? [carry, ...inSession] : inSession;
   return merged.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/**
+ * رصيد ختامي لدورة واحدة — من آخر حركة في دفتر المخزون (مصدر الحقيقة).
+ * يتجنّب ازدواج «رصيد افتتاحي + تسوية افتتاحية» أو «افتتاحي + حركة OPENING».
+ */
+export function sessionClosingStockFromLedger(
+  session: Session,
+  inv: InventoryResult,
+): number {
+  const inSession = inv.entries.filter((e) => e.sessionId === session.id);
+  if (inSession.length === 0) return round(Math.max(0, session.openingStock));
+  const last = [...inSession].sort((a, b) => {
+    const byDate = a.date.localeCompare(b.date);
+    return byDate !== 0 ? byDate : a.id.localeCompare(b.id);
+  }).at(-1)!;
+  return round(Math.max(0, last.balanceAfter));
+}
+
+/** تفصيل وارد/صادر تشغيلي لدورة (بدون تسويات/حركات الافتتاح المكرّرة). */
+export function sessionStockFlowTotals(
+  session: Session,
+  supplies: SupplyTransaction[],
+  sales: SaleTransaction[],
+  adjustments: InventoryAdjustment[],
+  inv: InventoryResult,
+): { opening: number; inQty: number; outQty: number; closing: number } {
+  const opening = round(session.openingStock);
+  const closing = sessionClosingStockFromLedger(session, inv);
+  const opAdjs = uniqueAdjustments(
+    adjustments.filter(
+      (a) => a.sessionId === session.id && !isOpeningStockAdjustment(a),
+    ),
+  );
+  const supplyIn = supplies
+    .filter((s) => s.sessionId === session.id)
+    .reduce((s, x) => s + x.quantity, 0);
+  const adjIn = opAdjs
+    .filter((a) => a.quantity > 0)
+    .reduce((s, a) => s + a.quantity, 0);
+  const salesOut = sales
+    .filter((s) => s.sessionId === session.id)
+    .reduce((s, x) => s + x.quantity, 0);
+  const adjOut = opAdjs
+    .filter((a) => a.quantity < 0)
+    .reduce((s, a) => s + Math.abs(a.quantity), 0);
+  return {
+    opening,
+    inQty: round(supplyIn + adjIn),
+    outQty: round(salesOut + adjOut),
+    closing,
+  };
 }
 
 export function round(n: number, d = 2): number {
