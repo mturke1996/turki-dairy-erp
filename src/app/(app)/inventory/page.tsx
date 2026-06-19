@@ -200,7 +200,7 @@ export default function InventoryPage() {
             <CardDescription>الوارد والصادر والرصيد المتحرّك</CardDescription>
           </div>
           <Select value={sessionId} onValueChange={setSessionId}>
-            <SelectTrigger className="sm:w-52">
+            <SelectTrigger className="w-full sm:w-52">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -211,6 +211,7 @@ export default function InventoryPage() {
                 .map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.label}
+                    {s.status === 'archived' ? ' (مؤرشفة)' : ''}
                   </SelectItem>
                 ))}
             </SelectContent>
@@ -254,20 +255,8 @@ export default function InventoryPage() {
         </CardHeader>
         <CardContent>
           {entries.length ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>التاريخ</TableHead>
-                  <TableHead>المرجع</TableHead>
-                  <TableHead className="text-center">النوع</TableHead>
-                  <TableHead className="text-left">وارد</TableHead>
-                  <TableHead className="text-left">صادر</TableHead>
-                  <TableHead className="text-left">التكلفة</TableHead>
-                  <TableHead className="text-left">الرصيد</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              <div className="space-y-2.5 md:hidden">
                 {entries.slice(0, 60).map((e) => {
                   const b = MOVEMENT_BADGE[e.movementType];
                   const modifiable = canModifyEntry(e);
@@ -314,33 +303,149 @@ export default function InventoryPage() {
                   }
 
                   return (
-                    <TableRow key={e.id}>
-                      <TableCell className="text-[12.5px]">{formatShortDate(e.date)}</TableCell>
-                      <TableCell className="font-mono text-[11.5px] text-muted-foreground" dir="ltr">{e.ref}</TableCell>
-                      <TableCell className="text-center"><Badge variant={b.variant}>{b.label}</Badge></TableCell>
-                      <TableCell className="text-left">{e.quantityIn ? <Liters value={e.quantityIn} decimals={1} className="text-[12px] text-meadow-700" /> : <span className="text-muted-foreground">—</span>}</TableCell>
-                      <TableCell className="text-left">{e.quantityOut ? <Liters value={e.quantityOut} decimals={1} className="text-[12px]" /> : <span className="text-muted-foreground">—</span>}</TableCell>
-                      <TableCell className="text-left"><Money value={e.unitCost} decimals={3} className="text-[12px]" muted /></TableCell>
-                      <TableCell className="text-left"><Liters value={e.balanceAfter} decimals={1} className="text-[12.5px] font-semibold" /></TableCell>
-                      <TableCell>
-                        {showActions ? (
-                          <div className="flex justify-end gap-1">
-                            {canEdit ? (
-                              <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={openEdit} aria-label="تعديل">
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                            ) : null}
-                            {e.sourceKind !== 'opening' && canDeleteEntry(e) ? (
-                              <RowDeleteButton label={e.ref} allowed onConfirm={confirmDelete} />
-                            ) : null}
+                    <article key={e.id} className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13.5px] font-semibold">{e.label}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <Badge variant={b.variant} className="text-[10px]">{b.label}</Badge>
+                            <span className="text-[11px] text-muted-foreground">{formatShortDate(e.date)}</span>
                           </div>
-                        ) : null}
-                      </TableCell>
-                    </TableRow>
+                          <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground" dir="ltr">{e.ref}</p>
+                        </div>
+                        <div className="text-left">
+                          <Liters value={e.balanceAfter} decimals={1} className="text-[14px] font-bold" />
+                          <p className="mt-0.5 text-[10.5px] text-muted-foreground">بعد</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-[11.5px]">
+                        <div>
+                          <p className="text-muted-foreground">وارد</p>
+                          {e.quantityIn ? (
+                            <Liters value={e.quantityIn} decimals={1} className="font-semibold text-meadow-700" />
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">صادر</p>
+                          {e.quantityOut ? (
+                            <Liters value={e.quantityOut} decimals={1} className="font-semibold" />
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">تكلفة/ل</p>
+                          <Money value={e.unitCost} decimals={3} className="font-semibold" />
+                        </div>
+                      </div>
+                      {showActions ? (
+                        <div className="mt-3 flex justify-end gap-1 border-t border-border pt-3">
+                          {canEdit ? (
+                            <Button type="button" size="icon" variant="ghost" className="h-9 w-9" onClick={openEdit} aria-label="تعديل">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          ) : null}
+                          {e.sourceKind !== 'opening' && canDeleteEntry(e) ? (
+                            <RowDeleteButton label={e.ref} allowed onConfirm={confirmDelete} />
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </article>
                   );
                 })}
-              </TableBody>
-            </Table>
+              </div>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>التاريخ</TableHead>
+                      <TableHead>المرجع</TableHead>
+                      <TableHead className="text-center">النوع</TableHead>
+                      <TableHead className="text-left">وارد</TableHead>
+                      <TableHead className="text-left">صادر</TableHead>
+                      <TableHead className="text-left">التكلفة</TableHead>
+                      <TableHead className="text-left">الرصيد</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {entries.slice(0, 60).map((e) => {
+                      const b = MOVEMENT_BADGE[e.movementType];
+                      const modifiable = canModifyEntry(e);
+                      const canEdit =
+                        modifiable &&
+                        ((e.sourceKind === 'supply' && canAdjust) ||
+                          (e.sourceKind === 'sale' && canSell) ||
+                          (e.sourceKind === 'adjustment' && canAdjust));
+                      const showActions = modifiable && (canEdit || (e.sourceKind !== 'opening' && canDeleteEntry(e)));
+
+                      function openEdit() {
+                        if (e.sourceKind === 'supply') {
+                          const tx = data.supplies.find((s) => s.id === e.sourceId);
+                          if (tx) setEditSupply(tx);
+                        } else if (e.sourceKind === 'sale') {
+                          const tx = data.sales.find((s) => s.id === e.sourceId);
+                          if (tx) setEditSale(tx);
+                        } else if (e.sourceKind === 'adjustment') {
+                          const tx = data.adjustments.find((a) => a.id === e.sourceId);
+                          if (tx) setEditAdjustment(tx);
+                        }
+                      }
+
+                      async function confirmDelete() {
+                        if (e.sourceKind === 'supply') {
+                          const res = await deleteSupply(e.sourceId);
+                          if (res.ok) toast.success('تم حذف الاستلام');
+                          else toast.error(res.error ?? 'تعذّر الحذف');
+                          return res;
+                        }
+                        if (e.sourceKind === 'sale') {
+                          const res = await deleteSale(e.sourceId);
+                          if (res.ok) toast.success('تم حذف البيع');
+                          else toast.error(res.error ?? 'تعذّر الحذف');
+                          return res;
+                        }
+                        if (e.sourceKind === 'adjustment') {
+                          const res = await deleteAdjustment(e.sourceId);
+                          if (res.ok) toast.success('تم حذف التسوية');
+                          else toast.error(res.error ?? 'تعذّر الحذف');
+                          return res;
+                        }
+                        return { ok: false, error: 'لا يمكن حذف هذا النوع من الحركات.' };
+                      }
+
+                      return (
+                        <TableRow key={e.id}>
+                          <TableCell className="text-[12.5px]">{formatShortDate(e.date)}</TableCell>
+                          <TableCell className="font-mono text-[11.5px] text-muted-foreground" dir="ltr">{e.ref}</TableCell>
+                          <TableCell className="text-center"><Badge variant={b.variant}>{b.label}</Badge></TableCell>
+                          <TableCell className="text-left">{e.quantityIn ? <Liters value={e.quantityIn} decimals={1} className="text-[12px] text-meadow-700" /> : <span className="text-muted-foreground">—</span>}</TableCell>
+                          <TableCell className="text-left">{e.quantityOut ? <Liters value={e.quantityOut} decimals={1} className="text-[12px]" /> : <span className="text-muted-foreground">—</span>}</TableCell>
+                          <TableCell className="text-left"><Money value={e.unitCost} decimals={3} className="text-[12px]" muted /></TableCell>
+                          <TableCell className="text-left"><Liters value={e.balanceAfter} decimals={1} className="text-[12.5px] font-semibold" /></TableCell>
+                          <TableCell>
+                            {showActions ? (
+                              <div className="flex justify-end gap-1">
+                                {canEdit ? (
+                                  <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={openEdit} aria-label="تعديل">
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                ) : null}
+                                {e.sourceKind !== 'opening' && canDeleteEntry(e) ? (
+                                  <RowDeleteButton label={e.ref} allowed onConfirm={confirmDelete} />
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           ) : (
             <EmptyState icon={Warehouse} title="لا حركات مخزون" description="ستظهر الحركات تلقائياً مع استلام الحليب والبيع." />
           )}
@@ -354,6 +459,53 @@ export default function InventoryPage() {
             <CardDescription>تعديلات يدوية على الرصيد — يمكن تعديلها أو حذفها</CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="space-y-2.5 md:hidden">
+              {sessionAdjustments.map((a) => {
+                const modifiable = openSessionIds.has(a.sessionId);
+                return (
+                  <article key={a.id} className="rounded-xl border border-border bg-card p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13.5px] font-semibold">{a.reason}</p>
+                        <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground" dir="ltr">{a.ref}</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">{formatShortDate(a.date)}</p>
+                      </div>
+                      <Liters value={a.quantity} decimals={1} className="shrink-0 text-[14px] font-bold" />
+                    </div>
+                    {modifiable && (canAdjust || canDeleteAdmin) ? (
+                      <div className="mt-3 flex justify-end gap-1 border-t border-border pt-3">
+                        {canAdjust ? (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-9 w-9"
+                            onClick={() => setEditAdjustment(a)}
+                            aria-label="تعديل التسوية"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : null}
+                        {canAdjust || canDeleteAdmin ? (
+                          <RowDeleteButton
+                            label={a.ref}
+                            allowed
+                            showLabel
+                            onConfirm={async () => {
+                              const res = await deleteAdjustment(a.id);
+                              if (res.ok) toast.success('تم حذف التسوية');
+                              else toast.error(res.error ?? 'تعذّر الحذف');
+                              return res;
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+            <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -409,6 +561,7 @@ export default function InventoryPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       ) : null}
