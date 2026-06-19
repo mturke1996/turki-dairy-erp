@@ -74,6 +74,8 @@ export default function SessionsPage() {
     return { qty: Math.round(qty), value: Math.round(value) };
   }, [active, data.adjustments]);
 
+  const currentStock = d.totals.currentStock;
+
   const closePreview = useMemo(() => {
     if (!active) return null;
     return buildSessionCarryForwardSnapshot(
@@ -97,9 +99,9 @@ export default function SessionsPage() {
         settings: data.settings,
       },
       active,
-      summary.closingStock,
+      currentStock,
     );
-  }, [active, data, summary.closingStock]);
+  }, [active, data, currentStock]);
 
   const sortedSessions = [...data.sessions].sort((a, b) => b.periodFrom.localeCompare(a.periodFrom));
 
@@ -314,7 +316,7 @@ export default function SessionsPage() {
             <StatTile label="استلام الحليب" value={<Liters value={summary.supplyQty} />} icon={Droplets} tone="meadow" hint={`${summary.supplyCount} عملية`} />
             <StatTile label="مبيعات" value={<Money value={summary.salesRevenue} decimals={0} />} icon={ShoppingCart} tone="navy" hint={`${summary.salesCount} عملية`} />
             <StatTile label="الربح" value={<Money value={summary.grossProfit} decimals={0} />} icon={TrendingUp} tone="sun" hint={`هامش ${formatNumber(summary.marginPct, 1)}%`} />
-            <StatTile label="الرصيد الختامي" value={<Liters value={summary.closingStock} />} icon={Archive} tone="neutral" hint={`افتتاحي ${formatNumber(summary.openingStock, 0)} · يُرحَّل للدورة التالية`} />
+            <StatTile label="المخزون المتبقي" value={<Liters value={currentStock} />} icon={Archive} tone="neutral" hint={`افتتاحي ${formatNumber(summary.openingStock, 0)} · يُرحَّل للدورة التالية`} />
           </CardContent>
         </Card>
       ) : null}
@@ -433,8 +435,8 @@ export default function SessionsPage() {
               </div>
             ) : null}
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">مخزون مُرحّل (بعد خصم الهدر)</span>
-              <Liters value={summary.closingStock} className="font-semibold text-meadow-700" />
+              <span className="text-muted-foreground">مخزون مُرحّل (المتبقي في المخزون)</span>
+              <Liters value={currentStock} className="font-semibold text-meadow-700" />
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">ديون علينا (فلاحون + خارجيون)</span>

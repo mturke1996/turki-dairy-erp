@@ -343,39 +343,28 @@ export default function SalesPage() {
           </CardHeader>
           <CardContent>
             {sessionSales.length ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>المرجع</TableHead>
-                    <TableHead>العميل</TableHead>
-                    <TableHead className="text-left">الكمية</TableHead>
-                    <TableHead className="text-left">السعر</TableHead>
-                    <TableHead className="text-left">الإجمالي</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                <div className="space-y-2.5 md:hidden">
                   {sessionSales.slice(0, 40).map((s) => {
                     const customer = data.customers.find((c) => c.id === s.customerId);
                     return (
-                      <TableRow key={s.id}>
-                        <TableCell className="font-mono text-[11.5px] text-muted-foreground" dir="ltr">
-                          {s.ref}
-                          <span className="block text-[10.5px]">{formatShortDate(s.date)}</span>
-                        </TableCell>
-                        <TableCell className="text-[13px] font-medium">{customer?.entityName ?? '—'}</TableCell>
-                        <TableCell className="text-left">
-                          <Liters value={s.quantity} className="text-[12.5px]" />
-                        </TableCell>
-                        <TableCell className="text-left">
-                          <Money value={s.unitPrice} decimals={3} className="text-[12px]" muted />
-                        </TableCell>
-                        <TableCell className="text-left">
-                          <Money value={s.total} className="text-[13px] font-semibold" />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-1">
-                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditSale(s)}>
+                      <article key={s.id} className="rounded-xl border border-border bg-card p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[14px] font-semibold">{customer?.entityName ?? '—'}</p>
+                            <div className="mt-1 flex items-center gap-2 text-[11.5px] text-muted-foreground">
+                              <Liters value={s.quantity} />
+                              <span>×</span>
+                              <Money value={s.unitPrice} decimals={3} muted />
+                            </div>
+                            <span className="mt-0.5 block text-[11px] text-muted-foreground">{formatShortDate(s.date)}</span>
+                          </div>
+                          <Money value={s.total} className="shrink-0 text-[15px] font-bold text-navy-700" />
+                        </div>
+                        <div className="mt-3 flex items-center justify-between">
+                          <span className="font-mono text-[10.5px] text-muted-foreground" dir="ltr">{s.ref}</span>
+                          <div className="flex gap-1">
+                            <Button type="button" size="icon" variant="ghost" className="h-9 w-9" onClick={() => setEditSale(s)}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
                             <RowDeleteButton
@@ -388,12 +377,65 @@ export default function SalesPage() {
                               }}
                             />
                           </div>
-                        </TableCell>
-                      </TableRow>
+                        </div>
+                      </article>
                     );
                   })}
-                </TableBody>
-              </Table>
+                </div>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>المرجع</TableHead>
+                        <TableHead>العميل</TableHead>
+                        <TableHead className="text-left">الكمية</TableHead>
+                        <TableHead className="text-left">السعر</TableHead>
+                        <TableHead className="text-left">الإجمالي</TableHead>
+                        <TableHead />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sessionSales.slice(0, 40).map((s) => {
+                        const customer = data.customers.find((c) => c.id === s.customerId);
+                        return (
+                          <TableRow key={s.id}>
+                            <TableCell className="font-mono text-[11.5px] text-muted-foreground" dir="ltr">
+                              {s.ref}
+                              <span className="block text-[10.5px]">{formatShortDate(s.date)}</span>
+                            </TableCell>
+                            <TableCell className="text-[13px] font-medium">{customer?.entityName ?? '—'}</TableCell>
+                            <TableCell className="text-left">
+                              <Liters value={s.quantity} className="text-[12.5px]" />
+                            </TableCell>
+                            <TableCell className="text-left">
+                              <Money value={s.unitPrice} decimals={3} className="text-[12px]" muted />
+                            </TableCell>
+                            <TableCell className="text-left">
+                              <Money value={s.total} className="text-[13px] font-semibold" />
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex justify-end gap-1">
+                                <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditSale(s)}>
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <RowDeleteButton
+                                  label={s.ref}
+                                  onConfirm={async () => {
+                                    const res = await deleteSale(s.id);
+                                    if (res.ok) toast.success('تم حذف البيع');
+                                    else toast.error(res.error ?? 'تعذّر الحذف');
+                                    return res;
+                                  }}
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             ) : (
               <EmptyState icon={ShoppingCart} title="لا مبيعات في هذه الفترة" description="ابدأ بتسجيل أول عملية بيع." />
             )}

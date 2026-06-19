@@ -1007,8 +1007,8 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           profit: { gross: summary.grossProfit, marginPct: summary.marginPct },
           inventory: {
             opening: summary.openingStock,
-            closing: summary.closingStock,
-            variance: round(summary.closingStock - summary.openingStock),
+            closing: round(inv.currentStock),
+            variance: round(inv.currentStock - summary.openingStock),
           },
           cash: {
             farmerPayments: summary.farmerPayments,

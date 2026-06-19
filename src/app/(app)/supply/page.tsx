@@ -455,53 +455,40 @@ export default function SupplyPage() {
           </CardHeader>
           <CardContent>
             {sessionSupplies.length ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>المرجع</TableHead>
-                    <TableHead>الفلاح</TableHead>
-                    <TableHead className="text-center">الوجبة</TableHead>
-                    <TableHead className="text-center">الجودة</TableHead>
-                    <TableHead className="text-left">الكمية</TableHead>
-                    <TableHead className="text-left">الإجمالي</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                <div className="space-y-2.5 md:hidden">
                   {sessionSupplies.slice(0, 40).map((s) => {
                     const farmer = data.farmers.find((f) => f.id === s.farmerId);
                     const shift = s.milkShift ?? 'morning';
                     const isPeriod = !!(s.periodFrom && s.periodTo);
                     return (
-                      <TableRow key={s.id}>
-                        <TableCell className="font-mono text-[11.5px] text-muted-foreground" dir="ltr">
-                          {s.ref}
-                          <span className="block text-[10.5px]">
-                            {isPeriod ? `${formatShortDate(s.periodFrom!)} → ${formatShortDate(s.periodTo!)}` : formatShortDate(s.date)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-[13px] font-medium">{farmer?.fullName ?? '—'}</TableCell>
-                        <TableCell className="text-center">
-                          {isPeriod ? (
-                            <Badge variant="success" className="text-[10px]">فترة مجمّعة</Badge>
-                          ) : (
-                            <Badge variant={shift === 'morning' ? 'info' : 'neutral'} className="text-[10px]">
-                              {MILK_SHIFT_LABELS[shift]}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant={QUALITY_VARIANT[s.qualityTier]}>{s.qualityTier}</Badge>
-                        </TableCell>
-                        <TableCell className="text-left">
-                          <Liters value={s.quantity} className="text-[12.5px]" />
-                        </TableCell>
-                        <TableCell className="text-left">
-                          <Money value={s.total} className="text-[13px] font-semibold" />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-1">
-                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditSupply(s)}>
+                      <article key={s.id} className="rounded-xl border border-border bg-card p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[14px] font-semibold">{farmer?.fullName ?? '—'}</p>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              {isPeriod ? (
+                                <Badge variant="success" className="text-[10px]">فترة مجمّعة</Badge>
+                              ) : (
+                                <Badge variant={shift === 'morning' ? 'info' : 'neutral'} className="text-[10px]">
+                                  {MILK_SHIFT_LABELS[shift]}
+                                </Badge>
+                              )}
+                              <Badge variant={QUALITY_VARIANT[s.qualityTier]} className="text-[10px]">{s.qualityTier}</Badge>
+                              <span className="text-[11px] text-muted-foreground">
+                                {isPeriod ? `${formatShortDate(s.periodFrom!)} → ${formatShortDate(s.periodTo!)}` : formatShortDate(s.date)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-left">
+                            <Money value={s.total} className="text-[15px] font-bold text-meadow-700" />
+                            <Liters value={s.quantity} className="mt-0.5 block text-[11.5px] text-muted-foreground" />
+                          </div>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between">
+                          <span className="font-mono text-[10.5px] text-muted-foreground" dir="ltr">{s.ref}</span>
+                          <div className="flex gap-1">
+                            <Button type="button" size="icon" variant="ghost" className="h-9 w-9" onClick={() => setEditSupply(s)}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
                             <RowDeleteButton
@@ -514,12 +501,79 @@ export default function SupplyPage() {
                               }}
                             />
                           </div>
-                        </TableCell>
-                      </TableRow>
+                        </div>
+                      </article>
                     );
                   })}
-                </TableBody>
-              </Table>
+                </div>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>المرجع</TableHead>
+                        <TableHead>الفلاح</TableHead>
+                        <TableHead className="text-center">الوجبة</TableHead>
+                        <TableHead className="text-center">الجودة</TableHead>
+                        <TableHead className="text-left">الكمية</TableHead>
+                        <TableHead className="text-left">الإجمالي</TableHead>
+                        <TableHead />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sessionSupplies.slice(0, 40).map((s) => {
+                        const farmer = data.farmers.find((f) => f.id === s.farmerId);
+                        const shift = s.milkShift ?? 'morning';
+                        const isPeriod = !!(s.periodFrom && s.periodTo);
+                        return (
+                          <TableRow key={s.id}>
+                            <TableCell className="font-mono text-[11.5px] text-muted-foreground" dir="ltr">
+                              {s.ref}
+                              <span className="block text-[10.5px]">
+                                {isPeriod ? `${formatShortDate(s.periodFrom!)} → ${formatShortDate(s.periodTo!)}` : formatShortDate(s.date)}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-[13px] font-medium">{farmer?.fullName ?? '—'}</TableCell>
+                            <TableCell className="text-center">
+                              {isPeriod ? (
+                                <Badge variant="success" className="text-[10px]">فترة مجمّعة</Badge>
+                              ) : (
+                                <Badge variant={shift === 'morning' ? 'info' : 'neutral'} className="text-[10px]">
+                                  {MILK_SHIFT_LABELS[shift]}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant={QUALITY_VARIANT[s.qualityTier]}>{s.qualityTier}</Badge>
+                            </TableCell>
+                            <TableCell className="text-left">
+                              <Liters value={s.quantity} className="text-[12.5px]" />
+                            </TableCell>
+                            <TableCell className="text-left">
+                              <Money value={s.total} className="text-[13px] font-semibold" />
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex justify-end gap-1">
+                                <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditSupply(s)}>
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <RowDeleteButton
+                                  label={s.ref}
+                                  onConfirm={async () => {
+                                    const res = await deleteSupply(s.id);
+                                    if (res.ok) toast.success('تم حذف الاستلام');
+                                    else toast.error(res.error ?? 'تعذّر الحذف');
+                                    return res;
+                                  }}
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             ) : (
               <EmptyState icon={Droplets} title={C.empty} description={C.emptyHint} />
             )}
