@@ -130,7 +130,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   accountant: 'محاسب',
   operator: 'مشغّل',
   hr_manager: 'مدير موارد بشرية',
-  viewer: 'مطّلع',
+  viewer: 'مشاهد',
 };
 
 export type Permission =

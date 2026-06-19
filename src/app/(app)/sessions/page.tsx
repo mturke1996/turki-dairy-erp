@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatTile } from '@/components/shared/stat-tile';
 import { Money, Liters } from '@/components/shared/money';
+import { ProfitInventoryCard } from '@/components/shared/profit-inventory-card';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { SessionClosingPDF } from '@/features/pdf/SessionClosingPDF';
 import { FarmerCycleSettlement } from '@/components/farmers/farmer-cycle-settlement';
@@ -75,6 +76,9 @@ export default function SessionsPage() {
   }, [active, data.adjustments]);
 
   const currentStock = d.totals.currentStock;
+  const soldQtyAll = d.sessionSummaries.reduce((acc, x) => acc + x.salesQty, 0);
+  const soldRevenueAll = d.sessionSummaries.reduce((acc, x) => acc + x.salesRevenue, 0);
+  const avgSellPrice = soldQtyAll > 0 ? soldRevenueAll / soldQtyAll : data.settings.defaultSellPrice;
 
   const closePreview = useMemo(() => {
     if (!active) return null;
@@ -319,6 +323,17 @@ export default function SessionsPage() {
             <StatTile label="المخزون المتبقي" value={<Liters value={currentStock} />} icon={Archive} tone="neutral" hint={`افتتاحي ${formatNumber(summary.openingStock, 0)} · يُرحَّل للدورة التالية`} />
           </CardContent>
         </Card>
+      ) : null}
+
+      {active ? (
+        <ProfitInventoryCard
+          profitLabel="مجمل ربح الفترة"
+          profit={summary.grossProfit}
+          stockQty={currentStock}
+          stockCostValue={d.totals.inventoryValue}
+          sellPrice={avgSellPrice}
+          description={`${active.label} — الربح المحقّق مقابل قيمة المخزون الحالي`}
+        />
       ) : null}
 
       {active?.carryForwardBalances ? <CarryForwardBanner carry={active.carryForwardBalances} /> : null}

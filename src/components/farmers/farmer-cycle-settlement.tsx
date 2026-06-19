@@ -93,61 +93,115 @@ export function FarmerCycleSettlement({ session, readonly }: Props) {
           </div>
 
           {rows.length ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>الفلاح</TableHead>
-                  <TableHead className="text-left">مرحّل</TableHead>
-                  <TableHead className="text-left">الكمية</TableHead>
-                  <TableHead className="text-left">القيمة</TableHead>
-                  <TableHead className="text-left">المدفوع</TableHead>
-                  <TableHead className="text-left">المتبقي</TableHead>
-                  <TableHead className="text-center">الحالة</TableHead>
-                  {!readonly ? <TableHead /> : null}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              <div className="space-y-2.5 md:hidden">
                 {rows.map((r) => {
                   const st = STATUS_BADGE[r.status];
                   return (
-                    <TableRow key={r.farmerId}>
-                      <TableCell>
-                        <p className="text-[13px] font-medium">{r.fullName}</p>
-                        <p className="font-mono text-[10.5px] text-muted-foreground" dir="ltr">{r.code}</p>
-                      </TableCell>
-                      <TableCell className="text-left">
-                        {r.carriedForward > 0.01 ? (
-                          <Money value={r.carriedForward} className="text-[12px] text-sun-700" />
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-left">
-                        <Liters value={r.suppliedQty} className="text-[12px]" />
-                      </TableCell>
-                      <TableCell className="text-left"><Money value={r.suppliedValue} className="text-[12.5px]" /></TableCell>
-                      <TableCell className="text-left"><Money value={r.paidAmount} className="text-[12.5px] text-meadow-700" /></TableCell>
-                      <TableCell className="text-left"><Money value={r.balance} className="text-[12.5px] font-semibold" /></TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={st.variant}>{st.label}</Badge>
-                      </TableCell>
-                      {!readonly ? (
-                        <TableCell>
-                          {r.balance > 0.01 ? (
-                            <Button size="sm" variant="outline" onClick={() => setPayFarmer(r)}>
-                              <Banknote className="h-3.5 w-3.5" />
-                              دفع
-                            </Button>
+                    <article key={r.farmerId} className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[14px] font-semibold">{r.fullName}</p>
+                          <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground" dir="ltr">{r.code}</p>
+                          <Badge variant={st.variant} className="mt-1.5 text-[10px]">{st.label}</Badge>
+                        </div>
+                        <div className="text-left">
+                          <Money value={r.balance} decimals={0} className="text-[15px] font-bold" />
+                          <p className="mt-0.5 text-[10.5px] text-muted-foreground">متبقي</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11.5px] sm:grid-cols-4">
+                        <div>
+                          <p className="text-muted-foreground">مرحّل</p>
+                          {r.carriedForward > 0.01 ? (
+                            <Money value={r.carriedForward} decimals={0} className="font-semibold text-sun-700" />
                           ) : (
-                            <span className="text-[11px] text-muted-foreground">—</span>
+                            <span className="text-muted-foreground">—</span>
                           )}
-                        </TableCell>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">الكمية</p>
+                          <Liters value={r.suppliedQty} className="font-semibold" />
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">القيمة</p>
+                          <Money value={r.suppliedValue} decimals={0} className="font-semibold" />
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">المدفوع</p>
+                          <Money value={r.paidAmount} decimals={0} className="font-semibold text-meadow-700" />
+                        </div>
+                      </div>
+                      {!readonly && r.balance > 0.01 ? (
+                        <div className="mt-3 border-t border-border pt-3">
+                          <Button size="sm" variant="outline" className="w-full" onClick={() => setPayFarmer(r)}>
+                            <Banknote className="h-3.5 w-3.5" />
+                            دفع
+                          </Button>
+                        </div>
                       ) : null}
-                    </TableRow>
+                    </article>
                   );
                 })}
-              </TableBody>
-            </Table>
+              </div>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>الفلاح</TableHead>
+                      <TableHead className="text-left">مرحّل</TableHead>
+                      <TableHead className="text-left">الكمية</TableHead>
+                      <TableHead className="text-left">القيمة</TableHead>
+                      <TableHead className="text-left">المدفوع</TableHead>
+                      <TableHead className="text-left">المتبقي</TableHead>
+                      <TableHead className="text-center">الحالة</TableHead>
+                      {!readonly ? <TableHead /> : null}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((r) => {
+                      const st = STATUS_BADGE[r.status];
+                      return (
+                        <TableRow key={r.farmerId}>
+                          <TableCell>
+                            <p className="text-[13px] font-medium">{r.fullName}</p>
+                            <p className="font-mono text-[10.5px] text-muted-foreground" dir="ltr">{r.code}</p>
+                          </TableCell>
+                          <TableCell className="text-left">
+                            {r.carriedForward > 0.01 ? (
+                              <Money value={r.carriedForward} className="text-[12px] text-sun-700" />
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-left">
+                            <Liters value={r.suppliedQty} className="text-[12px]" />
+                          </TableCell>
+                          <TableCell className="text-left"><Money value={r.suppliedValue} className="text-[12.5px]" /></TableCell>
+                          <TableCell className="text-left"><Money value={r.paidAmount} className="text-[12.5px] text-meadow-700" /></TableCell>
+                          <TableCell className="text-left"><Money value={r.balance} className="text-[12.5px] font-semibold" /></TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={st.variant}>{st.label}</Badge>
+                          </TableCell>
+                          {!readonly ? (
+                            <TableCell>
+                              {r.balance > 0.01 ? (
+                                <Button size="sm" variant="outline" onClick={() => setPayFarmer(r)}>
+                                  <Banknote className="h-3.5 w-3.5" />
+                                  دفع
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                          ) : null}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           ) : (
             <p className="py-6 text-center text-[13px] text-muted-foreground">لا عمليات استلام مسجّلة في هذه الدورة.</p>
           )}

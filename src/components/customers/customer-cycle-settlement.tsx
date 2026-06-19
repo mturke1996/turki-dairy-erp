@@ -96,66 +96,119 @@ export function CustomerCycleSettlement({ session, readonly }: { session: Sessio
           </div>
 
           {rows.length ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>العميل</TableHead>
-                  <TableHead className="text-left">مرحّل</TableHead>
-                  <TableHead className="text-left">مبيعات</TableHead>
-                  <TableHead className="text-left">محصّل</TableHead>
-                  <TableHead className="text-left">المتبقي</TableHead>
-                  <TableHead className="text-center">الحالة</TableHead>
-                  {!readonly ? <TableHead /> : null}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              <div className="space-y-2.5 md:hidden">
                 {rows.map((r) => {
                   const st = STATUS_BADGE[r.status];
                   return (
-                    <TableRow key={r.customerId}>
-                      <TableCell>
-                        <p className="text-[13px] font-medium">{r.entityName}</p>
-                        <p className="font-mono text-[10.5px] text-muted-foreground" dir="ltr">{r.code}</p>
-                      </TableCell>
-                      <TableCell className="text-left">
-                        {r.carriedForward > 0.01 ? (
-                          <Money value={r.carriedForward} className="text-[12px] text-sun-700" />
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-left">
-                        <Money value={r.soldValue} className="text-[12.5px]" />
-                        {r.soldQty > 0 ? (
-                          <Liters value={r.soldQty} className="block text-[10px] text-muted-foreground" />
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="text-left">
-                        <Money value={r.receivedAmount} className="text-[12.5px] text-meadow-700" />
-                      </TableCell>
-                      <TableCell className="text-left">
-                        <Money value={r.balance} className="text-[12.5px] font-semibold" />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={st.variant}>{st.label}</Badge>
-                      </TableCell>
-                      {!readonly ? (
-                        <TableCell>
-                          {r.balance > 0.01 ? (
-                            <Button size="sm" variant="outline" onClick={() => setPayCustomer(r)}>
-                              <Banknote className="h-3.5 w-3.5" />
-                              تحصيل
-                            </Button>
+                    <article key={r.customerId} className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[14px] font-semibold">{r.entityName}</p>
+                          <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground" dir="ltr">{r.code}</p>
+                          <Badge variant={st.variant} className="mt-1.5 text-[10px]">{st.label}</Badge>
+                        </div>
+                        <div className="text-left">
+                          <Money value={r.balance} decimals={0} className="text-[15px] font-bold" />
+                          <p className="mt-0.5 text-[10.5px] text-muted-foreground">متبقي</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11.5px] sm:grid-cols-3">
+                        <div>
+                          <p className="text-muted-foreground">مرحّل</p>
+                          {r.carriedForward > 0.01 ? (
+                            <Money value={r.carriedForward} decimals={0} className="font-semibold text-sun-700" />
                           ) : (
-                            <span className="text-[11px] text-muted-foreground">—</span>
+                            <span className="text-muted-foreground">—</span>
                           )}
-                        </TableCell>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">مبيعات</p>
+                          <Money value={r.soldValue} decimals={0} className="font-semibold" />
+                          {r.soldQty > 0 ? (
+                            <Liters value={r.soldQty} className="mt-0.5 block text-[10px] text-muted-foreground" />
+                          ) : null}
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">محصّل</p>
+                          <Money value={r.receivedAmount} decimals={0} className="font-semibold text-meadow-700" />
+                        </div>
+                      </div>
+                      {!readonly && r.balance > 0.01 ? (
+                        <div className="mt-3 border-t border-border pt-3">
+                          <Button size="sm" variant="outline" className="w-full" onClick={() => setPayCustomer(r)}>
+                            <Banknote className="h-3.5 w-3.5" />
+                            تحصيل
+                          </Button>
+                        </div>
                       ) : null}
-                    </TableRow>
+                    </article>
                   );
                 })}
-              </TableBody>
-            </Table>
+              </div>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>العميل</TableHead>
+                      <TableHead className="text-left">مرحّل</TableHead>
+                      <TableHead className="text-left">مبيعات</TableHead>
+                      <TableHead className="text-left">محصّل</TableHead>
+                      <TableHead className="text-left">المتبقي</TableHead>
+                      <TableHead className="text-center">الحالة</TableHead>
+                      {!readonly ? <TableHead /> : null}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((r) => {
+                      const st = STATUS_BADGE[r.status];
+                      return (
+                        <TableRow key={r.customerId}>
+                          <TableCell>
+                            <p className="text-[13px] font-medium">{r.entityName}</p>
+                            <p className="font-mono text-[10.5px] text-muted-foreground" dir="ltr">{r.code}</p>
+                          </TableCell>
+                          <TableCell className="text-left">
+                            {r.carriedForward > 0.01 ? (
+                              <Money value={r.carriedForward} className="text-[12px] text-sun-700" />
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-left">
+                            <Money value={r.soldValue} className="text-[12.5px]" />
+                            {r.soldQty > 0 ? (
+                              <Liters value={r.soldQty} className="block text-[10px] text-muted-foreground" />
+                            ) : null}
+                          </TableCell>
+                          <TableCell className="text-left">
+                            <Money value={r.receivedAmount} className="text-[12.5px] text-meadow-700" />
+                          </TableCell>
+                          <TableCell className="text-left">
+                            <Money value={r.balance} className="text-[12.5px] font-semibold" />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={st.variant}>{st.label}</Badge>
+                          </TableCell>
+                          {!readonly ? (
+                            <TableCell>
+                              {r.balance > 0.01 ? (
+                                <Button size="sm" variant="outline" onClick={() => setPayCustomer(r)}>
+                                  <Banknote className="h-3.5 w-3.5" />
+                                  تحصيل
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                          ) : null}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           ) : (
             <p className="py-6 text-center text-[13px] text-muted-foreground">لا مبيعات أو ذمم في هذه الدورة.</p>
           )}

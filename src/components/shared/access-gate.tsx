@@ -22,7 +22,7 @@ export function AccessGate({
       </span>
       <h2 className="text-lg font-bold text-foreground">لا تملك صلاحية الوصول</h2>
       <p className="max-w-sm text-[13px] leading-relaxed text-muted-foreground">
-        هذه الصفحة متاحة لأدوار محددة فقط. يمكنك تبديل الدور من صفحة الإعدادات لاختبار النظام.
+        هذه الصفحة متاحة لأدوار محددة فقط. تواصل مع مدير النظام لمنحك الصلاحية المناسبة.
       </p>
     </div>
   );

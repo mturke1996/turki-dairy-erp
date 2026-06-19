@@ -16,7 +16,7 @@ import { PartyDebtsPanel } from '@/components/debts/party-debts-panel';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { CustomerStatementPDF } from '@/features/pdf/CustomerStatementPDF';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
-import { usePermission } from '@/lib/store/use-permission';
+import { usePermission, useCanEdit } from '@/lib/store/use-permission';
 import { computeAging } from '@/lib/domain/calculations';
 import { partyDebts } from '@/lib/domain/debt';
 import { CUSTOMER_TYPE_LABELS, PRICE_TIER_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
@@ -46,6 +46,7 @@ export function CustomerDetailDialog({
   const data = useErpData();
   const d = useDerived();
   const canReceive = usePermission('sales.record');
+  const canEdit = useCanEdit();
   const deletePayment = useErpStore((s) => s.deletePayment);
   const deleteCustomer = useErpStore((s) => s.deleteCustomer);
   const [payOpen, setPayOpen] = useState(false);
@@ -161,10 +162,12 @@ export function CustomerDetailDialog({
                 تسوية ديون ({customerDebts.length})
               </Button>
             ) : null}
-            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
-              <Pencil className="h-4 w-4" />
-              تعديل
-            </Button>
+            {canEdit ? (
+              <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil className="h-4 w-4" />
+                تعديل
+              </Button>
+            ) : null}
             <PartyDeleteButton
               label={`العميل ${customer.entityName}`}
               onConfirm={async () => {

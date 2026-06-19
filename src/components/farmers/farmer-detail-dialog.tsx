@@ -18,7 +18,7 @@ import { FarmerFormDialog } from './farmer-form-dialog';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { FarmerStatementPDF } from '@/features/pdf/FarmerStatementPDF';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
-import { usePermission } from '@/lib/store/use-permission';
+import { usePermission, useCanEdit } from '@/lib/store/use-permission';
 import {
   MILK_SHIFT_LABELS,
   QUALITY_LABELS,
@@ -57,6 +57,7 @@ export function FarmerDetailDialog({
   const data = useErpData();
   const d = useDerived();
   const canPay = usePermission('supply.record');
+  const canEdit = useCanEdit();
   const deletePayment = useErpStore((s) => s.deletePayment);
   const deleteFarmer = useErpStore((s) => s.deleteFarmer);
   const [payOpen, setPayOpen] = useState(false);
@@ -162,10 +163,12 @@ export function FarmerDetailDialog({
                 ديون مسجّلة ({farmerDebts.length})
               </Button>
             ) : null}
-            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
-              <Pencil className="h-4 w-4" />
-              تعديل
-            </Button>
+            {canEdit ? (
+              <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil className="h-4 w-4" />
+                تعديل
+              </Button>
+            ) : null}
             <PartyDeleteButton
               label={`الفلاح ${farmer.fullName}`}
               onConfirm={async () => {

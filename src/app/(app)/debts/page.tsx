@@ -28,6 +28,7 @@ import { EmployeeDetailDialog } from '@/components/employees/employee-detail-dia
 import { DebtFormDialog } from '@/components/debts/debt-form-dialog';
 import { DebtEntriesTable } from '@/components/debts/debt-entries-table';
 import { useDerived, useErpData } from '@/lib/store/use-derived';
+import { useCanEdit } from '@/lib/store/use-permission';
 import { DEBT_PARTY_LABELS } from '@/lib/domain/constants';
 import { filterDebtsByStatus, DEBT_DIRECTION_LABELS, debtRemainingAmount, resolveDebtDirection } from '@/lib/domain/debt';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
@@ -176,6 +177,7 @@ function DebtSection({
 export default function DebtsPage() {
   const d = useDerived();
   const data = useErpData();
+  const canEdit = useCanEdit();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKind>('all');
   const [addOpen, setAddOpen] = useState(false);
@@ -290,10 +292,12 @@ export default function DebtsPage() {
                 />
               )}
             />
-            <Button type="button" className="w-full sm:w-auto" onClick={() => setAddOpen(true)}>
-              <Plus className="h-4 w-4" />
-              تسجيل دين
-            </Button>
+            {canEdit ? (
+              <Button type="button" className="w-full sm:w-auto" onClick={() => setAddOpen(true)}>
+                <Plus className="h-4 w-4" />
+                تسجيل دين
+              </Button>
+            ) : null}
           </div>
         }
       />

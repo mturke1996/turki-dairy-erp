@@ -12,3 +12,8 @@ export function usePermission(permission: Permission): boolean {
   const role = useRole();
   return can(role, permission);
 }
+
+/** «المشاهد» للعرض فقط — كل الأدوار الأخرى يمكنها الإضافة والتعديل والحذف. */
+export function useCanEdit(): boolean {
+  return useRole() !== 'viewer';
+}

@@ -15,7 +15,7 @@ import { EmployeeDirectPayDialog } from './employee-direct-pay-dialog';
 import { PartyDebtsPanel } from '@/components/debts/party-debts-panel';
 import { useErpData, useDerived } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
-import { usePermission } from '@/lib/store/use-permission';
+import { usePermission, useCanEdit } from '@/lib/store/use-permission';
 import {
   CONTRACT_TYPE_LABELS,
   DEPARTMENT_LABELS,
@@ -83,6 +83,7 @@ export function EmployeeDetailDialog({
   const recordEmployeeAdvance = useErpStore((s) => s.recordEmployeeAdvance);
   const payEmployeeSalaryDirect = useErpStore((s) => s.payEmployeeSalaryDirect);
   const canPay = usePermission('payroll.pay');
+  const canEdit = useCanEdit();
 
   const [editOpen, setEditOpen] = useState(false);
   const [advanceOpen, setAdvanceOpen] = useState(false);
@@ -244,10 +245,12 @@ export function EmployeeDetailDialog({
                 سلفة
               </Button>
             ) : null}
-            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
-              <Pencil className="h-4 w-4" />
-              تعديل
-            </Button>
+            {canEdit ? (
+              <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil className="h-4 w-4" />
+                تعديل
+              </Button>
+            ) : null}
             <PartyDeleteButton
               label={`الموظف ${employee.fullName}`}
               onConfirm={async () => {

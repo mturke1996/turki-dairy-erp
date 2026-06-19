@@ -17,6 +17,7 @@ import { FarmerFormDialog } from '@/components/farmers/farmer-form-dialog';
 import { FarmerDetailDialog } from '@/components/farmers/farmer-detail-dialog';
 import { FarmerListCard, FarmerStatusChips } from '@/components/farmers/farmer-list-card';
 import { useDerived } from '@/lib/store/use-derived';
+import { useCanEdit } from '@/lib/store/use-permission';
 import { QUALITY_VARIANT, FARMER_STATUS_LABELS } from '@/lib/domain/constants';
 import type { FarmerStatus } from '@/lib/domain/types';
 
@@ -24,6 +25,7 @@ const STATUS_VARIANT = { active: 'success', suspended: 'warning', inactive: 'neu
 
 export default function FarmersPage() {
   const d = useDerived();
+  const canEdit = useCanEdit();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | FarmerStatus>('all');
   const [addOpen, setAddOpen] = useState(false);
@@ -64,10 +66,12 @@ export default function FarmersPage() {
         title="الفلاحون"
         description="شبكة موردي الحليب الخام — الأرصدة، عمليات الاستلام، وكشوف الحساب."
         actions={
-          <Button type="button" className="w-full sm:w-auto" onClick={() => setAddOpen(true)}>
-            <Plus className="h-4 w-4" />
-            إضافة فلاح
-          </Button>
+          canEdit ? (
+            <Button type="button" className="w-full sm:w-auto" onClick={() => setAddOpen(true)}>
+              <Plus className="h-4 w-4" />
+              إضافة فلاح
+            </Button>
+          ) : undefined
         }
       />
 

@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ROLE_LABELS } from '@/lib/domain/constants';
 import { isAuthRequired } from '@/lib/supabase/config';
 import type { Role } from '@/lib/domain/types';
@@ -30,7 +31,18 @@ interface UserRow {
   created_at: string;
 }
 
-const EMPTY = { name: '', email: '', password: '' };
+/** نوعا الحساب المتاحان عند الإنشاء: صلاحية كاملة أو مشاهد فقط. */
+const CREATE_ROLE_OPTIONS: { value: Role; label: string; hint: string }[] = [
+  { value: 'admin', label: 'صلاحية كاملة', hint: 'إضافة وتعديل كل شيء + الإعدادات وإدارة المستخدمين' },
+  { value: 'viewer', label: 'مشاهد فقط', hint: 'عرض فقط — لا يضيف ولا يعدّل ولا يدخل الإعدادات' },
+];
+
+const EMPTY: { name: string; email: string; password: string; role: Role } = {
+  name: '',
+  email: '',
+  password: '',
+  role: 'admin',
+};
 
 export function UsersPanel() {
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -69,7 +81,7 @@ export function UsersPanel() {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, role: 'admin' }),
+        body: JSON.stringify(form),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? 'فشل الإنشاء');
@@ -149,7 +161,7 @@ export function UsersPanel() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>مستخدم جديد</DialogTitle>
-            <DialogDescription>إنشاء حساب دخول جديد للفريق — يتطلب صلاحية مدير.</DialogDescription>
+            <DialogDescription>إنشاء حساب دخول جديد للفريق — اختر «صلاحية كاملة» أو «مشاهد فقط». يتطلب صلاحية مدير.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -183,6 +195,24 @@ export function UsersPanel() {
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
                 placeholder="6 أحرف على الأقل"
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="user-role">الصلاحية</Label>
+              <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v as Role }))}>
+                <SelectTrigger id="user-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CREATE_ROLE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                {CREATE_ROLE_OPTIONS.find((o) => o.value === form.role)?.hint}
+              </p>
             </div>
           </div>
           <DialogFooter>

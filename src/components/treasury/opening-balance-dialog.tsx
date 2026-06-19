@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Landmark, PiggyBank, Save } from 'lucide-react';
+import { Landmark, Wallet, Save } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -119,7 +119,7 @@ export function OpeningBalanceDialog({
                 <div key={key} className="rounded-xl border border-border bg-canvas-sunken/40 p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className="flex items-center gap-2 text-[13px] font-semibold">
-                      {a.type === 'vault' ? <PiggyBank className="h-4 w-4 text-meadow-600" /> : <Landmark className="h-4 w-4 text-navy-600" />}
+                      {a.type === 'vault' ? <Wallet className="h-4 w-4 text-meadow-600" /> : <Landmark className="h-4 w-4 text-navy-600" />}
                       {a.name}
                     </span>
                     <span className="text-[11px] text-muted-foreground">

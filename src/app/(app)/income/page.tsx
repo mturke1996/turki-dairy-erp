@@ -31,6 +31,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useErpStore } from '@/lib/store/use-erp-store';
 import { useDerived } from '@/lib/store/use-derived';
+import { useCanEdit } from '@/lib/store/use-permission';
 import { accountLabel } from '@/lib/domain/treasury';
 import { TurkiPdfToolbar } from '@/features/pdf/pdf-toolbar';
 import { ExternalIncomePDF } from '@/features/pdf/ExternalIncomePDF';
@@ -43,6 +44,7 @@ export default function IncomePage() {
 
 function IncomeContent() {
   const d = useDerived();
+  const canEdit = useCanEdit();
   const externalIncomes = useErpStore((s) => s.externalIncomes);
   const vaults = useErpStore((s) => s.vaults);
   const banks = useErpStore((s) => s.banks);
@@ -163,15 +165,17 @@ function IncomeContent() {
                 الخزينة
               </Link>
             </Button>
-            <Button type="button" onClick={openNew} disabled={!accounts.length}>
-              <Plus className="h-4 w-4" />
-              تسجيل مدخول
-            </Button>
+            {canEdit ? (
+              <Button type="button" onClick={openNew} disabled={!accounts.length}>
+                <Plus className="h-4 w-4" />
+                تسجيل مدخول
+              </Button>
+            ) : null}
           </div>
         }
       />
 
-      {!accounts.length ? (
+      {!accounts.length && canEdit ? (
         <Card className="border-sun-200 bg-sun-50/50">
           <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[13px]">لا توجد خزنة — أنشئ خزنة رئيسية أولاً.</p>
@@ -232,14 +236,16 @@ function IncomeContent() {
                     </TableCell>
                     <TableCell className="text-[12px]">{formatShortDate(item.date)}</TableCell>
                     <TableCell>
-                      <div className="flex justify-end gap-1">
-                        <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(item)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-rose-600" onClick={() => remove(item)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                      {canEdit ? (
+                        <div className="flex justify-end gap-1">
+                          <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(item)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-rose-600" onClick={() => remove(item)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}

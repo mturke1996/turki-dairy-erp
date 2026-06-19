@@ -22,6 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatTile } from '@/components/shared/stat-tile';
 import { Money, Liters } from '@/components/shared/money';
+import { ProfitInventoryCard } from '@/components/shared/profit-inventory-card';
 import { EmptyState } from '@/components/shared/empty-state';
 import { NetPositionCard } from '@/components/dashboard/net-position-card';
 import {
@@ -95,6 +96,12 @@ export default function ReportsPage() {
   const pnl = useMemo(() => pnlFromSummaries(scopedSummaries), [scopedSummaries]);
   const operational = scopedSummaries.length === 1 ? scopedSummaries[0] : null;
 
+  const avgSellPrice = useMemo(() => {
+    const qty = d.sessionSummaries.reduce((acc, x) => acc + x.salesQty, 0);
+    const revenue = d.sessionSummaries.reduce((acc, x) => acc + x.salesRevenue, 0);
+    return qty > 0 ? revenue / qty : data.settings.defaultSellPrice;
+  }, [d.sessionSummaries, data.settings.defaultSellPrice]);
+
   const trialBalance = useMemo(() => {
     const journals =
       periodId === 'all' ? d.journals : d.journals.filter((j) => j.sessionId === periodId);
@@ -161,7 +168,7 @@ export default function ReportsPage() {
     return (
       <div className="space-y-5 sm:space-y-6">
         <PageHeader eyebrow="النظام" title="التقارير" description="التحليلات المالية والمحاسبية." />
-        <EmptyState icon={Scale} title="صلاحية غير كافية" description="هذه التقارير متاحة للمدير والمحاسب والمطّلع فقط." />
+        <EmptyState icon={Scale} title="صلاحية غير كافية" description="هذه التقارير متاحة للمدير والمحاسب والمشاهد فقط." />
       </div>
     );
   }
@@ -331,6 +338,16 @@ export default function ReportsPage() {
               ) : null}
             </CardContent>
           </Card>
+
+          <ProfitInventoryCard
+            className="mt-4"
+            profitLabel="صافي الربح"
+            profit={pnl.netProfit}
+            stockQty={d.totals.currentStock}
+            stockCostValue={d.totals.inventoryValue}
+            sellPrice={avgSellPrice}
+            description="المخزون لحظة حالية (كل الدورات) — مفصول عن ربح الفترة المختارة"
+          />
         </TabsContent>
 
         <TabsContent value="trial">

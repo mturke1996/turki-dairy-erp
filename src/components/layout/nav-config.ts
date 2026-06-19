@@ -136,8 +136,9 @@ export const NAV_ITEMS: NavItem[] = [
     href: '/settings',
     label: 'الإعدادات',
     icon: Settings,
-    description: 'الأسعار والتنبيهات',
+    description: 'المستخدمون وقاعدة البيانات',
     group: 'system',
+    permission: 'users.manage',
   },
 ];
 

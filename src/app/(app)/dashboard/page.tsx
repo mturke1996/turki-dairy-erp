@@ -51,6 +51,10 @@ export default function DashboardPage() {
   const sessionLabel = d.activeSession?.label ?? 'الفترة الحالية';
   const hasDangerAlerts = d.alerts.some((a) => a.level === 'danger');
 
+  const soldQty = d.sessionSummaries.reduce((acc, x) => acc + x.salesQty, 0);
+  const soldRevenue = d.sessionSummaries.reduce((acc, x) => acc + x.salesRevenue, 0);
+  const avgSellPrice = soldQty > 0 ? soldRevenue / soldQty : data.settings.defaultSellPrice;
+
   const supplyBySupplier = new Map<string, number>();
   for (const sup of data.supplies.filter((x) => x.sessionId === d.activeSession?.id)) {
     supplyBySupplier.set(sup.farmerId, (supplyBySupplier.get(sup.farmerId) ?? 0) + sup.quantity);
@@ -95,7 +99,13 @@ export default function DashboardPage() {
 
       {/* ملخص الفترة مبكراً على الجوال */}
       <div className="lg:hidden">
-        <SessionSnapshotCard sessionLabel={sessionLabel} summary={s} />
+        <SessionSnapshotCard
+          sessionLabel={sessionLabel}
+          summary={s}
+          currentStock={d.totals.currentStock}
+          inventoryValue={d.totals.inventoryValue}
+          sellPrice={avgSellPrice}
+        />
       </div>
 
       {hasDangerAlerts ? <AlertsBanner alerts={d.alerts} /> : null}
@@ -257,7 +267,13 @@ export default function DashboardPage() {
       </div>
 
       <div className="hidden lg:block">
-        <SessionSnapshotCard sessionLabel={sessionLabel} summary={s} />
+        <SessionSnapshotCard
+          sessionLabel={sessionLabel}
+          summary={s}
+          currentStock={d.totals.currentStock}
+          inventoryValue={d.totals.inventoryValue}
+          sellPrice={avgSellPrice}
+        />
       </div>
     </div>
   );

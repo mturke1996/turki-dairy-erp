@@ -22,12 +22,14 @@ import {
   type CustomerQuickFilter,
 } from '@/components/customers/customer-list-card';
 import { useDerived } from '@/lib/store/use-derived';
+import { useCanEdit } from '@/lib/store/use-permission';
 import { CUSTOMER_TYPE_LABELS } from '@/lib/domain/constants';
 import type { CustomerType } from '@/lib/domain/types';
 import { formatNumber } from '@/lib/utils';
 
 export default function CustomersPage() {
   const d = useDerived();
+  const canEdit = useCanEdit();
   const [query, setQuery] = useState('');
   const [type, setType] = useState<'all' | CustomerType>('all');
   const [quick, setQuick] = useState<CustomerQuickFilter>('all');
@@ -78,10 +80,12 @@ export default function CustomersPage() {
         title="العملاء"
         description="المصانع والموزّعون وتجار التجزئة — الديون، أعمار الديون، وكشوف الحساب."
         actions={
-          <Button type="button" className="w-full sm:w-auto" onClick={() => setAddOpen(true)}>
-            <Plus className="h-4 w-4" />
-            إضافة عميل
-          </Button>
+          canEdit ? (
+            <Button type="button" className="w-full sm:w-auto" onClick={() => setAddOpen(true)}>
+              <Plus className="h-4 w-4" />
+              إضافة عميل
+            </Button>
+          ) : undefined
         }
       />
 

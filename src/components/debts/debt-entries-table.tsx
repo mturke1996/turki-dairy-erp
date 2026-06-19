@@ -10,6 +10,7 @@ import { Money } from '@/components/shared/money';
 import { DebtFormDialog } from '@/components/debts/debt-form-dialog';
 import { DebtSettleDialog } from '@/components/debts/debt-settle-dialog';
 import { useErpStore } from '@/lib/store/use-erp-store';
+import { useCanEdit } from '@/lib/store/use-permission';
 import { DEBT_PARTY_LABELS } from '@/lib/domain/constants';
 import {
   DEBT_DIRECTION_LABELS,
@@ -107,6 +108,7 @@ export function DebtEntriesTable({
   emptyMessage?: string;
 }) {
   const deleteDebtEntry = useErpStore((s) => s.deleteDebtEntry);
+  const canEdit = useCanEdit();
   const farmers = useErpStore((s) => s.farmers);
   const customers = useErpStore((s) => s.customers);
   const employees = useErpStore((s) => s.employees);
@@ -221,15 +223,17 @@ export function DebtEntriesTable({
                   <span className="mr-2 text-meadow-700">· تُسَدَّد {formatShortDate(e.settledAt)}</span>
                 ) : null}
               </p>
-              <DebtEntryActions
-                entry={e}
-                settled={settled}
-                deletingId={deletingId}
-                layout="stack"
-                onSettle={() => setSettleEntry(e)}
-                onEdit={() => setEditEntry(e)}
-                onRemove={() => remove(e)}
-              />
+              {canEdit ? (
+                <DebtEntryActions
+                  entry={e}
+                  settled={settled}
+                  deletingId={deletingId}
+                  layout="stack"
+                  onSettle={() => setSettleEntry(e)}
+                  onEdit={() => setEditEntry(e)}
+                  onRemove={() => remove(e)}
+                />
+              ) : null}
             </article>
           );
         })}
@@ -268,15 +272,17 @@ export function DebtEntriesTable({
                     ) : null}
                   </TableCell>
                   <TableCell>
-                    <DebtEntryActions
-                      entry={e}
-                      settled={settled}
-                      deletingId={deletingId}
-                      layout="row"
-                      onSettle={() => setSettleEntry(e)}
-                      onEdit={() => setEditEntry(e)}
-                      onRemove={() => remove(e)}
-                    />
+                    {canEdit ? (
+                      <DebtEntryActions
+                        entry={e}
+                        settled={settled}
+                        deletingId={deletingId}
+                        layout="row"
+                        onSettle={() => setSettleEntry(e)}
+                        onEdit={() => setEditEntry(e)}
+                        onRemove={() => remove(e)}
+                      />
+                    ) : null}
                   </TableCell>
                 </TableRow>
               );

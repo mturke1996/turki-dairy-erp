@@ -7,8 +7,10 @@ import {
   CalendarRange,
   ChevronLeft,
   Droplets,
+  Info,
   Trash2,
   TrendingUp,
+  Warehouse,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Money, Liters } from '@/components/shared/money';
@@ -18,11 +20,22 @@ import { formatNumber } from '@/lib/utils';
 export function SessionSnapshotCard({
   sessionLabel,
   summary,
+  currentStock,
+  inventoryValue,
+  sellPrice,
 }: {
   sessionLabel: string;
   summary: SessionSummary | undefined;
+  /** المخزون الفعلي الحالي (لتر) — يُرحّل للدورة التالية */
+  currentStock: number;
+  /** قيمة المخزون بسعر التكلفة (المتوسط المرجّح) */
+  inventoryValue: number;
+  /** متوسط سعر البيع الفعلي لتقدير قيمة المخزون بسعر البيع */
+  sellPrice: number;
 }) {
   const s = summary;
+  const netProfit = s?.netProfit ?? 0;
+  const stockSellValue = currentStock * sellPrice;
 
   const rows = [
     {
@@ -58,8 +71,8 @@ export function SessionSnapshotCard({
     },
     {
       icon: Droplets,
-      label: 'رصيد المخزون',
-      primary: <Liters value={s?.closingStock ?? 0} decimals={0} className="text-[13px] font-bold" />,
+      label: 'رصيد المخزون الحالي',
+      primary: <Liters value={currentStock} decimals={0} className="text-[13px] font-bold" />,
       secondary: (
         <span className="text-[11px] text-muted-foreground">
           افتتاحي <Liters value={s?.openingStock ?? 0} decimals={0} className="inline text-[11px]" />
@@ -117,6 +130,41 @@ export function SessionSnapshotCard({
             <Money value={s!.wasteLosses} decimals={0} className="font-bold text-rose-700" />
           </div>
         ) : null}
+
+        {/* قيمة المخزون منفصلة عن الربح + الإجمالي التقديري */}
+        <div className="rounded-xl border border-dashed border-meadow-300 bg-meadow-50/40 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2 text-[12px] font-semibold text-meadow-800">
+              <Warehouse className="h-4 w-4" />
+              قيمة الحليب في المخزون
+            </span>
+            <Liters value={currentStock} decimals={0} className="text-[12px] font-semibold" />
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-[11.5px]">
+            <div className="rounded-lg bg-card/70 px-2.5 py-1.5">
+              <p className="text-muted-foreground">بسعر التكلفة</p>
+              <Money value={inventoryValue} decimals={0} className="font-bold" />
+            </div>
+            <div className="rounded-lg bg-card/70 px-2.5 py-1.5">
+              <p className="text-muted-foreground">بسعر البيع (متوسط فعلي)</p>
+              <Money value={stockSellValue} decimals={0} className="font-bold text-meadow-700" />
+            </div>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 border-t border-meadow-200/70 pt-2 text-[11.5px]">
+            <div>
+              <p className="text-muted-foreground">صافي الربح + مخزون (تكلفة)</p>
+              <Money value={netProfit + inventoryValue} decimals={0} className="text-[13px] font-bold" />
+            </div>
+            <div>
+              <p className="text-muted-foreground">+ مخزون (بسعر البيع)</p>
+              <Money value={netProfit + stockSellValue} decimals={0} className="text-[13px] font-bold text-meadow-700" />
+            </div>
+          </div>
+          <p className="mt-2 flex items-start gap-1.5 text-[10.5px] leading-relaxed text-muted-foreground">
+            <Info className="mt-0.5 h-3 w-3 shrink-0" />
+            قيمة المخزون أصل غير محقّق (لم يُبَع بعد) ومنفصلة عن الربح المحقّق — الإجمالي تقديري.
+          </p>
+        </div>
 
         <div className="flex flex-wrap gap-2 border-t border-border pt-3">
           <Link
