@@ -1,6 +1,31 @@
-/** قراءة متغيرات Supabase مع trim وأسماء بديلة (Vercel / Supabase integration). */
+/** قراءة متغيرات Supabase — NEXT_PUBLIC_* يجب قراءتها بأسماء ثابتة ليعمل inlining في Next.js. */
 
-function readEnv(...names: string[]): string | undefined {
+function pickFirst(...values: (string | undefined)[]): string | undefined {
+  for (const raw of values) {
+    if (raw == null) continue;
+    const trimmed = raw.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return undefined;
+}
+
+/** أسماء ثابتة — لا تستخدم process.env[name] للمتغيرات العامة (يكسر Vercel/المتصفح). */
+export function getSupabaseUrl(): string | undefined {
+  return pickFirst(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_URL,
+  );
+}
+
+export function getSupabasePublishableKey(): string | undefined {
+  return pickFirst(
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    process.env.SUPABASE_ANON_KEY,
+  );
+}
+
+function readServerEnv(...names: string[]): string | undefined {
   for (const name of names) {
     const raw = process.env[name];
     if (raw == null) continue;
@@ -10,21 +35,9 @@ function readEnv(...names: string[]): string | undefined {
   return undefined;
 }
 
-export function getSupabaseUrl(): string | undefined {
-  return readEnv('NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_URL');
-}
-
-export function getSupabasePublishableKey(): string | undefined {
-  return readEnv(
-    'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
-    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-    'SUPABASE_ANON_KEY',
-  );
-}
-
 /** مفتاح service role — خادم فقط، لا تضعه في NEXT_PUBLIC_. */
 export function getSupabaseServiceRoleKey(): string | undefined {
-  return readEnv('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SERVICE_KEY');
+  return readServerEnv('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SERVICE_KEY');
 }
 
 export function getAdminClientConfigStatus(): { ok: true } | { ok: false; missing: string[] } {
