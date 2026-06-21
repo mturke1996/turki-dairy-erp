@@ -87,6 +87,14 @@ export async function signInWithPassword(email: string, password: string): Promi
 
   const db = await initDatabase();
   if (!db.ok) throw new AuthError(db.error ?? 'تعذّر تحميل البيانات من قاعدة البيانات');
+
+  const name = useErpStore.getState().auth?.name ?? email.split('@')[0];
+  void useErpStore.getState().recordAudit({
+    entityType: 'auth',
+    entityId: user.id,
+    action: 'login',
+    summary: `تسجيل دخول: ${name}`,
+  });
 }
 
 export async function signOut(): Promise<void> {

@@ -18,6 +18,7 @@ import { AUDIT_ACTION_LABELS } from '@/lib/domain/constants';
 import { useCycle } from '@/lib/store/use-cycle';
 import { useDerived, useErpData } from '@/lib/store/use-derived';
 import { useErpStore } from '@/lib/store/use-erp-store';
+import { usePermission } from '@/lib/store/use-permission';
 import { cn, formatNumber } from '@/lib/utils';
 
 function sameDay(value: string, date: Date): boolean {
@@ -41,6 +42,7 @@ export function OperationsCommandCenter() {
   const d = useDerived();
   const cycle = useCycle();
   const logs = useErpStore((s) => s.auditLogs);
+  const canViewAudit = usePermission('audit.view');
 
   const today = useMemo(() => {
     const now = new Date();
@@ -89,13 +91,17 @@ export function OperationsCommandCenter() {
       hint: `اليوم ${cycle.progress.daysElapsed} من ${cycle.progress.daysTotal}`,
       tone: 'sun' as const,
     },
-    {
-      icon: History,
-      label: 'نشاط اليوم',
-      value: formatNumber(today.actions),
-      hint: 'عملية موثّقة',
-      tone: 'rose' as const,
-    },
+    ...(canViewAudit
+      ? [
+          {
+            icon: History,
+            label: 'نشاط اليوم',
+            value: formatNumber(today.actions),
+            hint: 'عملية موثّقة',
+            tone: 'rose' as const,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -113,8 +119,13 @@ export function OperationsCommandCenter() {
               </p>
             </div>
             <Link
-              href="/audit"
-              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors active:bg-canvas-sunken sm:rounded-full sm:px-2.5 sm:text-[11.5px]"
+              href={canViewAudit ? '/audit' : '/dashboard'}
+              className={cn(
+                'inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors active:bg-canvas-sunken sm:rounded-full sm:px-2.5 sm:text-[11.5px]',
+                !canViewAudit && 'pointer-events-none opacity-0',
+              )}
+              aria-hidden={!canViewAudit}
+              tabIndex={canViewAudit ? 0 : -1}
             >
               السجل
               <ChevronLeft className="h-3.5 w-3.5" />
@@ -167,37 +178,39 @@ export function OperationsCommandCenter() {
         </div>
       </div>
 
-      <div className="hidden rounded-2xl border border-border bg-card p-4 lg:block lg:p-5">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-[15px] font-bold text-foreground">آخر ما حدث</h3>
-          <History className="h-4.5 w-4.5 text-muted-foreground" />
-        </div>
+      {canViewAudit ? (
+        <div className="hidden rounded-2xl border border-border bg-card p-4 lg:block lg:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-[15px] font-bold text-foreground">آخر ما حدث</h3>
+            <History className="h-4.5 w-4.5 text-muted-foreground" />
+          </div>
 
-        <div className="mt-3 space-y-2">
-          {latest.length ? (
-            latest.map((log) => (
-              <Link
-                key={log.id}
-                href="/audit"
-                className="group flex items-start gap-2.5 rounded-xl border border-border/70 bg-canvas-sunken/45 p-2.5 transition-colors hover:bg-canvas-sunken"
-              >
-                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-meadow-500 ring-4 ring-meadow-100" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12.5px] font-semibold text-foreground">{log.summary}</span>
-                  <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                    {AUDIT_ACTION_LABELS[log.action]} · <span dir="ltr">{timeOnly(log.performedAt)}</span>
+          <div className="mt-3 space-y-2">
+            {latest.length ? (
+              latest.map((log) => (
+                <Link
+                  key={log.id}
+                  href="/audit"
+                  className="group flex items-start gap-2.5 rounded-xl border border-border/70 bg-canvas-sunken/45 p-2.5 transition-colors hover:bg-canvas-sunken"
+                >
+                  <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-meadow-500 ring-4 ring-meadow-100" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12.5px] font-semibold text-foreground">{log.summary}</span>
+                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                      {AUDIT_ACTION_LABELS[log.action]} · <span dir="ltr">{timeOnly(log.performedAt)}</span>
+                    </span>
                   </span>
-                </span>
-                <ChevronLeft className="h-4 w-4 text-muted-foreground transition-transform group-hover:-translate-x-0.5" />
-              </Link>
-            ))
-          ) : (
-            <div className="rounded-xl border border-dashed border-border p-4 text-center text-[12px] text-muted-foreground">
-              سيظهر هنا آخر نشاط بعد أول عملية.
-            </div>
-          )}
+                  <ChevronLeft className="h-4 w-4 text-muted-foreground transition-transform group-hover:-translate-x-0.5" />
+                </Link>
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-border p-4 text-center text-[12px] text-muted-foreground">
+                سيظهر هنا آخر نشاط بعد أول عملية.
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }

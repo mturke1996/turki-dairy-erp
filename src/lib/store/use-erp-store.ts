@@ -152,6 +152,13 @@ interface ErpState {
   // auth
   login: (user?: Partial<AuthUser>) => void;
   logout: () => void;
+  recordAudit: (input: {
+    entityType: string;
+    entityId: string;
+    action: AuditAction;
+    summary: string;
+    reason?: string;
+  }) => Promise<MutationResult>;
 
   // sessions
   setActiveSession: (id: string) => Promise<MutationResult>;
@@ -852,6 +859,23 @@ export const useErpStore = create<ErpState>()((set, get) => ({
 
   login: (user) => set({ auth: { ...DEFAULT_USER, ...user } }),
   logout: () => set({ auth: null }),
+
+  recordAudit: async (input) => {
+    const state = get();
+    const audit = makeAudit(
+      state,
+      input.entityType,
+      input.entityId,
+      input.action,
+      input.summary,
+      input.reason,
+    );
+    const res = await mutateWithDb(
+      () => set((s) => ({ auditLogs: [audit, ...s.auditLogs] })),
+      [],
+    );
+    return res.ok ? { ok: true, id: audit.id } : res;
+  },
 
   setActiveSession: async (id) => {
     const state = get();
@@ -3992,6 +4016,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
   },
 
   addExpenseCategory: async (input) => {
+    const state = get();
     const cat: ExpenseCategory = {
       id: uid("cat-"),
       name: input.name.trim(),
@@ -4000,8 +4025,19 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       isRecurring: input.isRecurring ?? false,
     };
     if (!cat.name) return { ok: false, error: "أدخل اسم التصنيف." };
+    const audit = makeAudit(
+      state,
+      "expense_category",
+      cat.id,
+      "create",
+      `إضافة تصنيف مصروف: ${cat.name}`,
+    );
     const res = await mutateWithDb(
-      () => set((s) => ({ expenseCategories: [...s.expenseCategories, cat] })),
+      () =>
+        set((s) => ({
+          expenseCategories: [...s.expenseCategories, cat],
+          auditLogs: [audit, ...s.auditLogs],
+        })),
       [
         {
           table: "expense_categories",
@@ -4017,12 +4053,20 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const existing = state.expenseCategories.find((c) => c.id === id);
     if (!existing) return { ok: false, error: "التصنيف غير موجود." };
     const updated = { ...existing, ...patch };
+    const audit = makeAudit(
+      state,
+      "expense_category",
+      id,
+      "update",
+      `تعديل تصنيف مصروف: ${updated.name}`,
+    );
     const res = await mutateWithDb(
       () =>
         set((s) => ({
           expenseCategories: s.expenseCategories.map((c) =>
             c.id === id ? updated : c,
           ),
+          auditLogs: [audit, ...s.auditLogs],
         })),
       [
         {
@@ -4038,10 +4082,19 @@ export const useErpStore = create<ErpState>()((set, get) => ({
     const state = get();
     if (state.expenses.some((e) => e.categoryId === id))
       return { ok: false, error: "لا يمكن حذف تصنيف مرتبط بمصاريف." };
+    const existing = state.expenseCategories.find((c) => c.id === id);
+    const audit = makeAudit(
+      state,
+      "expense_category",
+      id,
+      "delete",
+      `حذف تصنيف مصروف: ${existing?.name ?? id}`,
+    );
     const res = await mutateWithDb(
       () =>
         set((s) => ({
           expenseCategories: s.expenseCategories.filter((c) => c.id !== id),
+          auditLogs: [audit, ...s.auditLogs],
         })),
       [{ table: "expense_categories", deletes: [id] }],
     );
@@ -4136,7 +4189,14 @@ export const useErpStore = create<ErpState>()((set, get) => ({
           description: updated.description,
           date: updated.date,
         }
-      : null;
+        : null;
+    const audit = makeAudit(
+      state,
+      "income",
+      id,
+      "update",
+      `تعديل مدخول خارجي: ${updated.description}`,
+    );
     const res = await mutateWithDb(
       () =>
         set((s) => ({
@@ -4148,6 +4208,7 @@ export const useErpStore = create<ErpState>()((set, get) => ({
                 m.id === updatedCm.id ? updatedCm : m,
               )
             : s.cashMovements,
+          auditLogs: [audit, ...s.auditLogs],
         })),
       [
         {

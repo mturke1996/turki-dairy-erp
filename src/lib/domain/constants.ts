@@ -135,6 +135,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 export type Permission =
   | 'users.manage'
+  | 'audit.view'
   | 'sessions.close'
   | 'supply.record'
   | 'sales.record'
@@ -149,6 +150,7 @@ export type Permission =
 
 export const PERMISSION_MATRIX: Record<Permission, Role[]> = {
   'users.manage': ['admin'],
+  'audit.view': ['admin'],
   'sessions.close': ['admin', 'accountant'],
   'supply.record': ['admin', 'accountant', 'operator'],
   'sales.record': ['admin', 'accountant', 'operator'],

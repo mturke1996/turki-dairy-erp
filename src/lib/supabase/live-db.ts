@@ -387,11 +387,29 @@ export async function persistMutation(
   ops: { table: string; rows?: Record<string, unknown>[]; deletes?: string[] }[],
   update: () => void,
 ): Promise<void> {
+  const prevAuditIds = new Set(useErpStore.getState().auditLogs.map((a) => a.id));
+
   for (const op of ops) {
     if (op.rows?.length) await upsertRows(op.table, op.rows);
     if (op.deletes?.length) await deleteRows(op.table, op.deletes);
   }
-  applyLocalDbWrite(update);
+
+  applyingRemote = true;
+  try {
+    update();
+  } finally {
+    applyingRemote = false;
+  }
+
+  const newAudits = useErpStore
+    .getState()
+    .auditLogs.filter((a) => !prevAuditIds.has(a.id));
+
+  if (newAudits.length) {
+    await upsertRows('audit_logs', newAudits as unknown as Record<string, unknown>[]);
+  }
+
+  prevSnapshot = snapshotFromStore();
 }
 
 /** @deprecated */

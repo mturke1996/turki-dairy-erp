@@ -131,6 +131,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: History,
     description: 'كل حركة موثّقة',
     group: 'system',
+    permission: 'audit.view',
   },
   {
     href: '/settings',

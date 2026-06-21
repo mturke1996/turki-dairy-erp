@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { usePermission } from '@/lib/store/use-permission';
+import { useErpStore } from '@/lib/store/use-erp-store';
 import {
   renderPdfBlob,
   savePdfBlob,
@@ -49,6 +50,16 @@ export function TurkiPdfToolbar({
 
   const canShare = canSharePdfFiles();
 
+  function logPdfExport(mode: 'open' | 'download' | 'share') {
+    const labels = { open: 'فتح', download: 'تحميل', share: 'مشاركة' };
+    void useErpStore.getState().recordAudit({
+      entityType: 'report',
+      entityId: fileName,
+      action: 'export',
+      summary: `تصدير PDF (${labels[mode]}): ${fileName}`,
+    });
+  }
+
   const revokePreviewUrl = useCallback(() => {
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
@@ -90,9 +101,11 @@ export function TurkiPdfToolbar({
         setPreviewUrl(buildPdfViewerUrl(url));
         setPreviewOpen(true);
         toast.success('تم تجهيز PDF للعرض', { id });
+        logPdfExport('open');
       } else {
         openPdfInNewTab(blob);
         toast.success('تم فتح PDF', { id });
+        logPdfExport('open');
       }
     } catch (e) {
       console.error('[PDF]', e);
@@ -116,6 +129,7 @@ export function TurkiPdfToolbar({
       const blob = await ensureBlob();
       const mode = await savePdfBlob(blob, fileName);
       toast.success(mode === 'share' ? 'اختر «حفظ في الملفات»' : 'تم تنزيل الملف', { id });
+      logPdfExport(mode === 'share' ? 'share' : 'download');
     } catch (e) {
       console.error(e);
       toast.error('تعذّر تنزيل PDF', { id, description: e instanceof Error ? e.message : undefined });
@@ -133,9 +147,11 @@ export function TurkiPdfToolbar({
       const mode = await savePdfBlob(blob, fileName);
       if (mode === 'share') {
         toast.success('تمت المشاركة', { id });
+        logPdfExport('share');
       } else {
         openPdfInNewTab(blob);
         toast.success('تم فتح PDF', { id });
+        logPdfExport('open');
       }
     } catch (e) {
       if (!(e instanceof Error && e.name === 'AbortError')) {
