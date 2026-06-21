@@ -4,7 +4,7 @@ import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell, PdfSignatureStrip } from './ReportShell';
 import { ar } from './arabicPDF';
 import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
-import { PdfMoneyText, PdfInfoGrid, pdfFmtDate, pdfFmtLiters, pdfFmtMoneyLibyan } from './pdfBrandKit';
+import { PdfMoneyText, PdfInfoGrid, pdfFmtDate, pdfFmtMoneyLibyan } from './pdfBrandKit';
 import { PdfSectionTitle, PdfKeepTogether, PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 import { MILK_SHIFT_LABELS, QUALITY_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import type { FarmerStats } from '@/lib/domain/calculations';
@@ -48,7 +48,7 @@ export function FarmerStatementPDF({ farmer, supplies, payments, sessionLabel }:
       metaCells={[
         { label: 'الفلاح', value: farmer.fullName },
         { label: 'الكود', value: farmer.code, valueDirection: 'ltr' },
-        { label: 'إجمالي اللترات', value: pdfFmtLiters(farmer.totalSupplied, 0) },
+        { label: 'إجمالي اللترات', litersAmount: farmer.totalSupplied },
         { label: 'الدين', moneyAmount: farmer.creditBalance },
       ]}
     >

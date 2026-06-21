@@ -4,7 +4,7 @@ import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell, PdfSignatureStrip } from './ReportShell';
 import { ar } from './arabicPDF';
 import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
-import { PdfMoneyText, PdfInfoGrid, pdfFmtNum, pdfFmtDate, pdfFmtLiters, pdfFmtMoneyLibyan } from './pdfBrandKit';
+import { PdfMoneyText, PdfInfoGrid, pdfFmtNum, pdfFmtDate, pdfFmtMoneyLibyan } from './pdfBrandKit';
 import { PdfSectionTitle, PdfKeepTogether, PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 import { CUSTOMER_TYPE_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/domain/constants';
 import type { AgingBuckets, CustomerStats } from '@/lib/domain/calculations';
@@ -53,7 +53,7 @@ export function CustomerStatementPDF({ customer, sales, payments, aging, session
       metaCells={[
         { label: 'العميل', value: customer.entityName },
         { label: 'الكود', value: customer.code, valueDirection: 'ltr' },
-        { label: 'إجمالي المشتريات', value: pdfFmtLiters(customer.totalPurchased, 0) },
+        { label: 'إجمالي المشتريات', litersAmount: customer.totalPurchased },
         { label: 'الدين', moneyAmount: customer.outstanding },
       ]}
     >

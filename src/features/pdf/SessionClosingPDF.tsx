@@ -4,7 +4,7 @@ import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar, pdfDisplayValue } from './arabicPDF';
 import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
-import { PdfMoneyText, PdfLitersText, pdfFmtNum, pdfFmtLiters } from './pdfBrandKit';
+import { PdfMoneyText, PdfLitersText, pdfFmtNum, LITERS_UNIT_LABEL } from './pdfBrandKit';
 import { PdfSectionTitle, PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 import type {
   SessionClosingReportProps,
@@ -400,7 +400,7 @@ function Stat({
 }: {
   title: string;
   value?: string;
-  sub?: string;
+  sub?: React.ReactNode;
   color?: string;
   moneyAmount?: number;
 }) {
@@ -416,7 +416,11 @@ function Stat({
           {pdfDisplayValue(value ?? '')}
         </Text>
       )}
-      {sub ? <Text style={s.statSub}>{ar(sub)}</Text> : null}
+      {sub ? (
+        <View style={{ marginTop: 4, alignItems: 'flex-end' }}>
+          {typeof sub === 'string' ? <Text style={s.statSub}>{ar(sub)}</Text> : sub}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -476,10 +480,24 @@ function EquationRow({
   );
 }
 
-function MilkStockPanel({ summary }: { summary: SessionSummary }) {
-  const { openingStock, supplyQty, salesQty, closingStock } = summary;
-  const adjustment = closingStock - openingStock - supplyQty + salesQty;
-  const netChange = closingStock - openingStock;
+function PdfTdLiters({ flex, liters }: { flex: number; liters: number }) {
+  return (
+    <View style={{ flex, alignItems: 'center', justifyContent: 'center' }}>
+      <PdfLitersText liters={liters} size="sm" />
+    </View>
+  );
+}
+
+function MilkStockPanel({
+  summary,
+  currentStock,
+}: {
+  summary: SessionSummary;
+  currentStock: number;
+}) {
+  const { openingStock, supplyQty, salesQty } = summary;
+  const adjustment = currentStock - openingStock - supplyQty + salesQty;
+  const netChange = currentStock - openingStock;
   const netPositive = netChange >= 0;
 
   return (
@@ -525,7 +543,7 @@ function MilkStockPanel({ summary }: { summary: SessionSummary }) {
         <View style={s.flowCellHighlight}>
           <Text style={s.flowOp}> </Text>
           <Text style={[s.flowLabel, { color: PDF.primary, fontWeight: 'bold' }]}>{ar('حليب متبقٍ')}</Text>
-          <PdfLitersText liters={closingStock} size="lg" color={PDF.sun} />
+          <PdfLitersText liters={currentStock} size="lg" color={PDF.sun} />
         </View>
       </View>
       <View style={s.equationBlock}>
@@ -535,7 +553,77 @@ function MilkStockPanel({ summary }: { summary: SessionSummary }) {
         {Math.abs(adjustment) > 0.01 ? (
           <EquationRow sign={adjustment >= 0 ? '+' : '−'} label="تعديلات" liters={Math.abs(adjustment)} />
         ) : null}
-        <EquationRow label="المتبقي — رصيد ختامي" liters={closingStock} strong />
+        <EquationRow label="المتبقي — يُرحَّل للدورة التالية" liters={currentStock} strong />
+      </View>
+    </View>
+  );
+}
+
+function ProfitInventoryPanel({
+  summary,
+  inventorySnapshot,
+}: {
+  summary: SessionSummary;
+  inventorySnapshot: SessionClosingProps['inventorySnapshot'];
+}) {
+  const totalCost = summary.netProfit + inventorySnapshot.inventoryCostValue;
+  const totalSell = summary.netProfit + inventorySnapshot.inventorySellValue;
+
+  return (
+    <View style={s.milkPanel} wrap={false}>
+      <View style={s.milkPanelHeader}>
+        <Text style={s.milkPanelTitle}>{ar('الربح + قيمة المخزون')}</Text>
+      </View>
+      <View style={s.pnlRow}>
+        <Text style={s.pnlLabel}>{ar('صافي الربح المحقّق')}</Text>
+        <PdfMoneyText
+          amount={summary.netProfit}
+          size="md"
+          color={summary.netProfit < 0 ? PDF.danger : PDF.logoGreen}
+        />
+      </View>
+      <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
+        <Text style={s.tableSectionNote}>
+          {ar('قيمة الحليب في المخزون — أصل غير محقّق (لم يُبَع بعد)')}
+        </Text>
+        <View style={{ direction: 'ltr', flexDirection: 'row-reverse', gap: 8, marginTop: 6 }}>
+          <View style={{ flex: 1, borderWidth: 0.5, borderColor: PDF.border, padding: 8, alignItems: 'center' }}>
+            <Text style={s.carryLabel}>{ar('بسعر التكلفة')}</Text>
+            <PdfMoneyText amount={inventorySnapshot.inventoryCostValue} size="sm" />
+            <View style={{ flexDirection: 'row', direction: 'ltr', alignItems: 'center', gap: 4, marginTop: 4 }}>
+              <PdfMoneyText amount={inventorySnapshot.wac} size="sm" decimals={3} />
+              <Text style={[s.carryLabel, { marginTop: 0 }]}>/ {LITERS_UNIT_LABEL}</Text>
+            </View>
+          </View>
+          <View style={{ flex: 1, borderWidth: 0.5, borderColor: PDF.border, padding: 8, alignItems: 'center' }}>
+            <Text style={s.carryLabel}>{ar('بسعر البيع الفعلي')}</Text>
+            <PdfMoneyText amount={inventorySnapshot.inventorySellValue} size="sm" color={PDF.logoGreen} />
+            <PdfLitersText liters={inventorySnapshot.currentStock} size="sm" color={PDF.muted} />
+          </View>
+        </View>
+        <View
+          style={{
+            direction: 'ltr',
+            flexDirection: 'row-reverse',
+            gap: 8,
+            marginTop: 8,
+            borderTopWidth: 0.5,
+            borderTopColor: PDF.border,
+            paddingTop: 8,
+          }}
+        >
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={s.carryLabel}>{ar('إجمالي تقديري (+ مخزون بالتكلفة)')}</Text>
+            <PdfMoneyText amount={totalCost} size="md" />
+          </View>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={s.carryLabel}>{ar('إجمالي تقديري (+ مخزون بالبيع)')}</Text>
+            <PdfMoneyText amount={totalSell} size="md" color={PDF.logoGreen} />
+          </View>
+        </View>
+        <Text style={[s.tableSectionNote, { marginTop: 8 }]}>
+          {ar('الربح محقّق من العمليات؛ قيمة المخزون تقديرية منفصلة — لا تُدمَج في قائمة الدخل.')}
+        </Text>
       </View>
     </View>
   );
@@ -650,9 +738,7 @@ function FarmerSettlementTable({ rows }: { rows: SessionClosingFarmerRow[] }) {
           <PdfTd flex={2} bold>
             {r.name}
           </PdfTd>
-          <PdfTd flex={0.9} kind="num">
-            {pdfFmtLiters(r.suppliedQty, 0)}
-          </PdfTd>
+          <PdfTdLiters flex={0.9} liters={r.suppliedQty} />
           <PdfTdMoney flex={1.1} amount={r.obligation} decimals={0} />
           <PdfTdMoney flex={1.1} amount={r.settled} decimals={0} color={PDF.logoGreen} />
           <PdfTdMoney flex={1} amount={r.balance} decimals={0} color={r.balance > 0.01 ? PDF.danger : PDF.text} bold />
@@ -703,9 +789,7 @@ function CustomerSettlementTable({ rows }: { rows: SessionClosingCustomerRow[] }
           <PdfTd flex={1.8} bold>
             {r.name}
           </PdfTd>
-          <PdfTd flex={0.8} kind="num">
-            {pdfFmtLiters(r.soldQty, 0)}
-          </PdfTd>
+          <PdfTdLiters flex={0.8} liters={r.soldQty} />
           <PdfTdMoney flex={0.9} amount={r.carriedForward} decimals={0} />
           <PdfTdMoney flex={1} amount={r.obligation} decimals={0} />
           <PdfTdMoney flex={1} amount={r.settled} decimals={0} color={PDF.logoGreen} />
@@ -842,6 +926,7 @@ export function SessionClosingPDF({
   customers,
   employees,
   external,
+  inventorySnapshot,
 }: SessionClosingProps) {
   const netCash = summary.customerReceipts - summary.farmerPayments;
 
@@ -852,26 +937,27 @@ export function SessionClosingPDF({
       summaryPrimaryDateIso={closedAtIso}
       summaryPrimaryDateLabel={closedAtIso ? 'تاريخ الإغلاق' : 'تاريخ التقرير'}
       metaCells={[
-        { label: 'حليب افتتاحي', value: pdfFmtLiters(summary.openingStock, 0), valueDirection: 'ltr' },
-        { label: 'حليب متبقٍ', value: pdfFmtLiters(summary.closingStock, 0), valueDirection: 'ltr' },
+        { label: 'حليب افتتاحي', litersAmount: summary.openingStock },
+        { label: 'حليب مُرحَّل', litersAmount: inventorySnapshot.currentStock },
         { label: 'صافي الربح', moneyAmount: summary.netProfit },
         { label: 'إجمالي المبيعات', moneyAmount: summary.salesRevenue },
       ]}
     >
-      <MilkStockPanel summary={summary} />
+      <MilkStockPanel summary={summary} currentStock={inventorySnapshot.currentStock} />
+      <ProfitInventoryPanel summary={summary} inventorySnapshot={inventorySnapshot} />
       <PdfSectionTitle>الملخص التشغيلي</PdfSectionTitle>
       <View style={s.grid}>
         <Stat
           title="عمليات الاستلام"
           value={pdfFmtNum(summary.supplyCount, 0)}
-          sub={pdfFmtLiters(summary.supplyQty, 0)}
+          sub={<PdfLitersText liters={summary.supplyQty} size="sm" color={PDF.logoGreen} />}
           color={PDF.logoGreen}
         />
         <Stat title="تكلفة الاستلام" moneyAmount={summary.supplyCost} sub="إجمالي المشتريات" />
         <Stat
           title="عمليات البيع"
           value={pdfFmtNum(summary.salesCount, 0)}
-          sub={pdfFmtLiters(summary.salesQty, 0)}
+          sub={<PdfLitersText liters={summary.salesQty} size="sm" />}
         />
         <Stat title="تكلفة البضاعة المباعة" moneyAmount={summary.cogs} sub="تكلفة المبيعات" />
         <Stat

@@ -8,6 +8,7 @@ import {
   type FarmerSessionStats,
   type SessionSummary,
 } from './calculations';
+import { buildInventoryLedger, round } from './inventory';
 import type { Session } from './types';
 
 export type SessionClosingPartyRow = {
@@ -52,6 +53,14 @@ export type SessionClosingReportProps = {
   customers: SessionClosingCustomerRow[];
   employees: { name: string; balance: number }[];
   external: { name: string; balance: number; direction: 'payable' | 'receivable' }[];
+  /** المخزون الفعلي لحظة التقرير — يُرحَّل للدورة التالية */
+  inventorySnapshot: {
+    currentStock: number;
+    inventoryCostValue: number;
+    inventorySellValue: number;
+    wac: number;
+    avgSellPrice: number;
+  };
 };
 
 function pct(settled: number, obligation: number): number {
@@ -124,12 +133,31 @@ function nextCycleLabel(periodTo: string): string {
   return cycleForDate(dayAfter).label;
 }
 
+function buildInventorySnapshot(data: ErpData, session: Session) {
+  const inv = buildInventoryLedger(data.supplies, data.sales, data.adjustments, data.sessions);
+  const sessionSales = data.sales.filter((s) => s.sessionId === session.id);
+  const soldQty = sessionSales.reduce((s, x) => s + x.quantity, 0);
+  const soldRevenue = sessionSales.reduce((s, x) => s + x.total, 0);
+  const avgSellPrice =
+    soldQty > 0 ? round(soldRevenue / soldQty, 3) : round(data.settings.defaultSellPrice, 3);
+  const currentStock = round(inv.currentStock);
+  return {
+    currentStock,
+    inventoryCostValue: round(inv.currentValue),
+    inventorySellValue: round(currentStock * avgSellPrice),
+    wac: round(inv.currentWac, 3),
+    avgSellPrice,
+  };
+}
+
 /** بيانات تقرير إغلاق الدورة — للمعاينة والأرشيف. */
 export function buildSessionClosingReportProps(
   data: ErpData,
   session: Session,
   summary: SessionSummary,
 ): SessionClosingReportProps {
+  const inventorySnapshot = buildInventorySnapshot(data, session);
+
   if (session.archive) {
     const snap = session.archive.balancesSnapshot;
     const farmers: SessionClosingFarmerRow[] = snap.farmers.map((f) => {
@@ -182,10 +210,20 @@ export function buildSessionClosingReportProps(
       customers,
       employees,
       external,
+      inventorySnapshot: {
+        ...inventorySnapshot,
+        currentStock: session.archive.carryForward.openingStock,
+        inventoryCostValue: round(
+          session.archive.carryForward.openingStock * inventorySnapshot.wac,
+        ),
+        inventorySellValue: round(
+          session.archive.carryForward.openingStock * inventorySnapshot.avgSellPrice,
+        ),
+      },
     };
   }
 
-  const preview = buildSessionCarryForwardSnapshot(data, session, summary.closingStock);
+  const preview = buildSessionCarryForwardSnapshot(data, session, inventorySnapshot.currentStock);
   const farmers = farmerRowsFromStats(allFarmerSessionStats(data, session));
   const customers = customerRowsFromStats(allCustomerSessionStats(data, session));
 
@@ -205,5 +243,6 @@ export function buildSessionClosingReportProps(
       balance: e.balance,
       direction: e.direction,
     })),
+    inventorySnapshot,
   };
 }

@@ -8,6 +8,7 @@ import {
   PdfBrandIdentity,
   PdfFactoryContactBar,
   PdfMoneyText,
+  PdfLitersText,
 } from './pdfBrandKit';
 import { BRAND } from '@/lib/brand';
 
@@ -38,6 +39,7 @@ export type ReportShellMetaCell = {
   label: string;
   value?: string;
   moneyAmount?: number;
+  litersAmount?: number;
   currency?: string;
   valueDirection?: 'ltr' | 'rtl';
 };
@@ -141,6 +143,10 @@ export function ReportShell({
                 {c.moneyAmount != null && Number.isFinite(c.moneyAmount) ? (
                   <View style={{ alignItems: 'flex-end' }}>
                     <PdfMoneyText amount={c.moneyAmount} size="sm" />
+                  </View>
+                ) : c.litersAmount != null && Number.isFinite(c.litersAmount) ? (
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <PdfLitersText liters={c.litersAmount} size="sm" />
                   </View>
                 ) : (
                   <Text

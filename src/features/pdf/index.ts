@@ -24,6 +24,7 @@ export { renderPdfBlob, savePdfBlob, openPdfInNewTab, canSharePdfFiles } from '.
 export {
   PDFPalette,
   LIBYAN_CURRENCY_LABEL,
+  LITERS_UNIT_LABEL,
   pdfBrandStyles,
   PdfLogoMark,
   PdfBrandIdentity,

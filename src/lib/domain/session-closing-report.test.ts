@@ -151,6 +151,9 @@ describe('buildSessionClosingReportProps', () => {
     expect(props.farmers).toHaveLength(1);
     expect(props.customers).toHaveLength(1);
     expect(props.nextSessionLabel).toContain('الدورة الثانية');
+    expect(props.inventorySnapshot.currentStock).toBe(200);
+    expect(props.inventorySnapshot.avgSellPrice).toBe(8);
+    expect(props.carryForward.openingStock).toBe(200);
   });
 
   it('reconstructs customer settlement from archived session snapshot', () => {

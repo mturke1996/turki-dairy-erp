@@ -4,7 +4,7 @@ import { Text, View, StyleSheet } from '@react-pdf/renderer';
 import { ReportShell } from './ReportShell';
 import { ar } from './arabicPDF';
 import { PDF, PDF_PAGINATION, pdfBase } from './pdfBase';
-import { pdfFmtNum, pdfFmtDate, pdfFmtLiters } from './pdfBrandKit';
+import { pdfFmtNum, pdfFmtDate } from './pdfBrandKit';
 import { PdfTh, PdfTd, PdfTdMoney } from './PdfTable';
 import type { InventoryLedgerEntry } from '@/lib/domain/types';
 
@@ -40,10 +40,10 @@ export function DailyMovementPDF({ entries, sessionLabel, openingStock, totals }
       subtitle={`الفترة: ${sessionLabel}`}
       summaryPrimaryDateLabel="تاريخ التقرير"
       metaCells={[
-        { label: 'الرصيد الافتتاحي', value: pdfFmtLiters(openingStock, 0) },
-        { label: 'إجمالي الوارد', value: pdfFmtLiters(totals.inQty, 0) },
-        { label: 'إجمالي الصادر', value: pdfFmtLiters(totals.outQty, 0) },
-        { label: 'الرصيد الختامي', value: pdfFmtLiters(totals.closing, 0) },
+        { label: 'الرصيد الافتتاحي', litersAmount: openingStock },
+        { label: 'إجمالي الوارد', litersAmount: totals.inQty },
+        { label: 'إجمالي الصادر', litersAmount: totals.outQty },
+        { label: 'الرصيد الختامي', litersAmount: totals.closing },
       ]}
     >
       <View style={pdfBase.tableHead} minPresenceAhead={PDF_PAGINATION.tableHead}>

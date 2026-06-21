@@ -6,6 +6,7 @@ import { BRAND } from '@/lib/brand';
 import { usePdfLogoDataUri, usePdfMarkDataUri } from './pdf-logo-context';
 
 export const LIBYAN_CURRENCY_LABEL = 'د.ل';
+export const LITERS_UNIT_LABEL = 'لتر';
 const P = BRAND.pdfPalette;
 
 export const PDFPalette = P;
@@ -264,7 +265,14 @@ export const PdfFactoryContactBar = () => (
   </View>
 );
 
-export type PdfInfoItem = { label: string; value?: string; ltr?: boolean; moneyAmount?: number; decimals?: number };
+export type PdfInfoItem = {
+  label: string;
+  value?: string;
+  ltr?: boolean;
+  moneyAmount?: number;
+  litersAmount?: number;
+  decimals?: number;
+};
 
 /** شبكة بيانات موحّدة للتقارير. */
 export const PdfInfoGrid = ({ items }: { items: PdfInfoItem[] }) => (
@@ -275,6 +283,10 @@ export const PdfInfoGrid = ({ items }: { items: PdfInfoItem[] }) => (
         {item.moneyAmount != null && Number.isFinite(item.moneyAmount) ? (
           <View style={{ alignItems: 'flex-end' }}>
             <PdfMoneyText amount={item.moneyAmount} size="sm" decimals={item.decimals ?? 2} />
+          </View>
+        ) : item.litersAmount != null && Number.isFinite(item.litersAmount) ? (
+          <View style={{ alignItems: 'flex-end' }}>
+            <PdfLitersText liters={item.litersAmount} size="sm" decimals={item.decimals ?? 0} />
           </View>
         ) : (
           <Text
@@ -312,10 +324,9 @@ export function pdfFmtMoneyLibyan(n: number, decimals = 2): string {
   return ltrAmountCurrency(n, LIBYAN_CURRENCY_LABEL, decimals);
 }
 
-/** رقم ثم الوحدة — LRM يثبت الترتيب في سياق RTL (لا «لتر» قبل العدد). */
+/** لترات كنص — نفس نمط العملة: «لتر» ثم الرقم (LTR). */
 export function pdfFmtLiters(n: number, decimals = 0): string {
-  const num = pdfFmtNum(n, decimals);
-  return `\u200E${num}\u00A0لتر`;
+  return ltrAmountCurrency(n, LITERS_UNIT_LABEL, decimals);
 }
 
 const MONEY_SIZE = { sm: 10, md: 13, lg: 18 };
@@ -342,7 +353,7 @@ export const PdfMoneyText = ({
   </View>
 );
 
-/** لترات — نص LTR واحد: العدد ثم «لتر» (مثل 5,000 لتر). */
+/** لترات — نفس تخطيط PdfMoneyText: «لتر» ثم الرقم في صف LTR منفصل. */
 export const PdfLitersText = ({
   liters,
   size = 'md',
@@ -359,20 +370,26 @@ export const PdfLitersText = ({
   prefix?: string;
 }) => {
   const fs = LITERS_SIZE[size];
+  const labelFs = fs * 0.82;
   const num = pdfFmtNum(liters, decimals);
   return (
-    <Text
-      style={{
-        direction: 'ltr',
-        textAlign: 'right',
-        fontSize: fs,
-        fontWeight: bold ? 'bold' : 'normal',
-        color,
-        lineHeight: 1.35,
-      }}
-    >
-      {`\u200E${prefix}${num}\u00A0لتر`}
-    </Text>
+    <View style={pdfBrandStyles.moneyRow}>
+      <Text style={{ fontSize: labelFs, fontWeight: 'bold', color: P.muted, lineHeight: 1.35 }}>
+        {LITERS_UNIT_LABEL}
+      </Text>
+      <Text
+        style={{
+          fontSize: fs,
+          fontWeight: bold ? 'bold' : 'normal',
+          color,
+          direction: 'ltr',
+          lineHeight: 1.35,
+        }}
+      >
+        {prefix}
+        {num}
+      </Text>
+    </View>
   );
 };
 

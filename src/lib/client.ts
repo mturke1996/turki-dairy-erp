@@ -1,8 +1,11 @@
 import { createBrowserClient } from '@supabase/ssr'
+import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/supabase/env'
 
 export function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
-  )
+  const url = getSupabaseUrl()
+  const key = getSupabasePublishableKey()
+  if (!url || !key) {
+    throw new Error('Supabase env missing')
+  }
+  return createBrowserClient(url, key)
 }
