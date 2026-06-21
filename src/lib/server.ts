@@ -1,6 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/supabase/env'
 
 /**
  * If using Fluid compute: Don't put this client in a global variable. Always create a new client within each
@@ -8,15 +7,10 @@ import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/supabase/env'
  */
 export async function createClient() {
   const cookieStore = await cookies()
-  const url = getSupabaseUrl()
-  const key = getSupabasePublishableKey()
-  if (!url || !key) {
-    throw new Error('Supabase env missing: NEXT_PUBLIC_SUPABASE_URL / publishable key')
-  }
 
   return createServerClient(
-    url,
-    key,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
       cookies: {
         getAll() {

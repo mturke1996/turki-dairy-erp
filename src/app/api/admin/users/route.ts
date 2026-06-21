@@ -1,30 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/server';
-import {
-  adminConfigErrorMessage,
-  getAdminClientConfigStatus,
-  getSupabaseServiceRoleKey,
-  getSupabaseUrl,
-} from '@/lib/supabase/env';
 import type { Role } from '@/lib/domain/types';
 
 function adminClient() {
-  const url = getSupabaseUrl();
-  const key = getSupabaseServiceRoleKey();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-}
-
-function adminConfigError() {
-  const status = getAdminClientConfigStatus();
-  if (status.ok) {
-    return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY غير مهيّأ' }, { status: 503 });
-  }
-  return NextResponse.json(
-    { error: adminConfigErrorMessage(status.missing), missing: status.missing },
-    { status: 503 },
-  );
 }
 
 async function assertAdmin() {
@@ -49,7 +32,7 @@ export async function GET() {
 
   const admin = adminClient();
   if (!admin) {
-    return adminConfigError();
+    return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY غير مهيّأ' }, { status: 503 });
   }
 
   const { data, error } = await admin.from('profiles').select('id,email,name,role,created_at').order('created_at');
@@ -64,7 +47,7 @@ export async function POST(request: Request) {
 
   const admin = adminClient();
   if (!admin) {
-    return adminConfigError();
+    return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY غير مهيّأ' }, { status: 503 });
   }
 
   const body = (await request.json()) as { email?: string; password?: string; name?: string; role?: Role };
@@ -101,7 +84,7 @@ export async function PATCH(request: Request) {
 
   const admin = adminClient();
   if (!admin) {
-    return adminConfigError();
+    return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY غير مهيّأ' }, { status: 503 });
   }
 
   const body = (await request.json()) as { id?: string; role?: Role; name?: string };

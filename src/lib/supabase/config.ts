@@ -1,9 +1,11 @@
 /** إعدادات Supabase — مصدر البيانات الوحيد (PostgreSQL). */
 
-import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/supabase/env';
-
 export function isSupabaseConfigured(): boolean {
-  return Boolean(getSupabaseUrl() && getSupabasePublishableKey());
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+  );
 }
 
 /** التطبيق يعمل حصرياً على قاعدة البيانات — لا وضع localStorage. */
