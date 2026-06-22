@@ -27,4 +27,16 @@ describe('mappers', () => {
     expect(toRow({ archive })).toEqual({ archive });
     expect(fromRow({ archive })).toEqual({ archive });
   });
+
+  it('maps carryForwardBalances to carry_forward_balances', () => {
+    const snap = { totals: { openingStock: 100, payables: 0, receivables: 0 } };
+    expect(toRow({ carryForwardBalances: snap })).toEqual({ carry_forward_balances: snap });
+    expect(fromRow({ carry_forward_balances: snap })).toEqual({ carryForwardBalances: snap });
+  });
+
+  it('maps treasurySplits to treasury_splits', () => {
+    const splits = [{ vaultId: 'v1', amount: 500 }];
+    expect(toRow({ treasurySplits: splits })).toEqual({ treasury_splits: splits });
+    expect(fromRow({ treasury_splits: splits })).toEqual({ treasurySplits: splits });
+  });
 });

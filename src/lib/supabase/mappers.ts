@@ -14,8 +14,8 @@ function toCamel(key: string): string {
   return key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 }
 
-/** حقول jsonb تُنسخ كما هي (دون لمس مفاتيحها الداخلية). */
-const OPAQUE = new Set(['archive', 'allowances', 'lines', 'carryForwardBalances', 'treasurySplits']);
+/** حقول jsonb — اسم العمود في Postgres = الاسم كما هو (archive, lines, …). */
+const OPAQUE = new Set(['archive', 'allowances', 'lines']);
 
 /** حقول Postgres من نوع date — تُرسل بصيغة YYYY-MM-DD فقط. */
 const DATE_ONLY = new Set([
