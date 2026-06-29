@@ -511,6 +511,9 @@ interface ErpState {
   updateSettings: (patch: Partial<AppSettings>) => Promise<MutationResult>;
   resetDemo: () => void;
   clearData: () => void;
+  /** بعد حذف الحركات من الخادم: يُبقي الموظفين/الفلاحين/العملاء والإعدادات،
+   *  يُنشئ دورة نصف شهرية مفتوحة جديدة، ويصفّر كل الحركات والخزن/البنوك. */
+  applyServerReset: () => void;
   setRole: (role: AuthUser["role"]) => void;
 
   /** استبدال الحالة بلقطة قادمة من السحابة (Supabase). يضبط فقط الحقول المُمرّرة. */
@@ -5030,6 +5033,40 @@ export const useErpStore = create<ErpState>()((set, get) => ({
       auditLogs: blank.auditLogs,
       externalIncomes: [],
     });
+  },
+
+  applyServerReset: () => {
+    const session = freshSession();
+    set((s) => ({
+      sessions: [session],
+      activeSessionId: session.id,
+      // البيانات الرئيسية المحفوظة — لا تُمسح
+      farmers: s.farmers,
+      customers: s.customers,
+      employees: s.employees.map((e) => ({
+        ...e,
+        // الخزن/البنوك محذوفة على الخادم — نظّف المراجع المعلّقة
+        bankId: undefined,
+        defaultPayoutType: undefined,
+        defaultPayoutId: undefined,
+      })),
+      // كل الحركات والخزن/البنوك والتصنيفات تُصفّر
+      supplies: [],
+      sales: [],
+      payments: [],
+      debtEntries: [],
+      adjustments: [],
+      vaults: [],
+      banks: [],
+      cashMovements: [],
+      transfers: [],
+      expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
+      expenses: [],
+      payrollBatches: [],
+      auditLogs: [],
+      externalIncomes: [],
+      // الإعدادات (الأسعار/العملة) تبقى كما هي
+    }));
   },
 
   setRole: (role) =>

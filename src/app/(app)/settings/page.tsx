@@ -2,6 +2,7 @@
 
 import { PageHeader } from '@/components/layout/page-header';
 import { CloudSyncPanel } from '@/components/settings/cloud-sync-panel';
+import { DangerZonePanel } from '@/components/settings/danger-zone-panel';
 import { UsersPanel } from '@/components/settings/users-panel';
 import { AccessGate } from '@/components/shared/access-gate';
 import { BRAND } from '@/lib/brand';
@@ -15,6 +16,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       {supabaseAuth ? <UsersPanel /> : null}
       {cloudSync ? <CloudSyncPanel /> : null}
+      {supabaseAuth ? <DangerZonePanel /> : null}
     </div>
   );
 
